@@ -1,0 +1,5 @@
+# 生产依赖（服务器上用 venv 安装）
+# 用法：/opt/novel-generator/.venv/bin/pip install -r deploy/requirements-prod.txt
+flask>=3.0
+requests>=2.31
+gunicorn>=23.0

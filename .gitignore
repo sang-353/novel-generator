@@ -1,0 +1,50 @@
+# 配置文件与个人凭据（绝不提交）
+config.json
+*.env
+*.pem
+*.key
+*.pub
+id_*
+HANDOFF.md
+
+# 小说数据、生成正文与爬虫产物（绝不提交任何小说与创作）
+novels/
+analysis_cache/
+*.txt
+!requirements.txt
+!requirements*.txt
+!deploy/requirements*.txt
+*.bak*
+*.md.bak*
+crawl.js
+
+# Python 运行时与依赖库
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.tmp/
+pylibs/
+wheels/
+pylibs_sitecustomize.py
+
+# 编辑器与操作系统
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# 本地调试、审计测试与快捷脚本
+shots/
+*.pid
+server.log
+server.log.*
+server.log.err
+start.bat
+install_and_start.bat
+开服务.bat
+关服务.bat
+状态.bat
+安装并启动.bat

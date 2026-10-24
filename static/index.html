@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#F7F7F8">
+<title>小说生成器</title>
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.png">  <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+<a class="skip-link" href="#main">跳到主内容</a>
+<header>
+  <div class="brand">
+    <svg class="brand-mark" viewBox="0 0 32 32" width="22" height="22" aria-hidden="true" focusable="false">
+      <path d="M3 5 L15 7 L15 25 L3 23 Z" fill="var(--ink)"/>
+      <path d="M29 5 L17 7 L17 25 L29 23 Z" fill="var(--accent)"/>
+    </svg>
+    <h1>小说生成器</h1>
+  </div>
+  <button class="nav active" data-view="original">原创生成</button>
+  <button class="nav" data-view="continuation">续写 · 同人</button>
+  <button class="nav" data-view="library">书架</button>
+  <button class="nav" data-view="settings">设置</button>
+</header>
+<main id="main">
+
+<!-- ================= 原创生成 ================= -->
+<section class="view active" id="view-original">
+  <div class="card">
+    <h2><span class="h2-folio">01</span>原创小说生成</h2>
+    <div class="row">
+      <div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+          <label for="og_title" style="margin:0">书名（可选）</label>
+          <button type="button" class="ghost mini-btn" id="btn_suggest_titles" title="根据当前题材与设定由 AI 推荐书名">✨ AI 拟名</button>
+        </div>
+        <input type="text" id="og_title" placeholder="留空则由 AI 自动拟定">
+        <div id="og_title_candidates" style="display:none;margin-top:6px;">
+          <span class="mini" style="color:var(--muted)">推荐书名（点击选用）：</span>
+          <div id="og_title_list" class="tag-pills"></div>
+        </div>
+      </div>
+      <div>
+        <label for="og_genre">题材</label>
+        <div class="tag-pills" id="og_genre_pills">
+          <button type="button" class="tag-pill" data-genre="都市异能">都市异能</button>
+          <button type="button" class="tag-pill" data-genre="玄幻修真">玄幻修真</button>
+          <button type="button" class="tag-pill" data-genre="科幻未来">科幻未来</button>
+          <button type="button" class="tag-pill" data-genre="悬疑惊悚">悬疑惊悚</button>
+          <button type="button" class="tag-pill" data-genre="赛博朋克">赛博朋克</button>
+          <button type="button" class="tag-pill" data-genre="末世求生">末世求生</button>
+          <button type="button" class="tag-pill" data-genre="轻小说/日常">轻小说/日常</button>
+          <button type="button" class="tag-pill" data-genre="古风武侠">古风武侠</button>
+          <button type="button" class="tag-pill" data-genre="西幻领主">西幻领主</button>
+          <button type="button" class="tag-pill" data-genre="历史架空">历史架空</button>
+          <button type="button" class="tag-pill" data-genre="游戏异界">游戏异界</button>
+          <button type="button" class="tag-pill" data-genre="无限流">无限流</button>
+        </div>
+        <input type="text" id="og_genre" placeholder="点击上方快捷标签选择，或直接输入自定义题材…">
+      </div>
+    </div>
+    <label for="og_setting">故事背景 / 核心设定</label>
+    <textarea id="og_setting" rows="3" placeholder="世界观、时代背景、核心冲突等"></textarea>
+    <label for="og_characters">主要角色（每行一个）</label>
+    <textarea id="og_characters" rows="3" placeholder="姓名：身份，性格，目标（每行一个角色）"></textarea>
+    <label for="og_storyline">故事主线 / 目标</label>
+    <textarea id="og_storyline" rows="2" placeholder="主角要做什么、结局大致走向"></textarea>
+    <div class="row">
+      <div><label for="og_style">风格要求</label><input type="text" id="og_style" placeholder="如：轻松幽默 / 严肃沉重 / 古风文雅"></div>
+      <div><label for="og_perspective">叙事视角</label>
+        <select id="og_perspective">
+          <option value="第三人称">第三人称</option>
+          <option value="第一人称">第一人称</option>
+          <option value="上帝视角">上帝视角</option>
+        </select>
+      </div>
+    </div>
+    <div class="row">
+      <div><label for="og_chapters">章节数</label><input type="number" id="og_chapters" value="10" min="1" max="100"></div>
+      <div><label for="og_per_words">每章字数</label><input type="number" id="og_per_words" value="1500" min="200" step="100"></div>
+    </div>
+    <label for="og_extra">补充要求（可选）</label>
+    <textarea id="og_extra" rows="2" placeholder="其他你想强调的内容，如结局方向、禁用元素等"></textarea>
+    <div class="model-select-row">
+      <div style="flex:1">
+        <label for="og_provider">创作模型</label>
+        <select id="og_provider"><option value="">加载中…</option></select>
+      </div>
+      <button class="ghost" id="btn_manage_og" style="margin-bottom:2px">管理模型</button>
+    </div>
+    <div class="actions">
+      <button id="btn_outline">1 生成大纲</button>
+      <button class="secondary" id="btn_write" disabled>2 开始写作</button>
+      <button class="ghost" id="btn_clear_og" title="清空本页所有输入">清空表单</button>
+      <span class="mini" id="og_status" role="status" aria-live="polite"></span>
+    </div>
+  </div>
+
+  <div class="card" id="og_bible_card" style="display:none">
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <h2><span class="h2-folio">01</span>设定档案 (Bible) <span class="hint">世界观背景与核心角色，可随心修改</span></h2>
+      <button type="button" class="ghost mini-btn" id="btn_toggle_bible_raw">查看原始 JSON</button>
+    </div>
+    <div style="margin-top:12px">
+      <label for="og_bible_setting">世界观与时代背景</label>
+      <textarea id="og_bible_setting" rows="3" placeholder="时代背景、力量法则、地理势力格局…"></textarea>
+    </div>
+    <div style="margin-top:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <label style="margin:0">主要角色档案</label>
+        <button type="button" class="secondary mini-btn" id="btn_add_bible_char">+ 添加角色</button>
+      </div>
+      <div id="og_bible_chars"></div>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <div>
+        <label for="og_bible_conflict">核心冲突与主线</label>
+        <input type="text" id="og_bible_conflict" placeholder="核心矛盾交锋与故事主线目标…">
+      </div>
+      <div>
+        <label for="og_bible_tone">故事基调与文风</label>
+        <input type="text" id="og_bible_tone" placeholder="叙事基调与语言特色…">
+      </div>
+    </div>
+    <textarea id="og_bible_raw" rows="6" style="display:none;font-size:12px;margin-top:10px"></textarea>
+  </div>
+
+  <div class="card" id="og_outline_card" style="display:none">
+    <h2>章节大纲 <span class="hint">可逐章修改标题与要点后开始写作</span></h2>
+    <label for="og_logline_input">一句话梗概</label>
+    <input type="text" id="og_logline_input" placeholder="本作的一句话梗概">
+    <div id="og_outline_editor" style="margin-top:12px"></div>
+    <div id="og_outline_add_wrap" style="margin:12px 0;display:flex;gap:10px;align-items:center;">
+      <button type="button" class="secondary mini-btn" id="btn_add_outline_ch">+ 添加一章</button>
+      <span class="mini" style="color:var(--muted)">共 <strong id="og_ch_count">0</strong> 章</span>
+    </div>
+    <details style="margin-top:12px">
+      <summary class="mini" style="cursor:pointer">查看原始 JSON（高级）</summary>
+      <textarea id="og_outline_text" rows="8" style="font-size:12px;margin-top:6px"></textarea>
+    </details>
+    <div class="actions">
+      <button class="ghost" id="btn_regenerate">重新生成大纲</button>
+    </div>
+  </div>
+
+  <div class="card progress-wrap" id="og_progress_card">
+    <h2 id="og_progress_title">生成进度</h2>
+    <div class="bar"><div id="og_progress_bar"></div></div>
+    <div class="progress-text" role="status" aria-live="polite"><span id="og_progress_text">准备中…</span><span class="msg" id="og_progress_msg"></span></div>
+    <div class="actions">
+      <button class="secondary" id="og_cancel_job" style="display:none">取消任务</button>
+      <button class="secondary" id="og_open_reader" style="display:none">打开阅读</button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 续写 / 同人 ================= -->
+<section class="view" id="view-continuation">
+  <div class="card">
+    <h2><span class="h2-folio">02</span>续写 / 同人</h2>
+    <div class="row" style="margin-bottom:8px">
+      <div><label for="ct_source_title">原作书名</label><input type="text" id="ct_source_title" placeholder="如：三体 / 甄嬛传"></div>
+      <div><label for="ct_source_author">原作作者（可选）</label><input type="text" id="ct_source_author" placeholder="如：刘慈欣"></div>
+    </div>
+    <label for="ct_source_intro">原作简介（可选，有助于风格判断）</label>
+    <textarea id="ct_source_intro" rows="2" placeholder="一句话介绍原作背景"></textarea>
+    <label for="ct_source_text">原作正文</label>
+    <div class="file-row">
+      <input type="file" id="ct_file" accept=".txt,.md,.markdown" aria-label="上传原作正文文件">
+      <span class="mini">或直接粘贴到下方文本框</span>
+    </div>
+    <textarea id="ct_source_text" rows="8" placeholder="粘贴原作正文（可只粘贴到你想续写的位置为止）"></textarea>
+    <div class="row">
+      <div>
+        <label for="ct_start_para">续写起点</label>
+        <input type="number" id="ct_start_para" value="0" min="0" title="0 = 从文末继续；>0 = 从第 N 段后继续">
+        <div class="hint" id="ct_para_hint"></div>
+      </div>
+      <div><label for="ct_mode">续写方式</label>
+        <select id="ct_mode">
+          <option value="continuation">续写（延续原剧情）</option>
+          <option value="fanfic">同人（按改写设定展开）</option>
+        </select>
+      </div>
+    </div>
+    <label for="ct_twist">改写设定（同人模式填写，续写模式可留空）</label>
+    <textarea id="ct_twist" rows="2" placeholder="如：主角身份对调 / 结局改写 / if 线：如果当年没有分开…"></textarea>
+    <div class="row">
+      <div><label for="ct_chapters">续写章节数</label><input type="number" id="ct_chapters" value="1" min="1" max="50"></div>
+      <div><label for="ct_per_words">每章字数</label><input type="number" id="ct_per_words" value="3000" min="200" step="100"></div>
+    </div>
+    <label for="ct_extra">补充要求（可选）</label>
+    <textarea id="ct_extra" rows="2" placeholder="对续写的具体要求，如让某个角色出场、解开某个伏笔等"></textarea>
+    <div class="model-select-row">
+      <div style="flex:1">
+        <label for="ct_provider">创作模型</label>
+        <select id="ct_provider"><option value="">加载中…</option></select>
+      </div>
+      <button class="ghost" id="btn_manage_ct" style="margin-bottom:2px">管理模型</button>
+    </div>
+    <div class="actions">
+      <button id="btn_analyze">1 通读全书</button>
+      <button class="secondary" id="btn_continue" disabled>2 开始续写</button>
+      <span class="mini" id="ct_status" role="status" aria-live="polite"></span>
+    </div>
+    <div class="progress-wrap" id="ct_analyze_progress" style="display:none">
+      <div class="bar"><div id="ct_analyze_bar"></div></div>
+      <div class="progress-text" role="status" aria-live="polite" id="ct_analyze_text">准备中…</div>
+      <div class="actions"><button class="secondary" id="ct_analyze_cancel" style="display:none">取消分析</button></div>
+    </div>
+  </div>
+
+  <div class="card" id="ct_style_card" style="display:none">
+    <h2>创作档案 <span class="hint">模型通读全书后提炼的文风、人物与剧情状态，供确认</span></h2>
+    <div id="ct_style_summary"></div>
+    <details>
+      <summary class="mini" style="cursor:pointer">查看原始 JSON</summary>
+      <pre class="style-box" id="ct_style_box"></pre>
+    </details>
+    <div class="actions"><button class="ghost" id="btn_reanalyze">重新通读分析</button></div>
+  </div>
+
+  <div class="card" id="ct_bible_card" style="display:none">
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <h2><span class="h2-folio">02</span>续写设定档案 (Bible) <span class="hint">通读提炼的设定与角色，可随心修改，续写将以此为准</span></h2>
+      <button type="button" class="ghost mini-btn" id="btn_toggle_ct_bible_raw">查看原始 JSON</button>
+    </div>
+    <div style="margin-top:12px">
+      <label for="ct_bible_setting">世界观与背景设定</label>
+      <textarea id="ct_bible_setting" rows="3" placeholder="时代背景、当前局势、力量法则…"></textarea>
+    </div>
+    <div style="margin-top:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <label style="margin:0">主要角色档案</label>
+        <button type="button" class="secondary mini-btn" id="btn_add_ct_bible_char">+ 添加角色</button>
+      </div>
+      <div id="ct_bible_chars"></div>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <div>
+        <label for="ct_bible_conflict">续写主线与矛盾发展</label>
+        <input type="text" id="ct_bible_conflict" placeholder="主线目标与矛盾交锋…">
+      </div>
+      <div>
+        <label for="ct_bible_tone">文风与叙事基调</label>
+        <input type="text" id="ct_bible_tone" placeholder="仿原书叙事风格与基调…">
+      </div>
+    </div>
+    <textarea id="ct_bible_raw" rows="6" style="display:none;font-size:12px;margin-top:10px"></textarea>
+  </div>
+
+  <div class="card progress-wrap" id="ct_progress_card">
+    <h2 id="ct_progress_title">续写进度</h2>
+    <div class="bar"><div id="ct_progress_bar"></div></div>
+    <div class="progress-text" role="status" aria-live="polite"><span id="ct_progress_text">准备中…</span><span class="msg" id="ct_progress_msg"></span></div>
+    <div class="actions">
+      <button class="secondary" id="ct_cancel_job" style="display:none">取消任务</button>
+      <button class="secondary" id="ct_open_reader" style="display:none">打开阅读</button>
+    </div>
+  </div>
+</section>
+<section class="view" id="view-library">
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <h2 style="margin:0"><span class="h2-folio">03</span>我的书架</h2>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="ghost mini-btn" id="lib_refresh_btn" title="刷新书架">刷新</button>
+        <button class="ghost mini-btn" id="lib_trash_toggle_btn" title="查看回收站">
+          回收站 <span class="badge" id="lib_trash_badge" style="display:none">0</span>
+        </button>
+      </div>
+    </div>
+    <div class="table-scroll">
+    <table id="lib_table">
+      <thead><tr><th class="folio"></th><th>书名</th><th>类型</th><th>章节</th><th>字数</th><th>状态</th><th>模型</th><th>更新时间</th><th></th></tr></thead>
+      <tbody id="lib_tbody"><tr><td colspan="9" class="mini">加载中…</td></tr></tbody>
+    </table>
+    </div>
+  </div>
+
+  <div class="card" id="lib_trash_card" style="display:none;margin-top:16px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <h3 style="margin:0;font-size:15px;font-weight:600">回收站 <span class="hint">被删除的书籍暂存在此，可一键恢复或彻底删除</span></h3>
+      <button class="ghost mini-btn" id="lib_trash_close_btn">收起</button>
+    </div>
+    <div id="lib_trash_list"><p class="mini">加载中…</p></div>
+  </div>
+
+  <div class="card" id="private_card">
+    <h2><span class="h2-folio">04</span>隐私书架 <span class="hint" style="margin-left:auto">需密码解锁；解锁前不显示书名与正文</span></h2>
+    <div id="pv_locked">
+      <div class="lock-row">
+        <input type="password" id="pv_password" aria-label="隐私密码" placeholder="输入隐私密码…" autocomplete="current-password">
+        <button id="pv_unlock">解锁</button>
+        <span class="mini" id="pv_status" role="status" aria-live="polite"></span>
+      </div>
+      <p class="hint" id="pv_hint">读取中…</p>
+    </div>
+    <div id="pv_list_wrap" style="display:none">
+      <div class="actions" style="margin-top:0">
+        <button class="ghost" id="pv_lock">锁定</button>
+        <span class="mini" id="pv_count"></span>
+      </div>
+      <div class="table-scroll">
+        <table id="pv_table">
+          <thead><tr><th class="folio"></th><th>书名</th><th>类型</th><th>章节</th><th>字数</th><th>状态</th><th>更新时间</th><th></th></tr></thead>
+          <tbody id="pv_tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 阅读器 ================= -->
+<section class="view" id="view-reader">
+  <div class="reader-surface">
+    <!-- 顶栏：自适应现代沉浸导航条 -->
+    <div class="rd-bar" id="rd_topbar">
+      <div class="rd-bar-left">
+        <button class="rd-icon" id="rd_back" title="返回书架" aria-label="返回书架">←</button>
+        <div class="rd-btitle">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <b id="rd_title"></b>
+            <button class="rd-btn ghost mini-btn" id="rd_rename_btn" title="修改书名" style="padding:2px 8px;font-size:12px;">✏️ 改名</button>
+          </div>
+          <span id="rd_top_sub"></span>
+        </div>
+        <div class="rd-meta-pill" id="rd_meta_pill">
+          <span class="tag" id="rd_type"></span>
+          <span class="status" id="rd_status"></span>
+          <span class="mini" id="rd_words"></span>
+        </div>
+      </div>
+      <div class="rd-bar-center" id="rd_desktop_nav">
+        <button class="rd-btn" id="rd_prev_d" title="上一章 (←/J)">上一章</button>
+        <select id="rd_chapter_sel" aria-label="选择章节"></select>
+        <button class="rd-btn" id="rd_next_d" title="下一章 (→/K)">下一章</button>
+      </div>
+      <div class="rd-bar-right">
+        <div class="rd-desktop-actions" id="rd_desktop_actions">
+          <button class="rd-btn rd-btn-primary" id="rd_continue">继续续写</button>
+          <button class="rd-btn secondary" id="rd_resume" style="display:none">继续生成</button>
+          <button class="rd-btn ghost" id="rd_bible_btn" title="查看与编辑设定档案">设定集</button>
+          <button class="rd-btn ghost" id="rd_export_txt" title="导出 TXT">TXT</button>
+          <button class="rd-btn ghost" id="rd_export_md" title="导出 Markdown">MD</button>
+        </div>
+        <button class="rd-icon" id="rd_toc_toggle" title="目录（T）" aria-label="目录">☰</button>
+        <button class="rd-icon" id="rd_settings_toggle" title="阅读设置" aria-label="阅读设置">Aa</button>
+        <button class="rd-icon" id="rd_more_toggle" title="更多操作" aria-label="更多">⋯</button>
+      </div>
+    </div>
+    <div class="reader-progress"><div id="rd_progress_fill"></div></div>
+
+    <div class="rd-body">
+      <!-- 目录：桌面为左侧栏；手机为全屏抽屉 -->
+      <aside class="toc-panel collapsed" id="rd_toc" aria-label="目录">
+        <div class="toc-head">
+          <input id="rd_toc_filter" aria-label="过滤章节或搜索正文" placeholder="过滤章节…（Enter 搜正文）">
+          <button class="ghost" id="rd_toc_search" title="搜索全书正文">搜索</button>
+          <button class="ghost" id="rd_toc_close" title="关闭目录">关闭</button>
+        </div>
+        <div class="toc-list" id="rd_toc_list"></div>
+      </aside>
+
+      <div class="rd-main">
+        <div id="rd_toolbar" style="display:none"></div>
+        <div class="chapter-content" id="rd_content"></div>
+      </div>
+    </div>
+
+    <!-- 底栏（手机）：上一章 / 位置 / 下一章 -->
+    <nav class="rd-foot" id="rd_bottombar">
+      <button class="rd-btn" id="rd_prev">上一章</button>
+      <span class="rd-pos" id="rd_pos">—</span>
+      <button class="rd-btn" id="rd_next">下一章</button>
+    </nav>
+  </div>
+
+  <div class="rd-mask" id="rd_mask"></div>
+
+  <!-- 阅读设置 -->
+  <div class="rd-sheet" id="rd_settings" role="dialog" aria-label="阅读设置">
+    <div class="rd-sheet-head">
+      <h4>阅读设置</h4>
+      <button class="ghost" data-rd-close="rd_settings">完成</button>
+    </div>
+    <div class="rd-sec">
+      <div class="rd-row">
+        <span class="rd-label">字号</span>
+        <button class="rd-btn" id="rd_font_minus" aria-label="减小字号">A−</button>
+        <input type="range" id="rd_font_range" min="13" max="26" step="1" aria-label="字号">
+        <button class="rd-btn" id="rd_font_plus" aria-label="增大字号">A+</button>
+        <span class="rd-val" id="rd_font_val">17</span>
+      </div>
+      <div class="rd-row">
+        <span class="rd-label">行距</span>
+        <input type="range" id="rd_lh_range" min="1.4" max="2.4" step="0.05" aria-label="行距">
+        <span class="rd-val" id="rd_lh_val">1.9</span>
+      </div>
+      <div class="rd-row">
+        <span class="rd-label">段距</span>
+        <input type="range" id="rd_gap_range" min="0.3" max="1.8" step="0.05" aria-label="段距">
+        <span class="rd-val" id="rd_gap_val">0.85</span>
+      </div>
+      <div class="rd-row">
+        <span class="rd-label">页宽</span>
+        <input type="range" id="rd_measure_range" min="26" max="52" step="1" aria-label="页宽">
+        <span class="rd-val" id="rd_measure_val">38</span>
+      </div>
+    </div>
+    <div class="rd-sec">
+      <div class="rd-row">
+        <span class="rd-label">字体</span>
+        <div class="rd-chips">
+          <button class="rd-btn" data-rd-font="sans">黑体</button>
+          <button class="rd-btn" data-rd-font="serif">宋体</button>
+        </div>
+      </div>
+      <div class="rd-row">
+        <span class="rd-label">首行</span>
+        <div class="rd-chips">
+          <button class="rd-btn" data-rd-indent="1">缩进</button>
+          <button class="rd-btn" data-rd-indent="0">顶格</button>
+        </div>
+      </div>
+      <div class="rd-row">
+        <span class="rd-label">主题</span>
+        <div class="rd-chips">
+          <button class="rd-swatch" data-rd-theme-btn="paper" title="纸白">纸</button>
+          <button class="rd-swatch" data-rd-theme-btn="sepia" title="羊皮">羊</button>
+          <button class="rd-swatch" data-rd-theme-btn="green" title="护眼">绿</button>
+          <button class="rd-swatch" data-rd-theme-btn="night" title="夜间">夜</button>
+          <button class="rd-swatch" data-rd-theme-btn="black" title="纯黑">黑</button>
+        </div>
+      </div>
+    </div>
+    <div class="rd-sec">
+      <div class="rd-chips">
+        <button class="rd-btn" id="rd_immersive_btn">沉浸阅读</button>
+        <button class="rd-btn" id="rd_fullscreen_btn">全屏</button>
+        <button class="rd-btn" id="rd_reset_btn">恢复默认</button>
+      </div>
+      <p class="hint">手机上点<b>左侧</b>翻上一章、点<b>右侧</b>翻下一章、点<b>中间</b>收起/显示工具栏；左右滑动也能翻章。桌面：← → 翻章，空格翻页，T 目录，Esc 退出沉浸。</p>
+    </div>
+  </div>
+
+  <!-- 更多（书籍信息与章节操作） -->
+  <div class="rd-sheet" id="rd_more" role="dialog" aria-label="书籍信息与操作">
+    <div class="rd-sheet-head">
+      <h4>书籍</h4>
+      <button class="ghost" data-rd-close="rd_more">关闭</button>
+    </div>
+    <p class="mini" id="rd_meta"></p>
+    <div class="rd-sec">
+      <div class="rd-row">
+        <span class="rd-label">章节</span>
+        <select id="rd_chapter_sel_m" aria-label="选择章节" style="flex:1"></select>
+      </div>
+    </div>
+    <div class="rd-sec">
+      <div class="rd-chips">
+        <button class="rd-btn" id="rd_continue_m">继续续写</button>
+        <button class="rd-btn" id="rd_resume_m" style="display:none">从断点继续生成</button>
+        <button class="rd-btn" id="rd_bible_btn_m">设定集档案</button>
+        <button class="rd-btn" id="rd_rename_btn_m">修改书名</button>
+        <button class="rd-btn" id="rd_export_txt_m">导出 TXT</button>
+        <button class="rd-btn" id="rd_export_md_m">导出 MD</button>
+        <button class="rd-btn" id="rd_rewrite_m">重写本章</button>
+        <button class="rd-btn danger" id="rd_del_chapter_m">删除本章</button>
+      </div>
+      <p class="mini" id="rd_chapter_tip" style="margin-top:8px"></p>
+    </div>
+    <div class="rd-sec">
+      <details id="rd_profile" style="display:none">
+        <summary style="cursor:pointer;font-weight:600;letter-spacing:.04em">创作档案（本书的分析总结，通读 / 续写时生成）</summary>
+        <div id="rd_profile_body" style="margin-top:10px"></div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 设置 ================= -->
+<section class="view" id="view-settings">
+  <div class="card">
+    <h2><span class="h2-folio">05</span>大模型设置 <span class="hint" style="margin-left:auto">可配置多个模型 API，创作时按需选择</span></h2>
+    <div id="provider_list"></div>
+    <div class="actions">
+      <button id="btn_add_provider">添加模型</button>
+      <button id="btn_save_settings">保存设置</button>
+      <button class="secondary" id="btn_test">测试连接（当前选中）</button>
+      <span class="mini" id="st_status" role="status" aria-live="polite"></span>
+    </div>
+    <p class="hint" style="margin-top:14px">Key 仅保存在本机 config.json 中，不会上传到任何地方。接口地址支持任意 OpenAI 兼容服务（如 DeepSeek / OpenAI / Kimi / 通义 / 本地 Ollama 等）。</p>
+  </div>
+  <div class="card">
+    <h2><span class="h2-folio">06</span>隐私密码 <span class="hint" style="margin-left:auto">用于解锁书架中的「隐私书架」</span></h2>
+    <p class="mini" id="pv_state" role="status" aria-live="polite">读取中…</p>
+    <div class="row">
+      <div><label for="pv_old">当前密码（首次设置留空）</label><input type="password" id="pv_old" autocomplete="current-password"></div>
+      <div><label for="pv_new">新密码（至少 4 位）</label><input type="password" id="pv_new" autocomplete="new-password"></div>
+    </div>
+    <label for="pv_new2">确认新密码</label>
+    <input type="password" id="pv_new2" autocomplete="new-password">
+    <div class="actions">
+      <button id="pv_save">保存密码</button>
+      <span class="mini" id="pv_save_status" role="status" aria-live="polite"></span>
+    </div>
+    <p class="hint">密码以加盐哈希保存在本机 config.json（不存明文）。隐私书籍的正文仍以明文存在于 novels/ 目录，本工具只在界面与接口层按密码隐藏。</p>
+  </div>
+  <div class="card">
+    <h2><span class="h2-folio">07</span>存储与清理</h2>
+    <div class="actions" style="margin-top:4px">
+      <button class="secondary" id="btn_clear_cache">清理分析缓存</button>
+      <button class="ghost" id="btn_refresh_trash">刷新</button>
+      <span class="mini" id="cache_stats"></span>
+    </div>
+    <h2 style="margin-top:24px"><span class="h2-folio">08</span>回收站 <span class="hint">删除的书先移到这里，可恢复或彻底删除</span></h2>
+    <div id="trash_list"><p class="mini">加载中…</p></div>
+    <h2 style="margin-top:24px"><span class="h2-folio">09</span>章节备份 <span class="hint">重写 / 删除章节前的自动快照，可恢复回原位置</span></h2>
+    <div id="ch_backup_list"><p class="mini">加载中…</p></div>
+    <p class="hint" style="margin-top:18px">部署/远程访问：服务默认只监听本机 <b>127.0.0.1:8000</b>；可用环境变量 <b>NOVEL_HOST</b> 与 <b>NOVEL_PORT</b> 指定监听地址与端口（例如服务器上设为 0.0.0.0）。这是单人自用工具、没有账号体系，请只在自己可控的网络里运行。</p>
+  </div>
+</section>
+
+</main>
+<div id="toast" role="status" aria-live="polite"></div>
+<!-- 慢网络下的加载反馈：延迟 350ms 才出现，快的时候不会闪一下 -->
+<div class="rd-loading" id="rd_loading" hidden>
+  <div class="rd-loading-box"><span class="rd-spin" aria-hidden="true"></span><span id="rd_loading_text">正在加载…</span></div>
+</div>
+
+<!-- ================= 续写 / 重写任务卡片 ================= -->
+<div class="modal-mask" id="round_modal">
+  <div class="modal-box">
+    <h3 id="rm_title">续写设置</h3>
+    <p class="mini" id="rm_summary"></p>
+    <!-- 表单区 -->
+    <div id="rm_form">
+      <label id="rm_instruction_label" for="rm_instruction">续写指示（可选，可调整后续走向）</label>
+      <textarea id="rm_instruction" rows="3" placeholder="如：让主角发现某个秘密 / 加快节奏 / 引入新角色 / 解开某处伏笔…"></textarea>
+      <div class="row">
+        <div id="rm_chapters_wrap"><label for="rm_chapters">章节数</label><input type="number" id="rm_chapters" value="1" min="1" max="50"></div>
+        <div><label for="rm_per_words">每章字数</label><input type="number" id="rm_per_words" value="3000" min="200" step="100"></div>
+        <div>
+          <label for="rm_provider">创作模型</label>
+          <select id="rm_provider"><option value="">加载中…</option></select>
+        </div>
+      </div>
+      <div class="preview-box" id="rm_preview" style="display:none"></div>
+      <div class="actions">
+        <button id="rm_start">开始续写</button>
+        <button class="secondary" id="rm_cancel">取消</button>
+      </div>
+    </div>
+    <!-- 进度区 -->
+    <div id="rm_progress" style="display:none">
+      <div class="bar"><div id="rm_bar"></div></div>
+      <div class="progress-text" role="status" aria-live="polite" id="rm_progress_text">准备中…</div>
+      <div class="actions">
+        <button class="secondary" id="rm_cancel_job" style="display:none">取消任务</button>
+        <button class="secondary" id="rm_close">关闭</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 修改书名弹窗 ================= -->
+<div class="modal-mask" id="rename_modal">
+  <div class="modal-box" style="max-width:440px;">
+    <h3 id="rename_modal_title">修改小说标题</h3>
+    <label for="rename_input">新标题</label>
+    <input type="text" id="rename_input" placeholder="输入新的小说标题…">
+    <div class="actions" style="margin-top:16px;">
+      <button class="primary" id="btn_confirm_rename">确定修改</button>
+      <button class="secondary" id="btn_cancel_rename">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 设定档案 (Bible) 弹窗 ================= -->
+<div class="modal-mask" id="bible_modal">
+  <div class="modal-box" style="max-width:760px;width:92%;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <h3 style="margin:0" id="bm_title">小说设定档案 (Bible)</h3>
+      <button class="ghost mini-btn" id="bm_close">×</button>
+    </div>
+    <div style="max-height:65vh;overflow-y:auto;padding-right:4px;">
+      <label for="bm_setting">世界观与时代背景</label>
+      <textarea id="bm_setting" rows="4" placeholder="时代背景、力量法则、地理势力格局…"></textarea>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin:14px 0 8px;">
+        <label style="margin:0">主要角色档案</label>
+        <button type="button" class="secondary mini-btn" id="btn_add_bm_char">+ 添加角色</button>
+      </div>
+      <div id="bm_chars"></div>
+      <div class="row" style="margin-top:14px;">
+        <div>
+          <label for="bm_conflict">核心冲突与主线</label>
+          <input type="text" id="bm_conflict" placeholder="核心矛盾交锋与故事主线目标…">
+        </div>
+        <div>
+          <label for="bm_tone">故事基调与文风</label>
+          <input type="text" id="bm_tone" placeholder="叙事基调与语言特色…">
+        </div>
+      </div>
+    </div>
+    <div class="actions" style="margin-top:16px;">
+      <button class="primary" id="bm_save">保存设定</button>
+      <button class="secondary" id="bm_cancel">关闭</button>
+      <span class="mini" id="bm_status" style="color:var(--muted)"></span>
+    </div>
+  </div>
+</div>
+  <script src="/static/js/util.js"></script>
+  <script src="/static/js/state.js"></script>
+  <script src="/static/js/generator.js"></script>
+  <script src="/static/js/library.js"></script>
+  <script src="/static/js/reader.js"></script>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

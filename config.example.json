@@ -1,0 +1,13 @@
+{
+  "providers": [
+    {
+      "id": "deepseek",
+      "name": "DeepSeek",
+      "base_url": "https://api.deepseek.com",
+      "api_key": "YOUR_API_KEY_HERE",
+      "model": "deepseek-chat",
+      "temperature": 1.0
+    }
+  ],
+  "active_provider": "deepseek"
+}

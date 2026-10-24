@@ -1,0 +1,69 @@
+# 小说生成器 —— systemd 服务单元
+#
+# 安装位置：/etc/systemd/system/novel-generator.service
+# deploy/setup-server.sh 会自动按你的 APP_DIR / APP_USER / PORT 替换下面三处后安装：
+#   /opt/novel-generator  → APP_DIR
+#   novelgen              → APP_USER
+#   0.0.0.0:8000          → 0.0.0.0:<PORT>
+#
+# 常用命令：
+#   systemctl status novel-generator
+#   systemctl restart novel-generator
+#   journalctl -u novel-generator -f
+
+[Unit]
+Description=Novel Generator (个人小说生成器)
+# 部署说明见 /opt/novel-generator/deploy/README-DEPLOY.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=novelgen
+Group=novelgen
+WorkingDirectory=/opt/novel-generator
+
+Environment=NOVEL_APP_DIR=/opt/novel-generator
+Environment=NOVEL_BIND=0.0.0.0:8000
+Environment=NOVEL_THREADS=8
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+# app.py 用 datetime.now() 生成时间戳，按自己的时区来
+Environment=TZ=Asia/Shanghai
+
+ExecStart=/opt/novel-generator/.venv/bin/gunicorn --config /opt/novel-generator/deploy/gunicorn.conf.py app:app
+
+Restart=on-failure
+RestartSec=5s
+KillSignal=SIGTERM
+TimeoutStopSec=60s
+
+# ---------------------------------------------------------------------------
+# 加固：限制这个进程能碰的东西。
+# 路径前面的 "-" 表示「该路径不存在时忽略」——首次部署 config.json 还没生成也不会启动失败。
+# 如果服务起不来，先把下面这段（NoNewPrivileges 到 SystemCallErrorNumber）整体注释掉，
+# 用 `systemctl daemon-reload && systemctl start novel-generator` 逐个加回来定位。
+# ---------------------------------------------------------------------------
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+# 必须带 AF_NETLINK：glibc 的 getaddrinfo 解析域名时要用（调大模型 API 全靠它）
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# 唯一可写的三个位置：小说正文、分析缓存、配置（设置页存 Key / 隐私密码）
+ReadWritePaths=-/opt/novel-generator/novels
+ReadWritePaths=-/opt/novel-generator/analysis_cache
+ReadWritePaths=-/opt/novel-generator/config.json
+
+[Install]
+WantedBy=multi-user.target

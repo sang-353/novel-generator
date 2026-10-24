@@ -1,0 +1,83 @@
+# 小说生成器 —— 可选的反代配置（nginx + Basic Auth + 可选 TLS）
+#
+# 项目自身没有账号体系，这一层是补上「登录」和「加密传输」的。
+# 安装：
+#   sudo apt install -y nginx apache2-utils
+#   sudo htpasswd -c /etc/nginx/.htpasswd 你的用户名
+#   sudo cp /opt/novel-generator/deploy/nginx-novel-generator.conf.example \
+#           /etc/nginx/sites-available/novel-generator
+#   sudo ln -s /etc/nginx/sites-available/novel-generator /etc/nginx/sites-enabled/novel-generator
+#   sudo nginx -t && sudo systemctl reload nginx
+#
+# 启用后【必须同时】做两件事，否则 8000 端口还是裸奔在公网上：
+#   1) deploy/novel-generator.service 里 NOVEL_BIND 改成 127.0.0.1:8000
+#      （然后 sudo systemctl daemon-reload && sudo systemctl restart novel-generator）
+#   2) 云安全组里删掉 8000 的入站规则，只留 443（80 留给 certbot 验证）
+
+server {
+    listen      80;
+    listen      [::]:80;
+    server_name _;
+
+    # 配好证书后放开这一行做跳转
+    # return 301 https://$host$request_uri;
+
+    # 反代鉴权：补上项目缺失的登录环节
+    auth_basic           "Novel Generator";
+    auth_basic_user_file /etc/nginx/.htpasswd;
+
+    # 19MB 的小说正文是整段 JSON 上传的，nginx 默认 1m 会直接 413
+    client_max_body_size 100m;
+    client_body_timeout  300s;
+
+    access_log /var/log/nginx/novel-access.log;
+    error_log  /var/log/nginx/novel-error.log;
+
+    location / {
+        proxy_pass         http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+
+        # app.py 的 chat() 单次请求超时是 300s，同步接口 /api/outline、
+        # /api/analyze-style 会一直占着连接，这里必须大于它
+        proxy_connect_timeout 60s;
+        proxy_send_timeout    900s;
+        proxy_read_timeout    900s;
+
+        # 导出整本小说时不让 nginx 在磁盘上做缓冲
+        proxy_buffering off;
+    }
+}
+
+# ---------------------------------------------------------------------------
+# HTTPS —— 有域名的话直接 `sudo certbot --nginx -d your.domain`，它会自动改写上面这块。
+# 手动配置大致长这样：
+# ---------------------------------------------------------------------------
+# server {
+#     listen      443 ssl;
+#     listen      [::]:443 ssl;
+#     http2       on;
+#     server_name novel.example.com;
+#
+#     ssl_certificate     /etc/letsencrypt/live/novel.example.com/fullchain.pem;
+#     ssl_certificate_key /etc/letsencrypt/live/novel.example.com/privkey.pem;
+#
+#     auth_basic           "Novel Generator";
+#     auth_basic_user_file /etc/nginx/.htpasswd;
+#
+#     client_max_body_size 100m;
+#
+#     location / {
+#         proxy_pass         http://127.0.0.1:8000;
+#         proxy_set_header   Host              $host;
+#         proxy_set_header   X-Real-IP         $remote_addr;
+#         proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+#         proxy_set_header   X-Forwarded-Proto $scheme;
+#         proxy_read_timeout 900s;
+#         proxy_send_timeout 900s;
+#         proxy_buffering    off;
+#     }
+# }
