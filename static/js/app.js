@@ -6,12 +6,16 @@ function switchView(name) {
     document.body.classList.remove('reading', 'rd-immersive');
     document.title = '小说生成器';
     try { closeReaderPanels(); } catch (e) { /* 忽略 */ }
+    try { if (typeof resetEditButtons === 'function') resetEditButtons(); } catch (e) { /* 忽略 */ }
   }
   document.querySelectorAll('header .nav').forEach(b => b.classList.toggle('active', b.dataset.view === name));
   document.querySelectorAll('section.view').forEach(s => s.classList.toggle('active', s.id === 'view-' + name));
   if (name === 'library') { loadLibrary(); loadPrivateShelf(); }
   if (name === 'settings') { loadSettings(); loadPrivacyState(); }
   if (name === 'original' || name === 'continuation') loadProviderSelects();
+  if (name === 'continuation') {
+    if (typeof loadExistingNovelsIntoContinuation === 'function') loadExistingNovelsIntoContinuation();
+  }
 }
 document.querySelectorAll('header .nav').forEach(btn => {
   btn.onclick = () => {
@@ -88,3 +92,49 @@ window.addEventListener('keydown', e => {
     const bm = $('bible_modal'); if (bm && bm.classList.contains('show')) bm.classList.remove('show');
   }
 });
+
+// ==================== P2: 全站轻量访问口令拦截与登录 ====================
+async function checkGlobalWebAuth() {
+  try {
+    const res = await api('/api/auth/status');
+    if (res && res.enabled && !res.authorized) {
+      showWebAuthModal();
+    }
+  } catch (e) {
+    if (e.auth_required) showWebAuthModal();
+  }
+}
+checkGlobalWebAuth();
+
+const authLoginBtn = $('web_auth_login_btn');
+if (authLoginBtn) {
+  authLoginBtn.onclick = async () => {
+    const pw = $('web_auth_input').value.trim();
+    if (!pw) { toast('请输入访问口令'); return; }
+    authLoginBtn.disabled = true;
+    authLoginBtn.textContent = '验证中…';
+    $('web_auth_err').textContent = '';
+    try {
+      const res = await api('/api/auth/login', 'POST', { password: pw });
+      authLoginBtn.disabled = false;
+      authLoginBtn.textContent = '解锁访问';
+      if (res && res.ok && res.token) {
+        setWebAccessToken(res.token);
+        hideWebAuthModal();
+        toast('口令验证成功，欢迎使用！');
+        onHashChange();
+        loadLibrary();
+      }
+    } catch (e) {
+      authLoginBtn.disabled = false;
+      authLoginBtn.textContent = '解锁访问';
+      $('web_auth_err').textContent = e.message || '访问口令错误';
+    }
+  };
+  const authInp = $('web_auth_input');
+  if (authInp) {
+    authInp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') authLoginBtn.click();
+    });
+  }
+}

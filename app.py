@@ -10,6 +10,8 @@
 """
 import hashlib
 import hmac
+import html
+import io
 import json
 import os
 import re
@@ -19,6 +21,7 @@ import sys
 import threading
 import time
 import uuid
+import zipfile
 from datetime import datetime
 from pathlib import Path
 
@@ -28,7 +31,7 @@ if _LIBS.exists() and str(_LIBS) not in sys.path:
     sys.path.insert(0, str(_LIBS))
 
 import requests
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, Response, jsonify, request, send_from_directory, stream_with_context
 
 BASE_DIR = Path(__file__).resolve().parent
 NOVELS_DIR = BASE_DIR / "novels"
@@ -200,13 +203,82 @@ def _mask_private_title(meta, title, token):
 
 
 # ---------------------------------------------------------------------------
+# 全站访问口令保护（Web Access Auth，用于 VPS / 局域网穿透防盗刷）
+# ---------------------------------------------------------------------------
+AUTH_TOKEN_TTL = 30 * 86400  # 30 天免密
+AUTH_TOKENS = {}
+AUTH_LOCK = threading.Lock()
+
+
+def _auth_record(cfg=None):
+    cfg = cfg if cfg is not None else load_config()
+    rec = cfg.get("web_auth") or {}
+    return rec if rec.get("hash") and rec.get("salt") else None
+
+
+def auth_enabled():
+    return _auth_record() is not None
+
+
+def issue_auth_token():
+    tok = secrets.token_urlsafe(32)
+    now = time.time()
+    with AUTH_LOCK:
+        for k in [k for k, exp in AUTH_TOKENS.items() if exp < now]:
+            AUTH_TOKENS.pop(k, None)
+        AUTH_TOKENS[tok] = now + AUTH_TOKEN_TTL
+    return tok
+
+
+def auth_token_valid(token):
+    if not token:
+        return False
+    with AUTH_LOCK:
+        exp = AUTH_TOKENS.get(token)
+        if not exp:
+            return False
+        if exp < time.time():
+            AUTH_TOKENS.pop(token, None)
+            return False
+        return True
+
+
+def revoke_auth_token(token):
+    with AUTH_LOCK:
+        AUTH_TOKENS.pop(token, None)
+
+
+def get_request_auth_token():
+    auth_hdr = request.headers.get("Authorization", "")
+    if auth_hdr.startswith("Bearer "):
+        return auth_hdr[7:].strip()
+    tok = request.cookies.get("access_token") or request.headers.get("X-Access-Token") or request.args.get("access_token")
+    return (tok or "").strip()
+
+
+@app.before_request
+def check_web_auth():
+    if not auth_enabled():
+        return None
+    path = request.path
+    # 静态资源、单页根路径、认证相关 API 始终允许访问
+    if path.startswith("/static/") or path in ["/", "/api/auth/status", "/api/auth/login"]:
+        return None
+    token = get_request_auth_token()
+    if not auth_token_valid(token):
+        return jsonify({"ok": False, "error": "全站访问已锁定，请输入访问口令", "auth_required": True}), 401
+
+
+# ---------------------------------------------------------------------------
 # 大模型调用（OpenAI 兼容，多 provider）
 # ---------------------------------------------------------------------------
-def chat(messages, max_tokens=2000, temperature=None, json_mode=False, timeout=300, provider_id=None, provider=None):
+def chat(messages, max_tokens=2000, temperature=None, json_mode=False, timeout=300, provider_id=None, provider=None, stream=False, on_chunk=None):
     """调用 chat/completions，返回 (content, finish_reason)。失败自动重试 3 次。
 
     provider_id：指定使用哪个大模型配置（缺省用默认 provider）。
     provider：直接传入 provider 配置 dict（用于测试尚未保存的新增模型）。
+    stream：是否启用流式传输。
+    on_chunk：流式 chunk 回调 (接收文本片段)。
     """
     if provider is None:
         provider = get_provider(provider_id)
@@ -218,7 +290,7 @@ def chat(messages, max_tokens=2000, temperature=None, json_mode=False, timeout=3
         "messages": messages,
         "temperature": temperature if temperature is not None else provider.get("temperature", 1.0),
         "max_tokens": max_tokens,
-        "stream": False,
+        "stream": bool(stream and on_chunk),
     }
     if json_mode:
         payload["response_format"] = {"type": "json_object"}
@@ -226,19 +298,52 @@ def chat(messages, max_tokens=2000, temperature=None, json_mode=False, timeout=3
     last_err = None
     for attempt in range(3):
         try:
-            r = requests.post(url, json=payload, headers=headers, timeout=timeout)
-            if r.status_code == 200:
-                data = r.json()
-                choice = data["choices"][0]
-                return choice["message"]["content"], choice.get("finish_reason")
-            last_err = f"HTTP {r.status_code}: {r.text[:300]}"
+            if stream and on_chunk:
+                r = requests.post(url, json=payload, headers=headers, timeout=timeout, stream=True)
+                if r.status_code == 200:
+                    chunks = []
+                    finish_reason = None
+                    for line in r.iter_lines():
+                        if not line:
+                            continue
+                        decoded = line.decode("utf-8", errors="replace").strip()
+                        if decoded.startswith("data: "):
+                            data_str = decoded[6:].strip()
+                            if data_str == "[DONE]":
+                                break
+                            try:
+                                chunk = json.loads(data_str)
+                                choices = chunk.get("choices") or []
+                                if choices:
+                                    c0 = choices[0]
+                                    delta = c0.get("delta") or {}
+                                    txt = delta.get("content") or ""
+                                    if txt:
+                                        chunks.append(txt)
+                                        try:
+                                            on_chunk(txt)
+                                        except Exception:
+                                            pass
+                                    if c0.get("finish_reason"):
+                                        finish_reason = c0.get("finish_reason")
+                            except Exception:
+                                pass
+                    return "".join(chunks), finish_reason or "stop"
+                last_err = f"HTTP {r.status_code}: {r.text[:300]}"
+            else:
+                r = requests.post(url, json=payload, headers=headers, timeout=timeout)
+                if r.status_code == 200:
+                    data = r.json()
+                    choice = data["choices"][0]
+                    return choice["message"]["content"], choice.get("finish_reason")
+                last_err = f"HTTP {r.status_code}: {r.text[:300]}"
         except requests.RequestException as e:
             last_err = str(e)
         time.sleep(2 * (attempt + 1))
     raise RuntimeError(f"调用模型失败（已重试 3 次）：{last_err}")
 
 
-def generate_text(messages_fn, max_chars, max_tokens_per_call=8000, temperature=None, provider_id=None):
+def generate_text(messages_fn, max_chars, max_tokens_per_call=8000, temperature=None, provider_id=None, on_chunk=None):
     """循环调用模型直到章节写完（finish_reason 非 length）或达到字数上限。
 
     messages_fn(sofar) -> messages：sofar 为本章已生成内容，用于上下文续写。
@@ -246,7 +351,7 @@ def generate_text(messages_fn, max_chars, max_tokens_per_call=8000, temperature=
     sofar = ""
     while True:
         msgs = messages_fn(sofar)
-        content, reason = chat(msgs, max_tokens=max_tokens_per_call, temperature=temperature, provider_id=provider_id)
+        content, reason = chat(msgs, max_tokens=max_tokens_per_call, temperature=temperature, provider_id=provider_id, stream=bool(on_chunk), on_chunk=on_chunk)
         sofar += content
         if reason != "length" or len(sofar) >= max_chars:
             break
@@ -254,27 +359,135 @@ def generate_text(messages_fn, max_chars, max_tokens_per_call=8000, temperature=
 
 
 def extract_json(text):
-    """从模型输出中提取 JSON 对象（容忍 ```json 围栏与多余文字）。
+    """从模型输出中提取 JSON 对象（容忍 ```json 围栏、中文全角标点、不完整截断与多余文字）。
 
-    只接受对象（dict）；`null`/数组/标量视为无效并抛错，避免调用方拿到 None。
+    只接受对象（dict）；`null`/数组/标量视为无效；遇到截断时尽全力自动闭合修复或正则抢救。
     """
-    text = text.strip()
+    if not text or not str(text).strip():
+        raise RuntimeError("模型返回内容为空，未生成有效内容。")
+    text = str(text).strip()
     text = re.sub(r"^```(?:json)?\s*", "", text)
     text = re.sub(r"\s*```$", "", text)
+
+    # 1. 直接尝试标准解析
     try:
         obj = json.loads(text)
         if isinstance(obj, dict):
             return obj
-        raise ValueError("模型返回的不是 JSON 对象")
     except Exception:
-        m = re.search(r"\{.*\}", text, re.S)
-        if m:
+        pass
+
+    # 2. 匹配最外层完整的大括号
+    m = re.search(r"\{.*\}", text, re.S)
+    if m:
+        try:
+            obj = json.loads(m.group(0))
+            if isinstance(obj, dict):
+                return obj
+        except Exception:
+            pass
+
+    # 3. 常见中文全角标点与多余尾随逗号清洗
+    cleaned = text
+    # 替换中文弯引号
+    cleaned = cleaned.replace("“", "\"").replace("”", "\"").replace("‘", "\"").replace("’", "\"")
+    # 替换中文冒号为英文冒号（作为键值分隔符时）
+    cleaned = re.sub(r"\"\s*：\s*", "\": ", cleaned)
+    # 替换中文逗号
+    cleaned = re.sub(r"\"\s*，\s*", "\", ", cleaned)
+    cleaned = re.sub(r"([0-9]|true|false|null|\]|\})\s*，\s*", r"\1, ", cleaned)
+    # 替换中文全角括号
+    cleaned = cleaned.replace("｛", "{").replace("｝", "}").replace("［", "[").replace("］", "]")
+    # 去除数组/对象尾随多余逗号
+    cleaned = re.sub(r",\s*([\}\]])", r"\1", cleaned)
+
+    m = re.search(r"\{.*\}", cleaned, re.S)
+    if m:
+        try:
+            obj = json.loads(m.group(0))
+            if isinstance(obj, dict):
+                return obj
+        except Exception:
+            pass
+
+    # 4. 截断闭合修复（当输出触及 max_tokens 未闭合字符串或括号时）
+    first_brace = cleaned.find("{")
+    if first_brace != -1:
+        s = cleaned[first_brace:]
+        # 去除末尾不完整的 key、冒号或逗号
+        s = re.sub(r"[,:\s]+$", "", s)
+
+        # 补全未闭合的双引号
+        quotes = len(re.findall(r"(?<!\\)\"", s))
+        if quotes % 2 != 0:
+            s += "\""
+
+        # 利用栈统计并闭合未匹配的括号
+        stack = []
+        in_str = False
+        escape = False
+        for c in s:
+            if escape:
+                escape = False
+                continue
+            if c == "\\":
+                escape = True
+                continue
+            if c == "\"":
+                in_str = not in_str
+                continue
+            if not in_str:
+                if c in "{[":
+                    stack.append(c)
+                elif c == "}":
+                    if stack and stack[-1] == "{":
+                        stack.pop()
+                elif c == "]":
+                    if stack and stack[-1] == "[":
+                        stack.pop()
+
+        while stack:
+            top = stack.pop()
+            if top == "{":
+                s += "}"
+            elif top == "[":
+                s += "]"
+
+        try:
+            obj = json.loads(s)
+            if isinstance(obj, dict):
+                return obj
+        except Exception:
+            pass
+
+    # 5. 正则保底抢救（提取所有完整的 "key": "value" 或 "key": [...] 字段）
+    salvaged = {}
+    pattern = r"\"([^\"]+)\"\s*[:：]\s*(?:\"([^\"]*)\"|\[(.*?)\]|(\{.*?\})|(\d+(?:\.\d+)?)|(true|false|null))"
+    for match in re.finditer(pattern, cleaned, re.S):
+        k = match.group(1).strip()
+        if not k:
+            continue
+        if match.group(2) is not None:
+            salvaged[k] = match.group(2)
+        elif match.group(3) is not None:
             try:
-                obj = json.loads(m.group(0))
-                if isinstance(obj, dict):
-                    return obj
+                salvaged[k] = json.loads("[" + match.group(3) + "]")
             except Exception:
-                pass
+                salvaged[k] = [x.strip().strip("\"") for x in match.group(3).split(",") if x.strip()]
+        elif match.group(4) is not None:
+            try:
+                salvaged[k] = json.loads(match.group(4))
+            except Exception:
+                salvaged[k] = {}
+        elif match.group(5) is not None:
+            salvaged[k] = float(match.group(5)) if "." in match.group(5) else int(match.group(5))
+        elif match.group(6) is not None:
+            val = match.group(6)
+            salvaged[k] = True if val == "true" else (False if val == "false" else None)
+
+    if salvaged and isinstance(salvaged, dict) and len(salvaged) > 0:
+        return salvaged
+
     raise RuntimeError("模型返回的不是有效 JSON：" + text[:200])
 
 
@@ -487,6 +700,7 @@ def new_job(mode, total, novel_name=None):
         "chars_total": 0,
         "eta": 0,
         "cancel": False,
+        "streaming_text": "",
     }
     with JOBS_LOCK:
         JOBS[job["id"]] = job
@@ -840,7 +1054,7 @@ def analyze_style(data, on_progress=None, provider_id=None, cancel_check=None):
         sys = "你是一位精通文本风格分析的文学编辑。"
         content, _ = chat(
             [{"role": "system", "content": sys}, {"role": "user", "content": user}],
-            max_tokens=2500,
+            max_tokens=4500,
             json_mode=True,
             provider_id=provider_id,
         )
@@ -864,7 +1078,7 @@ def analyze_style(data, on_progress=None, provider_id=None, cancel_check=None):
     sys = "你是一位精通文本风格分析的文学编辑。"
     content, _ = chat(
         [{"role": "system", "content": sys}, {"role": "user", "content": user}],
-        max_tokens=2500,
+        max_tokens=4500,
         json_mode=True,
         provider_id=provider_id,
     )
@@ -883,7 +1097,7 @@ def _partial_summary(chunk, title, author, idx, total, provider_id=None):
     sys = "你是一位精通文本分析的小说编辑，正在逐部分通读一部小说，为后续续写做准备。"
     content, _ = chat(
         [{"role": "system", "content": sys}, {"role": "user", "content": user}],
-        max_tokens=1200,
+        max_tokens=2500,
         json_mode=True,
         provider_id=provider_id,
     )
@@ -903,7 +1117,7 @@ def _merge_profile(merged, title, author, provider_id=None):
     sys = "你是一位资深文学编辑，正在为续写一部小说准备完整的创作档案。"
     content, _ = chat(
         [{"role": "system", "content": sys}, {"role": "user", "content": user}],
-        max_tokens=3000,
+        max_tokens=5000,
         json_mode=True,
         provider_id=provider_id,
     )
@@ -1114,8 +1328,14 @@ def run_original_job(job, data):
             if job.get("cancel"):
                 _finalize_cancelled(job, path, meta, chapters)
                 return
-            update_job(job, step=f"正在写第 {i}/{n} 章", current=i)
+            update_job(job, step=f"正在写第 {i}/{n} 章", current=i, streaming_text="")
             prev = context_from(chapters)
+
+            def on_chunk(token):
+                if job.get("cancel"):
+                    raise JobCancelledError()
+                with JOBS_LOCK:
+                    job["streaming_text"] = (job.get("streaming_text") or "") + token
 
             def mk_msgs(sofar, i=i, prev=prev):
                 msgs = [
@@ -1132,7 +1352,7 @@ def run_original_job(job, data):
                     msgs.append({"role": "user", "content": "继续写这一章，接着上面的内容往下写，不要重复。"})
                 return msgs
 
-            content = generate_text(mk_msgs, max_chars=int(per * 1.6), provider_id=provider_id)
+            content = generate_text(mk_msgs, max_chars=int(per * 1.6), provider_id=provider_id, on_chunk=on_chunk)
             title_line, body = chapter_title_from(content, i)
             chapters.append({"title": title_line, "content": body})
             meta["status"] = "generating"
@@ -1183,10 +1403,21 @@ def run_continuation_job(job, data):
         if not style_profile:
             # 原创生成的书首次续写：用已有章节自动建档案并缓存
             update_job(job, step="正在通读已有章节分析风格…")
-            src = "\n\n".join(c["content"] for c in chapters)
-            style_profile = analyze_style({"source_text": src, "source_title": meta.get("title", "")},
-                                          provider_id=provider_id)
+            src = "\n\n".join(c.get("content", "") for c in chapters)
+            try:
+                style_profile = analyze_style({"source_text": src, "source_title": meta.get("title", "")},
+                                              provider_id=provider_id)
+            except Exception as e:
+                bible = meta.get("bible") or (meta.get("job_payload") and meta["job_payload"].get("bible")) or {}
+                style_profile = {
+                    "文风": bible.get("tone") or (meta.get("job_payload") and meta["job_payload"].get("style")) or "延续前文文风",
+                    "叙事视角": (meta.get("job_payload") and meta["job_payload"].get("perspective")) or "第三人称",
+                    "人物表": bible.get("characters") or [],
+                    "当前剧情状态": f"前 {len(chapters)} 章已完成",
+                    "备注": "自动继承自原创设定与已有章节",
+                }
             meta["style_profile"] = style_profile
+            write_novel(path, meta, chapters)
         if data.get("bible"):
             meta["bible"] = data.get("bible")
         elif "bible" not in data and meta.get("bible"):
@@ -1274,8 +1505,14 @@ def run_continuation_job(job, data):
             if job.get("cancel"):
                 _finalize_cancelled(job, path, meta, chapters)
                 return
-            update_job(job, step=f"正在续写第 {i} 章（本轮 {i - start + 1}/{n}）", current=i - start + 1)
+            update_job(job, step=f"正在续写第 {i} 章（本轮 {i - start + 1}/{n}）", current=i - start + 1, streaming_text="")
             prev = context_from(chapters, budget=12000)
+
+            def on_chunk(token):
+                if job.get("cancel"):
+                    raise JobCancelledError()
+                with JOBS_LOCK:
+                    job["streaming_text"] = (job.get("streaming_text") or "") + token
 
             def mk_msgs(sofar, i=i, prev=prev):
                 msgs = [
@@ -1293,7 +1530,7 @@ def run_continuation_job(job, data):
                     msgs.append({"role": "user", "content": "继续写这一章，接着上面的内容往下写，不要重复。"})
                 return msgs
 
-            content = generate_text(mk_msgs, max_chars=int(per * 1.6), provider_id=provider_id)
+            content = generate_text(mk_msgs, max_chars=int(per * 1.6), provider_id=provider_id, on_chunk=on_chunk)
             title_line, body = chapter_title_from(content, i)
             chapters.append({"title": title_line, "content": body})
             meta["status"] = "generating"
@@ -1461,11 +1698,18 @@ def run_rewrite_job(job, data):
         # 重写前自动备份旧章节，可到「设置 -> 章节备份」恢复
         _backup_chapter(p.stem, idx, chapters[idx])
 
-        update_job(job, novel_name=p.stem, step=f"正在重写第 {num} 章…", current=1)
+        update_job(job, novel_name=p.stem, step=f"正在重写第 {num} 章…", current=1, streaming_text="")
         if job.get("cancel"):
             _finalize_cancelled(job, p, meta, chapters)
             return
-        content = generate_text(mk_msgs, max_chars=int(per * 1.6), provider_id=provider_id)
+
+        def on_chunk(token):
+            if job.get("cancel"):
+                raise JobCancelledError()
+            with JOBS_LOCK:
+                job["streaming_text"] = (job.get("streaming_text") or "") + token
+
+        content = generate_text(mk_msgs, max_chars=int(per * 1.6), provider_id=provider_id, on_chunk=on_chunk)
         title_line, body = chapter_title_from(content, num)
         chapters[idx] = {"title": title_line, "content": body}
         meta["words"] = sum(len(re.sub(r"\s", "", c["content"])) for c in chapters)
@@ -1556,6 +1800,69 @@ def api_privacy_lock():
     data = request.get_json(silent=True) or {}
     revoke_privacy_token(_request_token(data))
     return jsonify({"ok": True})
+
+
+# ---------- 全站访问门禁 ----------
+@app.get("/api/auth/status")
+def api_auth_status():
+    enabled = auth_enabled()
+    token = get_request_auth_token()
+    authorized = (not enabled) or auth_token_valid(token)
+    return jsonify({"enabled": enabled, "authorized": authorized})
+
+
+@app.post("/api/auth/login")
+def api_auth_login():
+    if not auth_enabled():
+        return jsonify({"ok": True, "token": "", "message": "未启用全站口令"})
+    data = request.get_json(force=True) or {}
+    password = (data.get("password") or "").strip()
+    rec = _auth_record()
+    if not verify_password(password, rec):
+        return jsonify({"ok": False, "error": "访问口令错误"}), 403
+    tok = issue_auth_token()
+    resp = jsonify({"ok": True, "token": tok})
+    resp.set_cookie("access_token", tok, max_age=int(AUTH_TOKEN_TTL), httponly=False, samesite="Lax")
+    return resp
+
+
+@app.post("/api/auth/set-password")
+def api_auth_set_password():
+    data = request.get_json(force=True) or {}
+    new_pw = (data.get("new_password") or "").strip()
+    old_pw = (data.get("old_password") or "").strip()
+    cfg = load_config()
+    rec = _auth_record(cfg)
+    if rec:
+        if not verify_password(old_pw, rec):
+            return jsonify({"ok": False, "error": "原访问口令不正确"}), 403
+    if not new_pw:
+        # 清除口令（关闭全站访问门禁）
+        cfg.pop("web_auth", None)
+        save_config(cfg)
+        with AUTH_LOCK:
+            AUTH_TOKENS.clear()
+        return jsonify({"ok": True, "enabled": False, "message": "全站访问口令已关闭"})
+    if len(new_pw) < 4:
+        return jsonify({"ok": False, "error": "口令长度至少 4 位"}), 400
+    cfg["web_auth"] = hash_password(new_pw)
+    save_config(cfg)
+    with AUTH_LOCK:
+        AUTH_TOKENS.clear()
+    tok = issue_auth_token()
+    resp = jsonify({"ok": True, "enabled": True, "token": tok, "message": "全站访问口令设置成功"})
+    resp.set_cookie("access_token", tok, max_age=int(AUTH_TOKEN_TTL), httponly=False, samesite="Lax")
+    return resp
+
+
+@app.post("/api/auth/logout")
+def api_auth_logout():
+    tok = get_request_auth_token()
+    if tok:
+        revoke_auth_token(tok)
+    resp = jsonify({"ok": True})
+    resp.delete_cookie("access_token")
+    return resp
 
 
 @app.get("/api/settings")
@@ -1761,6 +2068,49 @@ def api_get_chapter(name, idx):
         "title": c.get("title", ""),
         "content": c.get("content", ""),
         "words": c_words
+    })
+
+
+@app.post("/api/novels/<name>/chapters/<int:idx>")
+@app.post("/api/novels/<name>/chapter/<int:idx>")
+def api_edit_chapter(name, idx):
+    """就地编辑章节正文与标题，并在保存前自动生成快照备份。"""
+    token = _request_token()
+    p = safe_novel_path(name)
+    if not p:
+        return jsonify({"error": "小说不存在"}), 404
+    meta, chapters, words = parse_novel(p, repair=False)
+    if _deny_private(meta, token):
+        return jsonify({"error": "隐私书架已锁定，请先输入隐私密码", "locked": True}), 403
+    if idx < 0 or idx >= len(chapters):
+        return jsonify({"error": "章节不存在"}), 404
+    if book_busy(p.stem):
+        return jsonify({"error": "小说正在生成中，暂时无法编辑章节"}), 409
+
+    data = request.get_json(force=True) or {}
+    new_title = data.get("title")
+    new_content = data.get("content")
+    if new_content is None:
+        return jsonify({"error": "章节正文内容不能为空"}), 400
+
+    old_ch = chapters[idx]
+    # 编辑前自动备份旧版本快照（可在「设置 -> 章节备份」恢复）
+    _backup_chapter(p.stem, idx, old_ch)
+
+    if new_title is not None and str(new_title).strip():
+        chapters[idx]["title"] = str(new_title).strip()
+    chapters[idx]["content"] = str(new_content)
+
+    c_words = len(re.sub(r"\s+", "", chapters[idx]["content"]))
+    meta["words"] = sum(len(re.sub(r"\s+", "", c.get("content", ""))) for c in chapters)
+    write_novel(p, meta, chapters)
+    return jsonify({
+        "ok": True,
+        "index": idx,
+        "title": chapters[idx]["title"],
+        "content": chapters[idx]["content"],
+        "words": c_words,
+        "total_words": meta["words"]
     })
 
 
@@ -1993,9 +2343,217 @@ def api_cache_stats():
     return jsonify({"count": n})
 
 
+def generate_epub(title, author, intro, chapters, meta=None) -> bytes:
+    """纯标准库生成符合 EPUB 2/3 标准规范的电子书，适配 Apple Books、微信读书、Kindle 等。"""
+    meta = meta or {}
+    book_id = str(uuid.uuid4())
+    mod_time = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    title_esc = html.escape(title or "未命名小说")
+    author_esc = html.escape(author or "AI 创作")
+    intro_esc = html.escape(intro or "")
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        # 1. mimetype (必须是首个文件且无压缩存储)
+        z.writestr("mimetype", b"application/epub+zip", compress_type=zipfile.ZIP_STORED)
+
+        # 2. META-INF/container.xml
+        container_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>"""
+        z.writestr("META-INF/container.xml", container_xml, compress_type=zipfile.ZIP_DEFLATED)
+
+        # 3. OEBPS/style.css
+        css = """@charset "utf-8";
+body {
+  margin: 5% 8%;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  line-height: 1.85;
+  color: #2c3e50;
+  text-align: justify;
+}
+h1, h2, h3 {
+  font-weight: 600;
+  color: #1a202c;
+  text-align: center;
+  margin-top: 1.5em;
+  margin-bottom: 0.8em;
+}
+p {
+  text-indent: 2em;
+  margin: 0.5em 0;
+  line-height: 1.85;
+}
+.cover-wrap {
+  text-align: center;
+  padding: 16% 5%;
+}
+.cover-title {
+  font-size: 2.2em;
+  font-weight: bold;
+  color: #111;
+  margin-bottom: 0.4em;
+}
+.cover-author {
+  font-size: 1.1em;
+  color: #666;
+  margin-top: 1em;
+}
+.cover-meta {
+  font-size: 0.9em;
+  color: #888;
+  margin-top: 1.8em;
+}
+.cover-intro {
+  margin: 2.2em auto 0 auto;
+  font-size: 0.95em;
+  color: #555;
+  text-align: left;
+  max-width: 80%;
+  border-left: 3px solid #cbd5e1;
+  padding-left: 1em;
+}
+"""
+        z.writestr("OEBPS/style.css", css, compress_type=zipfile.ZIP_DEFLATED)
+
+        manifest_items = [
+            '<item id="style" href="style.css" media-type="text/css"/>',
+            '<item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/>',
+            '<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>',
+            '<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>',
+        ]
+        spine_items = [
+            '<itemref idref="cover"/>',
+            '<itemref idref="nav"/>',
+        ]
+        nav_points = []
+        nav_lis = []
+
+        # 4. 封面 XHTML
+        words_count = meta.get("words", 0)
+        intro_block = f'<div class="cover-intro"><p>{intro_esc}</p></div>' if intro_esc else ""
+        cover_html = f"""<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="zh-CN">
+<head>
+  <title>{title_esc}</title>
+  <link rel="stylesheet" type="text/css" href="style.css"/>
+</head>
+<body>
+  <div class="cover-wrap">
+    <div class="cover-title">{title_esc}</div>
+    <div class="cover-author">作者：{author_esc}</div>
+    <div class="cover-meta">总字数：{words_count:,} 字 · 共 {len(chapters)} 章</div>
+    {intro_block}
+  </div>
+</body>
+</html>"""
+        z.writestr("OEBPS/cover.xhtml", cover_html, compress_type=zipfile.ZIP_DEFLATED)
+
+        # 5. 章节 XHTML
+        for i, ch in enumerate(chapters):
+            ch_title = ch.get("title") or f"第 {i + 1} 章"
+            ch_title_esc = html.escape(ch_title)
+            ch_content = ch.get("content") or ""
+            paras = [f"<p>{html.escape(p.strip())}</p>" for p in ch_content.split("\n") if p.strip()]
+            paras_html = "\n    ".join(paras) if paras else "<p>（本章无正文）</p>"
+
+            ch_id = f"chapter_{i}"
+            ch_fname = f"{ch_id}.xhtml"
+            manifest_items.append(f'<item id="{ch_id}" href="{ch_fname}" media-type="application/xhtml+xml"/>')
+            spine_items.append(f'<itemref idref="{ch_id}"/>')
+            nav_points.append(f"""    <navPoint id="nav_{i}" playOrder="{i + 1}">
+      <navLabel><text>{ch_title_esc}</text></navLabel>
+      <content src="{ch_fname}"/>
+    </navPoint>""")
+            nav_lis.append(f'      <li><a href="{ch_fname}">{ch_title_esc}</a></li>')
+
+            ch_xhtml = f"""<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="zh-CN">
+<head>
+  <title>{ch_title_esc} - {title_esc}</title>
+  <link rel="stylesheet" type="text/css" href="style.css"/>
+</head>
+<body>
+  <h2>{ch_title_esc}</h2>
+  <div class="chapter-content">
+    {paras_html}
+  </div>
+</body>
+</html>"""
+            z.writestr(f"OEBPS/{ch_fname}", ch_xhtml, compress_type=zipfile.ZIP_DEFLATED)
+
+        # 6. OEBPS/nav.xhtml (EPUB 3 导航)
+        nav_lis_str = "\n".join(nav_lis)
+        nav_html = f"""<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="zh-CN">
+<head>
+  <title>目录 - {title_esc}</title>
+  <link rel="stylesheet" type="text/css" href="style.css"/>
+</head>
+<body>
+  <nav epub:type="toc" id="toc">
+    <h2>目录</h2>
+    <ol>
+{nav_lis_str}
+    </ol>
+  </nav>
+</body>
+</html>"""
+        z.writestr("OEBPS/nav.xhtml", nav_html, compress_type=zipfile.ZIP_DEFLATED)
+
+        # 7. OEBPS/toc.ncx (EPUB 2 兼容目录)
+        nav_points_str = "\n".join(nav_points)
+        ncx_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
+  <head>
+    <meta name="dtb:uid" content="urn:uuid:{book_id}"/>
+    <meta name="dtb:depth" content="1"/>
+    <meta name="dtb:totalPageCount" content="0"/>
+    <meta name="dtb:maxPageNumber" content="0"/>
+  </head>
+  <docTitle><text>{title_esc}</text></docTitle>
+  <docAuthor><text>{author_esc}</text></docAuthor>
+  <navMap>
+{nav_points_str}
+  </navMap>
+</ncx>"""
+        z.writestr("OEBPS/toc.ncx", ncx_xml, compress_type=zipfile.ZIP_DEFLATED)
+
+        # 8. OEBPS/content.opf (包清单与元数据)
+        manifest_str = "\n    ".join(manifest_items)
+        spine_str = "\n    ".join(spine_items)
+        desc_xml = f"<dc:description>{intro_esc}</dc:description>" if intro_esc else ""
+        opf_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="BookID" version="3.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
+    <dc:title>{title_esc}</dc:title>
+    <dc:creator>{author_esc}</dc:creator>
+    <dc:language>zh-CN</dc:language>
+    <dc:identifier id="BookID">urn:uuid:{book_id}</dc:identifier>
+    <meta property="dcterms:modified">{mod_time}</meta>
+    {desc_xml}
+  </metadata>
+  <manifest>
+    {manifest_str}
+  </manifest>
+  <spine toc="ncx">
+    {spine_str}
+  </spine>
+</package>"""
+        z.writestr("OEBPS/content.opf", opf_xml, compress_type=zipfile.ZIP_DEFLATED)
+
+    return buf.getvalue()
+
+
 @app.get("/api/novels/<name>/export")
 def api_export_novel(name):
-    """导出整本小说为 txt 或 md。fmt=txt|md"""
+    """导出整本小说为 epub、txt 或 md。fmt=epub|txt|md"""
     p = safe_novel_path(name)
     if not p:
         return jsonify({"error": "小说不存在"}), 404
@@ -2005,7 +2563,17 @@ def api_export_novel(name):
         return jsonify({"error": "隐私书架已锁定，请先输入隐私密码", "locked": True}), 403
     title = meta.get("title", p.stem)
 
-    if fmt == "md":
+    from urllib.parse import quote
+    if fmt == "epub":
+        author = meta.get("author") or "AI 创作"
+        job_payload = meta.get("job_payload") or {}
+        intro = meta.get("intro") or job_payload.get("setting") or ""
+        epub_data = generate_epub(title, author, intro, chapters, meta=meta)
+        fname = f"{p.stem}.epub"
+        resp = app.response_class(epub_data, mimetype="application/epub+zip")
+        resp.headers["Content-Disposition"] = f"attachment; filename*=UTF-8''{quote(fname)}"
+        return resp
+    elif fmt == "md":
         parts = [f"# {title}", ""]
         for c in chapters:
             parts.append(f"## {c['title']}")
@@ -2026,10 +2594,80 @@ def api_export_novel(name):
         fname = f"{p.stem}.txt"
         mime = "text/plain; charset=utf-8"
 
-    from urllib.parse import quote
     resp = app.response_class(content, mimetype=mime)
     resp.headers["Content-Disposition"] = f"attachment; filename*=UTF-8''{quote(fname)}"
     return resp
+
+
+@app.post("/api/novels/<name>/selection-assist")
+def api_selection_assist(name):
+    """划词局部 AI 辅助精修：扩写细节、转换文风、精简降水或自定义指示。"""
+    p = safe_novel_path(name)
+    if not p:
+        return jsonify({"error": "小说不存在"}), 404
+    data = request.get_json(force=True) or {}
+    selected_text = (data.get("selected_text") or "").strip()
+    if not selected_text:
+        return jsonify({"error": "未提供选中的文本片段"}), 400
+    if len(selected_text) > 4000:
+        return jsonify({"error": "选中文本过长，请选择 2000 字以内的局部片段进行精修"}), 400
+
+    instruction_type = data.get("instruction_type") or "expand"
+    style_target = (data.get("style_target") or "生动细腻").strip()
+    custom_instruction = (data.get("custom_instruction") or "").strip()
+    context_before = (data.get("context_before") or "")[-800:]
+    context_after = (data.get("context_after") or "")[:800:]
+    provider_id = data.get("provider_id")
+
+    meta, _, _ = parse_novel(p)
+    novel_title = meta.get("title", p.stem)
+    novel_tone = (meta.get("style_profile") and meta["style_profile"].get("文风")) or ""
+
+    if instruction_type == "expand":
+        task_desc = "丰富并扩充所选文本的细节（五感、动作神态、环境氛围与心理描写），保持人物设定与情节连贯，使其更加生动细腻。"
+    elif instruction_type == "style":
+        task_desc = f"将所选文本改写为「{style_target}」风格，保持核心事件与信息不变，替换遣词造句与叙事语调。"
+    elif instruction_type == "concise":
+        task_desc = "对所选文本进行精简降水，剔除陈词滥调与冗余描述，加快叙事节奏，强化语言力度。"
+    elif instruction_type == "custom":
+        task_desc = f"根据要求进行针对性改写：{custom_instruction}" if custom_instruction else "润色并优化所选文本。"
+    else:
+        task_desc = "优化所选文本的行文质感与表达。"
+
+    sys_prompt = (
+        "你是一位精通小说改写与润色的资深文学编辑。"
+        "你的任务是仅针对用户提供的【选中文本片段】进行局部改写/扩写/精修，使其完美嵌入上下文。"
+        "严格规则：\n"
+        "1. 只输出改写后的正文文字；\n"
+        "2. 绝对不要输出任何前言、解释、前后缀标记（如：'以下是修改后的内容：'）、或用引号包裹；\n"
+        "3. 保持前后剧情与标点承接自然。"
+    )
+
+    user_prompt = (
+        f"小说书名：《{novel_title}》\n"
+        f"{f'整体文风基调：{novel_tone}' if novel_tone else ''}\n\n"
+        f"【上文语境】：\n...{context_before}\n\n"
+        f"【需要修改的原文片段】：\n{selected_text}\n\n"
+        f"【下文语境】：\n{context_after}...\n\n"
+        f"【改写指令】：{task_desc}\n\n"
+        "请直接输出改写后的正文片段："
+    )
+
+    try:
+        content, _ = chat([
+            {"role": "system", "content": sys_prompt},
+            {"role": "user", "content": user_prompt}
+        ], max_tokens=1500, temperature=0.7, provider_id=provider_id)
+        result_text = content.strip()
+        result_text = re.sub(r"^```(?:markdown|text)?\s*", "", result_text)
+        result_text = re.sub(r"\s*```$", "", result_text).strip()
+        if result_text.startswith("“") and result_text.endswith("”") and not selected_text.startswith("“"):
+            result_text = result_text[1:-1].strip()
+        elif result_text.startswith('"') and result_text.endswith('"') and not selected_text.startswith('"'):
+            result_text = result_text[1:-1].strip()
+        return jsonify({"ok": True, "result": result_text, "original": selected_text})
+    except Exception as e:
+        return jsonify({"error": f"AI 辅助改写失败：{str(e)}"}), 500
 
 
 @app.post("/api/novels/<name>/chapters/delete")
@@ -2220,6 +2858,78 @@ def api_analyze():
     return jsonify({"job_id": job["id"]})
 
 
+@app.post("/api/generate-variants")
+def api_generate_variants():
+    """生成续写起手剧情候选小样（2 选 1）：为半自动导演模式提供走向选择。"""
+    data = request.get_json(force=True) or {}
+    novel_name = data.get("novel_name")
+    instruction = (data.get("instruction") or "继续推进剧情").strip()
+    provider_id = data.get("provider_id")
+
+    title = ""
+    tail_text = ""
+    tone = ""
+
+    if novel_name:
+        p = safe_novel_path(novel_name)
+        if p and p.exists():
+            meta, chapters, _ = parse_novel(p)
+            if chapters:
+                title = meta.get("title", p.stem)
+                last_ch = chapters[-1]
+                tail_text = (last_ch.get("content") or "")[-1200:]
+                tone = (meta.get("style_profile") and meta["style_profile"].get("文风")) or ""
+
+    if not tail_text and data.get("source_text"):
+        tail_text = (data["source_text"] or "")[-1200:]
+        title = data.get("source_title") or data.get("novel_name") or "未命名作品"
+        if data.get("style_profile") and isinstance(data["style_profile"], dict):
+            tone = data["style_profile"].get("文风", "")
+
+    if not tail_text:
+        if novel_name:
+            p = safe_novel_path(novel_name)
+            if not p or not p.exists():
+                return jsonify({"error": "小说不存在"}), 404
+            return jsonify({"error": "小说暂无章节，无法生成续写小样"}), 400
+        return jsonify({"error": "缺少小说名称或正文上下文"}), 400
+
+    sys_prompt = (
+        "你是一位精通故事结构与情节推进的资深小说编辑兼编剧。"
+        "你的任务是为小说的后续章节构思【两种截然不同走向的起手剧情小样（每样约 250-350 字）】，供作者/导演二选一。"
+        "输出必须为严格的 JSON 对象，包含键 'variants'（数组，含两个对象）：\n"
+        "每个对象含：\n"
+        "- 'id': 'A' 或 'B'\n"
+        "- 'title': 走向简述（8字以内，如'暗流涌动·潜行调查'、'正面冲突·突发意外'）\n"
+        "- 'synopsis': 核心看点（1-2句说明该走向的戏剧冲突）\n"
+        "- 'preview': 起手剧情正文片段（200-300字，承接前文，直接可作为下章开篇）"
+    )
+
+    user_prompt = (
+        f"小说书名：《{title}》\n"
+        f"{f'文风基调：{tone}' if tone else ''}\n"
+        f"前文结局片段：\n...{tail_text}\n\n"
+        f"当前续写指示：{instruction}\n\n"
+        "请构思两种风格差异鲜明的剧情小样（例如：一个偏重伏笔反转/智斗，一个偏重正面交锋/突发危机），以 JSON 输出："
+    )
+
+    try:
+        content, _ = chat([
+            {"role": "system", "content": sys_prompt},
+            {"role": "user", "content": user_prompt}
+        ], max_tokens=1500, temperature=1.0, json_mode=True, provider_id=provider_id)
+        obj = extract_json(content)
+        variants = obj.get("variants") or []
+        if not variants or len(variants) < 2:
+            variants = [
+                {"id": "A", "title": "方向 A：顺承推进", "synopsis": "顺应前文线索展开调查", "preview": content[:300]},
+                {"id": "B", "title": "方向 B：突发意外", "synopsis": "引入突发事件打破僵局", "preview": content[300:600] if len(content) > 300 else "忽然间门外传来急促的脚步声..."}
+            ]
+        return jsonify({"ok": True, "variants": variants})
+    except Exception as e:
+        return jsonify({"error": f"生成剧情小样失败：{str(e)}"}), 500
+
+
 @app.post("/api/generate")
 def api_generate():
     data = request.get_json(force=True) or {}
@@ -2285,6 +2995,34 @@ def api_cancel_job(job_id):
         return jsonify({"error": "任务已结束，无法取消"}), 400
     update_job(job, cancel=True, message="取消请求已发送，将在当前章节完成后停止…")
     return jsonify({"ok": True})
+
+
+@app.get("/api/jobs/<job_id>/stream")
+def api_job_stream(job_id):
+    """实时 Server-Sent Events (SSE) 流式推送生成文本与进度。"""
+    job = JOBS.get(job_id)
+    if not job:
+        return jsonify({"error": "任务不存在"}), 404
+
+    def generate_events():
+        last_len = 0
+        while True:
+            cur_job = JOBS.get(job_id)
+            if not cur_job:
+                break
+            st = cur_job.get("streaming_text") or ""
+            if len(st) > last_len:
+                chunk = st[last_len:]
+                last_len = len(st)
+                yield f"data: {json.dumps({'type': 'chunk', 'text': chunk, 'step': cur_job.get('step', ''), 'current': cur_job.get('current', 0), 'total': cur_job.get('total', 0)}, ensure_ascii=False)}\n\n"
+
+            status = cur_job.get("status")
+            if status in ("done", "error", "cancelled"):
+                yield f"data: {json.dumps({'type': 'done', 'status': status, 'message': cur_job.get('message', ''), 'novel_name': cur_job.get('novel_name')}, ensure_ascii=False)}\n\n"
+                break
+            time.sleep(0.12)
+
+    return Response(stream_with_context(generate_events()), mimetype="text/event-stream")
 
 
 def _lan_urls(port):
