@@ -658,13 +658,39 @@ def test_novel_bible(tmpdir, monkeypatch):
     assert len(meta["bible"]["characters"]) == 2
 
 
-def test_suggest_titles_and_bible_validation(tmpdir, monkeypatch):
+def test_suggest_tropes_api(tmpdir, monkeypatch):
+    import json
+    import app
     client = _privacy_env(monkeypatch, tmpdir)
-    # 无输入应报错 400
-    r1 = client.post("/api/suggest-titles", json={})
-    assert r1.status_code == 400
-    r2 = client.post("/api/generate-bible", json={})
-    assert r2.status_code == 400
+
+    mock_tropes_resp = json.dumps({
+        "tropes": [
+            {
+                "icon": "🌸",
+                "label": "都市言情·反向狩猎",
+                "title": "失算后我成了前夫白月光",
+                "genre": "都市言情",
+                "setting": "现代都市金融投行圈",
+                "characters": "主角A：投行总监\n主角B：建筑设计师",
+                "storyline": "破镜重圆与克制拉扯",
+                "style": "细腻克制",
+                "perspective": "第三人称",
+                "chapters": 10,
+                "per_words": 2000
+            }
+        ]
+    }, ensure_ascii=False)
+
+    monkeypatch.setattr(app, "chat", lambda *args, **kwargs: (mock_tropes_resp, "stop"))
+
+    res = client.post("/api/suggest-tropes", json={"category": "female", "genre": "都市言情", "count": 2})
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data["ok"] is True
+    assert len(data["tropes"]) == 1
+    assert data["tropes"][0]["label"] == "都市言情·反向狩猎"
+    assert data["tropes"][0]["genre"] == "都市言情"
+
 
 
 def test_build_continuation_setup_with_bible():

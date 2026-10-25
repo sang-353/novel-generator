@@ -2761,6 +2761,124 @@ def api_suggest_titles():
         return jsonify({"error": "AI 拟名失败：" + str(e)}), 500
 
 
+@app.route("/api/suggest-tropes", methods=["GET", "POST"], strict_slashes=False)
+def api_suggest_tropes():
+    """实时生成一批富有创意且结构化的小说灵感脑洞模板。"""
+    if request.method == "GET":
+        category = request.args.get("category") or "all"
+        genre = (request.args.get("genre") or "").strip()
+        provider_id = request.args.get("provider_id")
+        try:
+            count = min(max(int(request.args.get("count", 4)), 2), 6)
+        except Exception:
+            count = 4
+    else:
+        data = request.get_json(silent=True) or {}
+        category = data.get("category") or "all"
+        genre = (data.get("genre") or "").strip()
+        provider_id = data.get("provider_id")
+        try:
+            count = min(max(int(data.get("count", 4)), 2), 6)
+        except Exception:
+            count = 4
+
+    category_desc = ""
+    if category == "female":
+        category_desc = "侧重晋江/番茄女性向、现实情感与治愈生活：都市言情（先婚后爱/破镜重圆）、青春校园（暗恋救赎）、双女主（女性互助/携手搞事业/百合纯爱）、都市日常（慢生活/美食食愈）、古代言情（经商种田/宅斗权谋）。"
+    elif category == "fantasy":
+        category_desc = "侧重起点/番茄脑洞、奇幻科幻与探案传奇：刑侦推理、悬疑惊悚、赛博朋克、末世求生、古风武侠、西幻领主、无限流、轻小说日常。"
+    else:
+        category_desc = "涵盖都市言情、青春校园、双女主互助、悬疑刑侦、现代日常、科幻脑洞、仙侠武侠等多元题材。"
+
+    sys_prompt = (
+        "你是一位精通各大网络文学平台（晋江文学城、起点中文网、番茄小说）的资深金牌策划编辑。"
+        f"请策划 {count} 个极具戏剧张力、设定新颖、读者粘性高的小说灵感开局模板。\n"
+        "必须严格输出符合 JSON 格式的对象，包含键 'tropes'（数组，每个元素为一个对象）：\n"
+        "每个对象字段必须包含：\n"
+        "- 'icon': 单个 emoji 图标（如 💍, 🎒, 👭, 🌙, 🍵, 🔍, ⚡, 🗡️）\n"
+        "- 'label': 标签简称（8-14字，格式如'都市言情·合约婚姻'、'双女主·合租破局'）\n"
+        "- 'title': 极具吸引力的网文书名\n"
+        "- 'genre': 题材分类（如 都市言情、青春校园、双女主/互助、百合纯爱、都市日常、刑侦推理、古代言情、赛博朋克、古风武侠等）\n"
+        "- 'setting': 世界观背景（2-3句话交代时代、核心舞台与独特设定）\n"
+        "- 'characters': 主要角色（格式为'角色A：身份、性格与核心动机\\n角色B：...'）\n"
+        "- 'storyline': 主线故事发展与核心冲突（2-3句话）\n"
+        "- 'style': 文风语调要求（如'细腻克制，拉扯感强，都市轻熟风'）\n"
+        "- 'perspective': '第三人称' 或 '第一人称'\n"
+        "- 'chapters': 推荐初始章节数（8-12之间整数）\n"
+        "- 'per_words': 推荐单章字数（2000-3000之间整数）"
+    )
+
+    user_prompt = f"请策划 {count} 个全新的小说开局灵感脑洞。\n要求：{category_desc}\n"
+    if genre:
+        user_prompt += f"指定重点偏好题材：{genre}\n"
+    user_prompt += "避免千篇一律的陈旧套路，注重人物动机与核心冲突反差。以 JSON 输出："
+
+    try:
+        content, _ = chat([
+            {"role": "system", "content": sys_prompt},
+            {"role": "user", "content": user_prompt}
+        ], max_tokens=2200, temperature=1.0, json_mode=True, provider_id=provider_id)
+        obj = extract_json(content)
+        raw_tropes = obj.get("tropes") if isinstance(obj, dict) else (obj if isinstance(obj, list) else [])
+        if not raw_tropes and isinstance(obj, dict):
+            for k in ("templates", "list", "data", "items"):
+                if isinstance(obj.get(k), list):
+                    raw_tropes = obj[k]
+                    break
+
+        clean_tropes = []
+        if isinstance(raw_tropes, list):
+            for item in raw_tropes:
+                if not isinstance(item, dict):
+                    continue
+                title = str(item.get("title") or item.get("book_name") or item.get("name") or "").strip()
+                label = str(item.get("label") or item.get("tag") or title or "").strip()
+                if not title and not label:
+                    continue
+                icon = str(item.get("icon") or "💡").strip() or "💡"
+                t_genre = str(item.get("genre") or item.get("category") or genre or "都市").strip()
+                setting = str(item.get("setting") or item.get("background") or "").strip()
+                characters = str(item.get("characters") or item.get("roles") or "").strip()
+                storyline = str(item.get("storyline") or item.get("plot") or item.get("outline") or "").strip()
+                style = str(item.get("style") or "生动细腻，节奏明快").strip()
+                perspective = str(item.get("perspective") or "第三人称").strip()
+                try:
+                    chapters = int(item.get("chapters", 10))
+                except Exception:
+                    chapters = 10
+                try:
+                    per_words = int(item.get("per_words", 2200))
+                except Exception:
+                    per_words = 2200
+
+                cat_val = category
+                if cat_val == "all":
+                    cat_val = "female" if any(w in t_genre for w in ("言情", "校园", "双女", "百合", "婚恋", "日常")) else "fantasy"
+
+                clean_tropes.append({
+                    "icon": icon,
+                    "label": label or title,
+                    "title": title or label,
+                    "genre": t_genre,
+                    "setting": setting,
+                    "characters": characters,
+                    "storyline": storyline,
+                    "style": style,
+                    "perspective": perspective,
+                    "chapters": chapters,
+                    "per_words": per_words,
+                    "cat": cat_val
+                })
+                if len(clean_tropes) >= count:
+                    break
+
+        if not clean_tropes:
+            raise ValueError("模型未返回有效灵感模板")
+        return jsonify({"ok": True, "tropes": clean_tropes})
+    except Exception as e:
+        return jsonify({"error": f"生成灵感脑洞失败：{str(e)}"}), 500
+
+
 @app.post("/api/generate-bible")
 def api_generate_bible():
     data = request.get_json(force=True) or {}

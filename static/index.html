@@ -62,13 +62,21 @@
         <button type="button" class="mini-btn banner-btn" id="og_go_settings_btn">前往设置 →</button>
       </div>
 
-      <!-- P1: 灵感脑洞库与网文经典开局模板 -->
+      <!-- 灵感脑洞库 -->
       <div class="trope-templates-wrap" id="og_trope_wrap">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-          <span class="mini" style="font-weight:600;color:var(--text);display:flex;align-items:center;gap:6px;">
-            💡 灵感脑洞库 <span class="hint">网文经典开局模板，一键填满设定秒开新书</span>
-          </span>
-          <button type="button" class="ghost mini-btn" id="btn_random_trope" title="随机抽取一个灵感脑洞">🎲 随机脑洞</button>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <span style="font-weight:600;font-size:13px;color:var(--ink);">💡 灵感脑洞</span>
+            <div class="trope-cat-tabs" id="og_trope_cat_tabs">
+              <button type="button" class="trope-cat-tab active" data-cat="all">全部</button>
+              <button type="button" class="trope-cat-tab" data-cat="female">情感 / 校园 / 生活</button>
+              <button type="button" class="trope-cat-tab" data-cat="fantasy">幻想 / 悬疑 / 脑洞</button>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <button type="button" class="ghost mini-btn" id="btn_refresh_tropes" title="由 AI 实时生成一批新脑洞">✨ 换一批</button>
+            <button type="button" class="ghost mini-btn" id="btn_random_trope" title="随机选用一个灵感脑洞">🎲 随机</button>
+          </div>
         </div>
         <div class="trope-pills" id="og_trope_pills"></div>
       </div>
@@ -76,32 +84,43 @@
       <div class="row">
         <div>
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-            <label for="og_title" style="margin:0">书名（可选）</label>
+            <label for="og_title" style="margin:0">书名</label>
             <button type="button" class="ghost mini-btn" id="btn_suggest_titles" title="根据当前题材与设定由 AI 推荐书名">✨ AI 拟名</button>
           </div>
           <input type="text" id="og_title" placeholder="留空则由 AI 自动拟定" autocomplete="off">
           <div id="og_title_candidates" style="display:none;margin-top:6px;">
-            <span class="mini" style="color:var(--muted)">推荐书名（点击选用）：</span>
+            
             <div id="og_title_list" class="tag-pills"></div>
           </div>
         </div>
         <div>
           <label for="og_genre">题材</label>
-          <div class="tag-pills" id="og_genre_pills">
-            <button type="button" class="tag-pill" data-genre="都市异能">都市异能</button>
-            <button type="button" class="tag-pill" data-genre="玄幻修真">玄幻修真</button>
-            <button type="button" class="tag-pill" data-genre="科幻未来">科幻未来</button>
-            <button type="button" class="tag-pill" data-genre="悬疑惊悚">悬疑惊悚</button>
-            <button type="button" class="tag-pill" data-genre="赛博朋克">赛博朋克</button>
-            <button type="button" class="tag-pill" data-genre="末世求生">末世求生</button>
-            <button type="button" class="tag-pill" data-genre="轻小说/日常">轻小说/日常</button>
-            <button type="button" class="tag-pill" data-genre="古风武侠">古风武侠</button>
-            <button type="button" class="tag-pill" data-genre="西幻领主">西幻领主</button>
-            <button type="button" class="tag-pill" data-genre="历史架空">历史架空</button>
-            <button type="button" class="tag-pill" data-genre="游戏异界">游戏异界</button>
-            <button type="button" class="tag-pill" data-genre="无限流">无限流</button>
+          <div class="genre-groups" id="og_genre_pills" style="display:flex; flex-direction:column; gap:6px; margin:4px 0 8px;">
+            <div class="tag-pills" style="margin:0; display:flex; flex-wrap:wrap; gap:5px;">
+              <button type="button" class="tag-pill" data-genre="都市言情">都市言情</button>
+              <button type="button" class="tag-pill" data-genre="青春校园">青春校园</button>
+              <button type="button" class="tag-pill" data-genre="双女主/互助">双女主/互助</button>
+              <button type="button" class="tag-pill" data-genre="百合纯爱">百合纯爱</button>
+              <button type="button" class="tag-pill" data-genre="破镜重圆">破镜重圆</button>
+              <button type="button" class="tag-pill" data-genre="职场婚恋">职场婚恋</button>
+              <button type="button" class="tag-pill" data-genre="都市日常">都市日常</button>
+              <button type="button" class="tag-pill" data-genre="古代言情">古代言情</button>
+              <button type="button" class="tag-pill" data-genre="经商种田">经商种田</button>
+              <button type="button" class="tag-pill" data-genre="宫斗宅斗">宫斗宅斗</button>
+              <button type="button" class="tag-pill" data-genre="古风武侠">古风武侠</button>
+              <button type="button" class="tag-pill" data-genre="刑侦推理">刑侦推理</button>
+              <button type="button" class="tag-pill" data-genre="现实群像">现实群像</button>
+              <button type="button" class="tag-pill" data-genre="都市异能">都市异能</button>
+              <button type="button" class="tag-pill" data-genre="玄幻修真">玄幻修真</button>
+              <button type="button" class="tag-pill" data-genre="科幻未来">科幻未来</button>
+              <button type="button" class="tag-pill" data-genre="赛博朋克">赛博朋克</button>
+              <button type="button" class="tag-pill" data-genre="末世求生">末世求生</button>
+              <button type="button" class="tag-pill" data-genre="西幻领主">西幻领主</button>
+              <button type="button" class="tag-pill" data-genre="无限流">无限流</button>
+              <button type="button" class="tag-pill" data-genre="轻小说/日常">轻小说/日常</button>
+            </div>
           </div>
-          <input type="text" id="og_genre" placeholder="点击上方快捷标签选择，或直接输入自定义题材…" autocomplete="off">
+          <input type="text" id="og_genre" placeholder="输入自定义题材，或点击上方标签选择…" autocomplete="off">
         </div>
       </div>
 
@@ -132,7 +151,7 @@
 
       <div class="stepper-actions-box" style="margin-top:14px;padding:12px 14px;background:var(--card-subtle, rgba(0,0,0,0.02));border:1px solid var(--line);border-radius:var(--radius);">
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-          <span style="font-weight:600;font-size:13px;">推演大纲与设定集（可选，推演后可在下方直接调整各章细纲）</span>
+          <span style="font-weight:600;font-size:13px;">推演大纲与设定集</span>
           <button type="button" class="secondary mini-btn" id="btn_outline">✨ 推演大纲与设定集</button>
         </div>
         <span class="mini" id="og_status" role="status" aria-live="polite" style="margin-top:4px;display:block;"></span>
@@ -172,7 +191,7 @@
 
   <div class="card" id="og_bible_card" style="display:none">
     <div style="display:flex;align-items:center;justify-content:space-between;">
-      <h2><span class="h2-folio">01</span>设定档案 (Bible) <span class="hint">世界观背景与核心角色，可随心修改</span></h2>
+      <h2><span class="h2-folio">01</span>设定档案</h2>
       <button type="button" class="ghost mini-btn" id="btn_toggle_bible_raw">查看原始 JSON</button>
     </div>
     <div style="margin-top:12px">
@@ -200,7 +219,7 @@
   </div>
 
   <div class="card" id="og_outline_card" style="display:none">
-    <h2>章节大纲 <span class="hint">可逐章修改标题与要点后开始写作</span></h2>
+    <h2>章节大纲</h2>
     <label for="og_logline_input">一句话梗概</label>
     <input type="text" id="og_logline_input" placeholder="本作的一句话梗概" autocomplete="off">
     <div id="og_outline_editor" style="margin-top:12px"></div>
@@ -248,7 +267,7 @@
     <!-- 快速选择书架已有书籍进行续写 -->
     <div class="existing-novel-bar" id="ct_existing_bar" style="margin-bottom: 14px; padding: 10px 14px; background: var(--card-subtle, rgba(0,0,0,0.02)); border: 1px solid var(--line); border-radius: var(--radius); display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
       <div style="display:flex; align-items:center; gap:8px;">
-        <span style="font-size:13px; font-weight:600; color:var(--ink);">📚 为书架已有书籍续写：</span>
+        <span style="font-size:13px; font-weight:600; color:var(--ink);">为已有书籍续写：</span>
         <select id="ct_existing_sel" style="max-width:240px; padding:5px 8px; font-size:12px;" aria-label="选择书架中的已有小说">
           <option value="">-- 选择书架中的小说 --</option>
         </select>
@@ -270,12 +289,12 @@
       <div><label for="ct_source_title">原作书名</label><input type="text" id="ct_source_title" placeholder="如：三体 / 甄嬛传" autocomplete="off"></div>
       <div><label for="ct_source_author">原作作者（可选）</label><input type="text" id="ct_source_author" placeholder="如：刘慈欣" autocomplete="off"></div>
     </div>
-    <label for="ct_source_intro">原作简介（可选，有助于风格判断）</label>
+    <label for="ct_source_intro">原作简介</label>
     <textarea id="ct_source_intro" rows="2" placeholder="一句话介绍原作背景"></textarea>
     <label for="ct_source_text">原作正文</label>
     <div class="file-row">
       <input type="file" id="ct_file" accept=".txt,.md,.markdown" aria-label="上传原作正文文件">
-      <span class="mini">或直接粘贴到下方文本框</span>
+      
     </div>
     <textarea id="ct_source_text" rows="8" placeholder="粘贴原作正文（可只粘贴到你想续写的位置为止）"></textarea>
     <div class="row">
@@ -315,7 +334,7 @@
     <!-- 2 选 1 候选小样展示卡片 -->
     <div class="variants-picker-wrap" id="ct_variants_wrap" style="display:none;">
       <div class="variants-picker-head">
-        <span class="variants-title">🎭 选择下章剧情走向小样 (2 选 1)：</span>
+        <span class="variants-title">剧情走向小样 (2 选 1)</span>
         <button type="button" class="ghost mini-btn" id="ct_variants_retry_btn">↺ 换一批小样</button>
       </div>
       <div class="variants-cards-grid" id="ct_variants_cards"></div>
@@ -334,7 +353,7 @@
   </div>
 
   <div class="card" id="ct_style_card" style="display:none">
-    <h2>创作档案 <span class="hint">模型通读全书后提炼的文风、人物与剧情状态，供确认</span></h2>
+    <h2>创作档案</h2>
     <div id="ct_style_summary"></div>
     <details>
       <summary class="mini" style="cursor:pointer">查看原始 JSON</summary>
@@ -345,7 +364,7 @@
 
   <div class="card" id="ct_bible_card" style="display:none">
     <div style="display:flex;align-items:center;justify-content:space-between;">
-      <h2><span class="h2-folio">02</span>续写设定档案 (Bible) <span class="hint">通读提炼的设定与角色，可随心修改，续写将以此为准</span></h2>
+      <h2><span class="h2-folio">02</span>续写设定档案</h2>
       <button type="button" class="ghost mini-btn" id="btn_toggle_ct_bible_raw">查看原始 JSON</button>
     </div>
     <div style="margin-top:12px">
@@ -439,7 +458,7 @@
   <div class="card" id="lib_trash_card" style="display:none;margin-top:16px;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
       <h3 style="margin:0;font-size:15px;font-weight:600">回收站 <span class="hint">被删除的书籍暂存在此，可一键恢复或彻底删除</span></h3>
-      <button class="ghost mini-btn" id="lib_trash_close_btn">收起</button>
+      <button class="ghost mini-btn" id="lib_trash_close_btn" aria-label="收起回收站">收起</button>
     </div>
     <div id="lib_trash_list"><p class="mini">加载中…</p></div>
   </div>
@@ -707,9 +726,9 @@
 <!-- ================= 设置 ================= -->
 <section class="view" id="view-settings">
   <div class="card">
-    <h2><span class="h2-folio">05</span>大模型设置 <span class="hint" style="margin-left:auto">可配置多个模型 API，创作时按需选择</span></h2>
+    <h2><span class="h2-folio">05</span>大模型设置</h2>
     <div class="preset-bar" style="margin: 10px 0 14px 0;">
-      <span class="preset-bar-title" style="font-size:13px;color:var(--muted);margin-bottom:6px;display:block;">⚡ 快速添加模型预设（自动填好地址与模型名）：</span>
+      <span class="preset-bar-title" style="font-size:13px;color:var(--muted);margin-bottom:6px;display:block;">快速添加预设：</span>
       <div class="tag-pills" id="provider_preset_pills"></div>
     </div>
     <div id="provider_list"></div>
@@ -722,7 +741,7 @@
     <p class="hint" style="margin-top:14px">Key 仅保存在本机 config.json 中，不会上传到任何地方。接口地址支持任意 OpenAI 兼容服务（如 DeepSeek / OpenAI / Kimi / 通义 / 本地 Ollama 等）。</p>
   </div>
   <div class="card">
-    <h2><span class="h2-folio">06</span>隐私密码 <span class="hint" style="margin-left:auto">用于解锁书架中的「隐私书架」</span></h2>
+    <h2><span class="h2-folio">06</span>隐私密码</h2>
     <p class="mini" id="pv_state" role="status" aria-live="polite">读取中…</p>
     <div class="row">
       <div><label for="pv_old">当前密码（首次设置留空）</label><input type="password" id="pv_old" autocomplete="current-password" spellcheck="false"></div>
@@ -739,7 +758,7 @@
 
   <!-- P2: 全站轻量访问口令 (Web Access Protection) -->
   <div class="card" id="web_auth_settings_card">
-    <h2><span class="h2-folio">07</span>全站访问口令 <span class="hint" style="margin-left:auto">VPS 部署 / 局域网穿透推荐开启，防止外网盗刷 API</span></h2>
+    <h2><span class="h2-folio">07</span>全站访问口令</h2>
     <p class="mini" id="web_auth_state" role="status" aria-live="polite">读取状态中…</p>
     <div class="row" style="margin-top:12px">
       <div id="web_auth_old_wrap" style="display:none">
@@ -786,13 +805,13 @@
 </div>
 
 <!-- ================= 续写 / 重写任务卡片 ================= -->
-<div class="modal-mask" id="round_modal">
+<div class="modal-mask" id="round_modal" role="dialog" aria-modal="true" aria-labelledby="rm_title">
   <div class="modal-box">
     <h3 id="rm_title">续写设置</h3>
     <p class="mini" id="rm_summary"></p>
     <!-- 表单区 -->
     <div id="rm_form">
-      <label id="rm_instruction_label" for="rm_instruction">续写指示（可选，可调整后续走向）</label>
+      <label id="rm_instruction_label" for="rm_instruction">续写指示</label>
       <textarea id="rm_instruction" rows="3" placeholder="如：让主角发现某个秘密 / 加快节奏 / 引入新角色 / 解开某处伏笔…"></textarea>
       <div class="row">
         <div id="rm_chapters_wrap"><label for="rm_chapters">章节数</label><input type="number" id="rm_chapters" value="1" min="1" max="50"></div>
@@ -809,19 +828,17 @@
         <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
           <label style="margin:0; display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:600; color:var(--ink); font-size:13px;">
             <input type="checkbox" id="rm_use_variants" style="width:16px; height:16px; margin:0; accent-color:var(--accent);">
-            🎲 开启剧情走向多分支（生成 2 种方案供 2 选 1 择优续写）
+            🎲 2 选 1 剧情走向小样
           </label>
-          <button type="button" class="mini-btn ghost" id="rm_trigger_variants_btn" style="color:var(--accent); font-weight:600; border-color:var(--accent);">✨ 立即生成 2 种走向小样</button>
+          <button type="button" class="mini-btn ghost" id="rm_trigger_variants_btn" style="color:var(--accent); font-weight:600; border-color:var(--accent);">✨ 生成走向小样</button>
         </div>
-        <p class="mini" style="margin:4px 0 0; color:var(--muted); line-height:1.5;">
-          由 AI 针对当前小说的最新章节构思两种截然不同的剧情走向与开篇试读，满意后再正式续写整章。
-        </p>
+
       </div>
 
       <!-- 2 选 1 候选小样展示卡片 -->
       <div class="variants-picker-wrap" id="rm_variants_wrap" style="display:none; margin: 14px 0;">
         <div class="variants-picker-head">
-          <span class="variants-title">🎭 选择下章剧情走向小样 (2 选 1)：</span>
+          <span class="variants-title">剧情走向小样 (2 选 1)</span>
           <button type="button" class="ghost mini-btn" id="rm_variants_retry_btn">↺ 重新生成小样</button>
         </div>
         <div class="variants-cards-grid" id="rm_variants_cards"></div>
@@ -852,31 +869,31 @@
 
       <div class="actions">
         <button class="secondary" id="rm_cancel_job" style="display:none">取消任务</button>
-        <button class="secondary" id="rm_close">关闭</button>
+        <button class="secondary" id="rm_close" aria-label="关闭弹窗">关闭</button>
       </div>
     </div>
   </div>
 </div>
 
 <!-- ================= 修改书名弹窗 ================= -->
-<div class="modal-mask" id="rename_modal">
+<div class="modal-mask" id="rename_modal" role="dialog" aria-modal="true" aria-labelledby="rename_modal_title">
   <div class="modal-box" style="max-width:440px;">
     <h3 id="rename_modal_title">修改小说标题</h3>
     <label for="rename_input">新标题</label>
     <input type="text" id="rename_input" aria-label="新小说标题" placeholder="输入新的小说标题…" autocomplete="off">
     <div class="actions" style="margin-top:16px;">
       <button class="primary" id="btn_confirm_rename">确定修改</button>
-      <button class="secondary" id="btn_cancel_rename">取消</button>
+      <button class="secondary" id="btn_cancel_rename" aria-label="取消修改">取消</button>
     </div>
   </div>
 </div>
 
 <!-- ================= 设定档案 (Bible) 弹窗 ================= -->
-<div class="modal-mask" id="bible_modal">
+<div class="modal-mask" id="bible_modal" role="dialog" aria-modal="true" aria-labelledby="bm_title">
   <div class="modal-box" style="max-width:760px;width:92%;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
       <h3 style="margin:0" id="bm_title">小说设定档案 (Bible)</h3>
-      <button class="ghost mini-btn" id="bm_close" aria-label="关闭">×</button>
+      <button class="ghost mini-btn" id="bm_close" aria-label="关闭设定档案弹窗">×</button>
     </div>
     <div style="max-height:65vh;overflow-y:auto;padding-right:4px;">
       <label for="bm_setting">世界观与时代背景</label>

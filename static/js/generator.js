@@ -1,13 +1,25 @@
 
-// ==================== 题材药丸选择与自拟书名 ====================
+// ==================== 题材药丸选择器 ====================
+function syncGenrePillsFromInput() {
+  const inp = $('og_genre');
+  const wrap = $('og_genre_pills');
+  if (!inp || !wrap) return;
+  const v = inp.value.trim();
+  wrap.querySelectorAll('.tag-pill').forEach(p => {
+    const g = p.dataset.genre || p.textContent.trim();
+    p.classList.toggle('active', g === v);
+  });
+}
+
 function initGenrePills() {
   const wrap = $('og_genre_pills');
   if (!wrap) return;
   wrap.querySelectorAll('.tag-pill').forEach(pill => {
     pill.onclick = () => {
-      const genre = pill.dataset.genre;
+      const genre = pill.dataset.genre || pill.textContent.trim();
       const inp = $('og_genre');
-      if (inp.value === genre) {
+      if (!inp) return;
+      if (inp.value.trim() === genre) {
         inp.value = '';
         pill.classList.remove('active');
       } else {
@@ -16,16 +28,139 @@ function initGenrePills() {
       }
     };
   });
-  $('og_genre').addEventListener('input', () => {
-    const v = $('og_genre').value.trim();
-    wrap.querySelectorAll('.tag-pill').forEach(p => p.classList.toggle('active', p.dataset.genre === v));
-  });
-}
-initGenrePills();
 
-// ==================== P1: 灵感脑洞库与网文开局模板 ====================
+  const inp = $('og_genre');
+  if (inp) {
+    inp.addEventListener('input', syncGenrePillsFromInput);
+  }
+  syncGenrePillsFromInput();
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initGenrePills);
+} else {
+  initGenrePills();
+}
+
+// ==================== P1: 灵感脑洞库与全平台经典开局模板 ====================
 const TROPE_TEMPLATES = [
+  // --- 🌸 情感 · 校园 · 双女主 · 慢生活 · 现实向 ---
   {
+    cat: 'female',
+    icon: '💍',
+    label: '都市言情·合约婚姻失效',
+    title: '合约婚姻在立春失效',
+    genre: '都市言情',
+    setting: '快节奏现代一线都市，投行投资总监与新锐建筑设计师的三年协议婚姻即将到期。同住屋檐下却恪守契约边界，随着各自职场风云变幻与家庭催婚波澜，平静湖面泛起暗涌。',
+    characters: '温听竹：投行投资总监，外表清冷从容、工作严谨果断，内心慢热且防御心重。\n周应淮：享誉业界的独立建筑设计师，温润克制，看似漫不经心，实则暗恋已久。\n江予安：温听竹职场劲敌，行事狠辣。',
+    storyline: '在合约到期前三个月，周应淮的项目遭遇资方做局陷害，温听竹动用投行资源暗中护盘，意外发现周应淮三年前主动促成这场婚姻的秘密手稿。随着合约解除日倒计时，成年人克制试探的感情终于爆发，双向奔赴。',
+    style: '现代都市轻熟风，细腻克制，拉扯感强，职场专业度高，情感温暖治愈',
+    perspective: '第三人称',
+    chapters: 10,
+    per_words: 2200
+  },
+  {
+    cat: 'female',
+    icon: '🎒',
+    label: '青春校园·盛夏暗恋成真',
+    title: '夏天结束前说喜欢你',
+    genre: '青春校园',
+    setting: '南方临海小城一中的高三盛夏。咸湿的海风、吱呀作响的吊扇、泛黄的高考模拟卷与操场边的单车棚。',
+    characters: '林初夏：坚韧温和的普通文科生，习惯默默努力，把心事藏在笔记本最后一页。\n顾言澈：因家庭重大变故从省实验中学转来的理科天才，看似散漫寡言，实则内心孤独负疚。\n陈妙：林初夏的欢脱同桌兼死党。',
+    storyline: '被班主任安排成互助同桌后，林初夏发现了顾言澈夜晚在海边废弃灯塔画画的秘密。两人从最初的小心防备，到互相补课、在高考重压下互相打气，成为彼此晦暗生活里的唯一光源，在蝉鸣散去的盛夏坦诚心意。',
+    style: '青春明亮，酸甜细腻，海风与市井烟火气，双向救赎，治愈系',
+    perspective: '第一人称',
+    chapters: 8,
+    per_words: 2000
+  },
+  {
+    cat: 'female',
+    icon: '👭',
+    label: '双女主·从合租到携手破局',
+    title: '双姝破局：从合租开始登顶',
+    genre: '双女主/互助',
+    setting: '一线都会传媒与顶尖公关咨询圈。一个是被传统大报排挤出局的前王牌调查记者，一个是替家族背负巨债的独立公关高手。两人因囊中羞涩成为老破小公寓的临时合租室友。',
+    characters: '沈青宜：硬骨头调查记者，观察敏锐，笔锋如刀，坚持追寻真相。\n许明薇：八面玲珑的危机公关操盘手，深谙人性与资本游戏，外表精致冷艳。\n赵明诚：跨国医药集团公关副总裁，道貌岸然的幕后操盘手。',
+    storyline: '两人从最初生活习惯的摩擦龃龉，到联手接下一桩看似必死无疑的企业危机公关案。沈青宜查真相，许明薇操盘舆论，两位性格截然相反的女性在残酷商战中互相托底成为生死搭档，最终逆袭创办属于自己的独立公关调查所，联手撕破资本伪善面具。',
+    style: '大女主强强联手，节奏干脆利落，女性互助与惺惺相惜，商战逻辑严密，爽点扎实',
+    perspective: '第三人称',
+    chapters: 10,
+    per_words: 2500
+  },
+  {
+    cat: 'female',
+    icon: '🌙',
+    label: '百合纯爱·月光落在旧琴键上',
+    title: '月光落在旧琴键上',
+    genre: '百合纯爱',
+    setting: '北方老工业城市的旧居民区与市音乐学院。秋末冬初落叶满地，旧防空洞改建的地下独立唱片店与高雅的古典乐演奏厅形成鲜明对照。',
+    characters: '孟书颜：出身音乐世家的大提琴手，内敛敏感，因突发神经性耳鸣陷入前所未有的创作低谷。\n迟野：在地下唱片店修老黑胶唱片的电吉他女孩，随性热烈，看似玩世不恭，却有一双能听懂所有情绪的耳朵。',
+    storyline: '失聪恐慌中的孟书颜在老街偶入迟野的唱片店，被迟野随手弹奏的粗粝旋律震颤。迟野教她用手掌贴着木吉他面板感受振动，孟书颜带迟野走入结构严谨的交响世界。两颗孤独残缺的灵魂在旋律中无限靠近，互相包扎伤口，逆光新生。',
+    style: '唯美细腻，电影质感，文笔诗意清透，情感充沛且动人，氛围感拉满',
+    perspective: '第三人称',
+    chapters: 8,
+    per_words: 2000
+  },
+  {
+    cat: 'female',
+    icon: '🍵',
+    label: '都市日常·辞职回乡开糖水铺',
+    title: '辞职后我在老街开了家糖水铺',
+    genre: '都市日常',
+    setting: '江南水乡古镇未商业化的青石板老街。一栋带小天井的晚清旧民居，院里有棵老桂花树，夏有凉风冬有炉火。',
+    characters: '阮棠：大厂裸辞回乡的年轻人，擅长顺应二十四节气熬制传统甜水与温养糕点，性格恬淡。\n陆见川：隔壁旧木器修缮行的小老板，沉默寡言却手艺极巧，总默默替阮棠修好老屋破旧的木格窗。\n周婆婆：老街巷口的八十岁裁缝，知晓整座古镇半个世纪的秘辛。',
+    storyline: '阮棠回到古镇接下外婆留下的空铺子，春煮桑葚红枣露，夏熬薄荷绿豆马蹄沙，秋做桂花栗子羹，冬煨陈皮红豆圆子。形形色色的镇民与远道而来的疲惫旅人在此停驻，一碗碗温润糖水串联起人间烟火百态，也温暖了彼此的人生。',
+    style: '治愈温情生活流，慢节奏日常，美食食谱细致考究，文字如清茶回甘，烟火人间',
+    perspective: '第三人称',
+    chapters: 8,
+    per_words: 1800
+  },
+  {
+    cat: 'female',
+    icon: '🌾',
+    label: '经商种田·边塞客栈发家日常',
+    title: '边塞客栈发家日常',
+    genre: '经商种田',
+    setting: '大盛王朝西北边陲咽喉重镇玉门关外，荒漠戈壁与商道绿洲交界处。商旅、驼队、戍边将士与塞外胡商往来不绝。',
+    characters: '苏玉娘：遭逢家道中落、带着年幼弟妹千里逃难的落难千金，厨艺极佳且深通算账经营。\n裴烈：边关巡防营冷面校尉，常年驻守风沙一线，外冷内热，刀法如神。',
+    storyline: '从商道旁一间快塌陷的废弃土坯驿站开始，苏玉娘用一口铁锅做出热气腾腾的羊肉臊子面、馕包肉和驱寒姜汤，收拢过路客商。开水井、辟菜畦、引商队、防马匪，一步步将荒凉路口发展成塞外第一繁华商贸大客栈，成就一段传奇。',
+    style: '古代经商种田流，塞外风情浓郁，美食生动诱人，勤劳致富爽感，细水长流感情线',
+    perspective: '第三人称',
+    chapters: 10,
+    per_words: 2200
+  },
+  {
+    cat: 'female',
+    icon: '👑',
+    label: '古代言情·重生主母掌权夺势',
+    title: '主母不慈：重生后我掀翻侯府',
+    genre: '古代言情',
+    setting: '大周京城钟鸣鼎食的永嘉侯府，看似光鲜亮丽的百年世家，内里早已千疮百孔，蛀虫横行、妻妾明枪暗箭。',
+    characters: '薛凝：重生归来的侯府掌家嫡妻，前世贤良淑德倾尽家财却被侯府背刺惨死，今生冷心绝情，一心掌权夺利。\n谢策：当朝首辅，权倾朝野却身负隐疾，冷静纵容薛凝的一切借势复仇。',
+    storyline: '重生回掌权第一日，薛凝收回所有贴补嫁妆，断了侯府虚荣开销。查亏空、夺庄产、逐刁奴、斗偏心婆母与白莲外室，一步步斩断侯府羽翼，把侯府产业牢牢掌控在自己手中，扶持娘家自立门第。',
+    style: '高段位宅斗权谋，大女主清醒利落，打脸节奏飞快，反矫情不圣母',
+    perspective: '第三人称',
+    chapters: 10,
+    per_words: 2500
+  },
+
+  // --- ⚡ 脑洞 · 悬疑 · 幻想 · 传奇向 ---
+  {
+    cat: 'fantasy',
+    icon: '🔍',
+    label: '刑侦推理·第七个未接来电',
+    title: '第七个未接来电',
+    genre: '刑侦推理',
+    setting: '暴雨倾盆的南方二线江城，老旧筒子楼、废弃船坞与现代化监控天网交织的迷宫。连续三起看似毫无关联的离奇密室坠亡案。',
+    characters: '陈恪：市刑侦支队副支队长，老练沉稳，因旧案患有应激性创伤，观察力入微。\n叶清：新调来的省厅犯罪心理画像专家，年轻直率，精通微表情与犯罪行为学。',
+    storyline: '每个死者生前手机上，都出现过同一个神秘未接来电，而该号码的主人早在五年前就已经确认死亡。陈恪与叶清顺藤摸瓜，在重重伪造的自杀现场与嫌疑人谎言中剥茧抽丝，挖出一桩跨越十年的校园旧案与复仇迷局。',
+    style: '本格与社会派结合，硬核刑侦推理，心理博弈紧凑，氛围阴冷潮湿，现实感强',
+    perspective: '第三人称',
+    chapters: 10,
+    per_words: 2400
+  },
+  {
+    cat: 'fantasy',
     icon: '⚡',
     label: '赛博修仙·反派夺舍',
     title: '赛博修仙：开局夺舍财阀老祖',
@@ -39,6 +174,7 @@ const TROPE_TEMPLATES = [
     per_words: 2000
   },
   {
+    cat: 'fantasy',
     icon: '❄️',
     label: '末日求生·数据避难所',
     title: '全球冰封：我的避难所能无限升级',
@@ -52,6 +188,7 @@ const TROPE_TEMPLATES = [
     per_words: 2000
   },
   {
+    cat: 'fantasy',
     icon: '🍞',
     label: '轻小说·满级魔王退休',
     title: '明明是毁灭世界的魔王，退休后却成了萌新导师？',
@@ -65,32 +202,7 @@ const TROPE_TEMPLATES = [
     per_words: 1800
   },
   {
-    icon: '👻',
-    label: '悬疑惊悚·规则怪谈',
-    title: '午夜四点四十四，请勿直视镜子',
-    genre: '悬疑惊悚',
-    setting: '现代都市中暗藏的怪谈渗透事件。不可名状的规则类异常在深夜随机降临公寓、写字楼与地铁。',
-    characters: '周默：失业后应聘为异常事物处理所夜班接线员的前刑警，观察力敏锐，精神san值异常稳定。\n苏临：神秘的异常生还者，知晓大量禁忌规则但患有间歇性失忆。',
-    storyline: '主角通过解读每一条看似荒谬却致命的规则手册，在一桩桩看似自杀实为怪谈侵蚀的案件中寻找异常源头与真相。',
-    style: '克苏鲁式微恐，压抑悬疑，逻辑推理解密，短促紧凑',
-    perspective: '第一人称',
-    chapters: 8,
-    per_words: 2000
-  },
-  {
-    icon: '💰',
-    label: '都市异能·反向消费首富',
-    title: '亏成首富从反向消费开始',
-    genre: '都市异能',
-    setting: '现代繁华都市，主角绑定了一款独特的“返现系统”，只要投资失败或让客户满意，就能获得万倍现金奖励。',
-    characters: '裴谦：一心只想亏钱退休的年轻创业者，思维天马行空，却总被员工脑补为商业教父。\n林晚：能力极强的商业精英助理，疯狂把主角随手败家的项目做成行业龙头。',
-    storyline: '主角本想做一款赔钱暴死的独立游戏快速亏空资金，结果阴差阳错引爆全网，财富越亏越多，被迫成为全球商业巨子。',
-    style: '幽默爆笑，职场反讽，信息差误会流，轻松解压',
-    perspective: '第三人称',
-    chapters: 10,
-    per_words: 2000
-  },
-  {
+    cat: 'fantasy',
     icon: '🗡️',
     label: '古风武侠·天下第一退隐',
     title: '折剑听雨江湖远',
@@ -104,6 +216,7 @@ const TROPE_TEMPLATES = [
     per_words: 2500
   },
   {
+    cat: 'fantasy',
     icon: '🏰',
     label: '西幻领主·蒸汽魔导拓荒',
     title: '边境开拓：从零打造蒸汽魔导领',
@@ -117,6 +230,7 @@ const TROPE_TEMPLATES = [
     per_words: 2000
   },
   {
+    cat: 'fantasy',
     icon: '🎲',
     label: '无限流·剧本杀生还者',
     title: '致命副本：只有我知道正确解法',
@@ -131,58 +245,397 @@ const TROPE_TEMPLATES = [
   }
 ];
 
-function applyTropeTemplate(t) {
-  if (!t) return;
-  $('og_title').value = t.title;
-  $('og_genre').value = t.genre;
-  $('og_setting').value = t.setting;
-  $('og_characters').value = t.characters;
-  $('og_storyline').value = t.storyline;
-  $('og_style').value = t.style;
-  $('og_perspective').value = t.perspective;
-  $('og_chapters').value = t.chapters;
-  $('og_per_words').value = t.per_words;
-
-  // 同步高亮题材胶囊
-  const gWrap = $('og_genre_pills');
-  if (gWrap) {
-    gWrap.querySelectorAll('.tag-pill').forEach(p => {
-      p.classList.toggle('active', p.dataset.genre === t.genre);
-    });
-  }
-  toast(`已填入「${t.label}」灵感模板！`);
+function strVal(v) {
+  return v === null || v === undefined ? '' : String(v).trim();
 }
 
-function initTropeTemplates() {
+function applyTropeTemplate(t) {
+  if (!t || typeof t !== 'object') return;
+  const title = strVal(t.title || t.label || t.name);
+  const label = strVal(t.label || t.title || t.name);
+  $('og_title').value = title;
+  $('og_genre').value = strVal(t.genre);
+  $('og_setting').value = strVal(t.setting || t.background);
+  $('og_characters').value = strVal(t.characters || t.roles);
+  $('og_storyline').value = strVal(t.storyline || t.plot);
+  $('og_style').value = strVal(t.style);
+  $('og_perspective').value = strVal(t.perspective || '第三人称');
+  $('og_chapters').value = parseInt(t.chapters, 10) || 10;
+  $('og_per_words').value = parseInt(t.per_words, 10) || 2000;
+
+  // 同步高亮题材胶囊
+  syncGenrePillsFromInput();
+  toast(`已填入「${label || title}」灵感模板！`);
+}
+
+// --- 备用精选脑洞库（用于大模型未配置或本地服务未重启时无缝降级）---
+const BACKUP_TROPES_POOL = [
+  {
+    cat: 'female',
+    icon: '⚖️',
+    label: '职场婚恋·红圈所假戏真做',
+    title: '违约合伙人',
+    genre: '职场婚恋',
+    setting: '顶尖红圈律师事务所，两位常年针锋相对的高级合伙人为拿下跨国并购重组大单，不得不对外假扮成恩爱订婚情侣。',
+    characters: '宋青窈：高级合伙人，以逻辑冷静和诉讼胜率闻名，防御心极强。\n沈肆：并购部合伙人，外表儒雅从容，暗中布局守护多年。\n韩越：原告方老牌律所创始合伙人。',
+    storyline: '在应对棘手的上市公司股权争夺战中，两人同进同出破除对方做局，却在一次深夜闭门核查中假戏真做。当案件大获全胜，两人才发现真正的契约早已刻在心底。',
+    style: '现代职场轻熟风，智商在线，双强博弈，细腻克制，拉扯感极强',
+    perspective: '第三人称',
+    chapters: 10,
+    per_words: 2400
+  },
+  {
+    cat: 'female',
+    icon: '🍵',
+    label: '都市日常·海岛咖啡治愈手记',
+    title: '我在离岛煮海风与咖啡',
+    genre: '都市日常',
+    setting: '南方避世小岛，废弃码头改建的旧灯塔咖啡馆，潮涨潮落，烟火慢调。',
+    characters: '苏棠：大厂资深运营，经历严重职场内耗后辞职包下离岛小灯塔，专注研发特调手冲。\n陆屿白：沉静少言的岛民兼木工造船师，手艺出众，守候着家族旧船坞。',
+    storyline: '随着小店营业，形形色色的疲惫旅人登岛带来属于他们的故事，苏棠与陆屿白从搭伙做木工到心照不宣地并肩看日落，在最平凡的日常中治愈了彼此的焦虑与过往。',
+    style: '慢节奏治愈向，生活流，清新恬淡，海风烟火气，温暖微甜',
+    perspective: '第三人称',
+    chapters: 8,
+    per_words: 2000
+  },
+  {
+    cat: 'female',
+    icon: '👭',
+    label: '双女主·真假千金联手破局',
+    title: '真假千金联手整顿豪门',
+    genre: '双女主/互助',
+    setting: '错换人生二十载的真假千金相认现场，没有狗血互撕，只有看透豪门利益盘剥后的联手反击。',
+    characters: '盛栀：被豪门领养长大的假千金，深谙商战博弈与财阀规矩，冷静清醒。\n林知遥：在民间草根打拼出独立工作室的真千金，机敏坚韧，敢想敢拼。',
+    storyline: '豪门试图让两人竞争牺牲联姻以挽救家族集团，二人一拍即合、暗中结成同盟。一个居内搜集暗账把柄，一个居外联手资本做空，合力夺回属于彼此的人生自主权与产业。',
+    style: '双强互助，爽快高燃，清醒搞事业，女性友谊深刻细腻',
+    perspective: '第三人称',
+    chapters: 10,
+    per_words: 2500
+  },
+  {
+    cat: 'female',
+    icon: '🩺',
+    label: '破镜重圆·急诊重逢暗涌',
+    title: '心跳骤停那一秒',
+    genre: '破镜重圆',
+    setting: '三甲医院急诊重症监护室与心外科，生死一线的抢救日常与多年前未解的心结。',
+    characters: '江晚：心胸外科新锐主刀医生，冷静利落，对手术台有近乎执拗的专注。\n程序：知名医疗器械创新公司首席架构师，当年因误会不告而别，如今回国推动急救科研。',
+    storyline: '一次重大车祸抢救现场，两人在重症监护室重逢。并肩挽救生命的无数个深夜里，当年的误会与不得已的牺牲被层层揭开，爱意从未熄灭。',
+    style: '专业医疗背景，双向奔赴，破镜重圆，情感浓郁张力拉满',
+    perspective: '第三人称',
+    chapters: 10,
+    per_words: 2200
+  },
+  {
+    cat: 'female',
+    icon: '🌾',
+    label: '经商种田·江南第一锦绣行',
+    title: '锦绣大掌柜：从织坊到御商',
+    genre: '经商种田',
+    setting: '架空古代江南水乡织锦世家，濒临破产的老字号织坊。',
+    characters: '沈清漪：沈家嫡女，精通传统缂丝与天然草木染技艺，极具商业远见与决断力。\n裴景安：巡按御史，微服私访查探官盐与织造税案，清正内敛。',
+    storyline: '面对族叔夺产与外商联合压价，沈清漪改良织机、研发创新云锦花样，带领全坊女工自立自强，一步步打破垄断，将沈氏织坊做到名扬四海的天下第一行。',
+    style: '古言经商励志，传统非遗文化，群像生动，剧情扎实引人入胜',
+    perspective: '第三人称',
+    chapters: 12,
+    per_words: 2400
+  },
+  {
+    cat: 'female',
+    icon: '📷',
+    label: '百合纯爱·山海公路摄影手记',
+    title: '风吹过三千公里的夏天',
+    genre: '百合纯爱',
+    setting: '西北大环线公路旅行，雪山、荒原、盐湖与公路尽头的漫天星河。',
+    characters: '池月：自由人文摄影师，性格随性肆意，相机里装满人间烟火。\n闻青弦：严谨古板的野生植物学家，带着一册珍稀植物图鉴踏上寻种之旅。',
+    storyline: '一辆二手越野车，两个性格迥异的女子同行三千公里。从最初的互不理解到彼此依偎度过无人区的狂风暴雨，在荒凉壮阔的大地上长出最纯粹动人的爱意。',
+    style: '公路片质感，辽阔诗意，细腻慢热，双向救赎，治愈清新',
+    perspective: '第一人称',
+    chapters: 8,
+    per_words: 2200
+  },
+  {
+    cat: 'female',
+    icon: '🔍',
+    label: '刑侦推理·法医物证追凶',
+    title: '骨语无声，白刃留痕',
+    genre: '刑侦推理',
+    setting: '市公安局刑侦支队物证鉴定中心，沉睡二十年的悬案档案室。',
+    characters: '秦昭：省厅特聘法医病理学专家，洞察秋毫，能从微末痕迹中还原死者生前遭遇。\n陆停云：刑侦重案大队长，雷厉风行，擅长审讯心理学。',
+    storyline: '一场旧城改造挖掘出的连环白骨案，引出横跨两代人的悬案网络。两人联手用现代法医学与严密逻辑链抽丝剥茧，突破重重阻力替逝者伸张正义。',
+    style: '硬核刑侦，本格推理，法医物证细节考究，节奏扣人心弦',
+    perspective: '第三人称',
+    chapters: 12,
+    per_words: 2600
+  },
+  {
+    cat: 'fantasy',
+    icon: '💾',
+    label: '赛博朋克·记忆当铺典当师',
+    title: '第九街区记忆当铺',
+    genre: '赛博朋克',
+    setting: '霓虹永夜的未来高耸下城，巨型财阀垄断意识上传，记忆成为最昂贵的硬通货。',
+    characters: '顾言：老街记忆当铺的最后一位人工解析师，拥有罕见的非数字化神经突触。\n艾琳：被财阀除名的仿生义体赏金猎人，体内藏有一段被加密的记忆核心。',
+    storyline: '当顾言收到一份典当期已过八十年却从未被赎回的财阀绝密记忆，全城的猎犬与改造人蜂拥而至。二人循着记忆裂隙逆流而上，揭开虚拟永生背后的惊天谎言。',
+    style: '硬核科幻，赛博朋克，悬疑博弈，视听感强烈，反乌托邦内核',
+    perspective: '第三人称',
+    chapters: 10,
+    per_words: 2500
+  },
+  {
+    cat: 'fantasy',
+    icon: '🚪',
+    label: '无限流·我能看到隐藏禁令',
+    title: '逃生游戏：通关准则在最后一页',
+    genre: '无限流',
+    setting: '高维文明构筑的规则怪谈副本世界，所有玩家必须在各类诡异规则中寻找一线生机。',
+    characters: '季云川：逻辑怪才，在进入副本后觉醒「规则解构视界」，能看到被系统涂黑的隐藏准则。\n白薇：武力值爆表的冷兵器专精独行客。',
+    storyline: '在《午夜血色列车》、《无尽回廊学校》等必死副本中，季云川一次次反向利用怪谈规则算计考官与幕后黑手，带领求生小队一步步逼近游戏世界的终极底层代码。',
+    style: '智商碾压，规则怪谈，微恐悬疑，反转层出不穷，脑洞大开',
+    perspective: '第三人称',
+    chapters: 10,
+    per_words: 2400
+  },
+  {
+    cat: 'fantasy',
+    icon: '❄️',
+    label: '末世求生·全息恒温生态坞',
+    title: '全球冰封：我打造了地下生态城',
+    genre: '末世求生',
+    setting: '地磁反转引发超低温冰川期，全球气温骤降至零下六十度，人类文明退守地下。',
+    characters: '陆舟：空间物理学者兼资深机械极客，重生在极寒降临前三个月。\n唐雪：动植物种质资源库主管，精通低温无土栽培。',
+    storyline: '带着前世遗憾与充足物资，陆舟利用地热与模块化工程在废弃矿井打造出坚不可摧的恒温避难生态坞。在文明秩序崩塌的严冬里，开创出属于幸存者的绿色奇迹。',
+    style: '末世种田，硬核避难所基建，生存探索，爽感节奏分明',
+    perspective: '第三人称',
+    chapters: 10,
+    per_words: 2200
+  },
+  {
+    cat: 'fantasy',
+    icon: '🔮',
+    label: '都市异能·非人类社畜事务所',
+    title: '妖怪事务所的考勤日常',
+    genre: '都市异能',
+    setting: '繁华都市写字楼地下一层，表面上是普通物业咨询公司，实则是管理局设立的非人类维稳办。',
+    characters: '楚非：体质罕见的普通人类实习生，拥有能让一切法术失灵的「绝对绝缘」体质。\n九月：活了上千年的白狐大仙，沉迷喝奶茶和炒股的部门毒舌主管。',
+    storyline: '每天处理偷溜进人类小学的饕餮幼崽、在地铁站画符扰民的千年旱魃，楚非一边为转正绩效奔波，一边用朴素的人类智慧化解一起起险些引爆两界的大危机。',
+    style: '都市日常轻喜剧，脑洞轻小说，人妖共存，反差萌，轻松幽默',
+    perspective: '第一人称',
+    chapters: 8,
+    per_words: 2000
+  },
+  {
+    cat: 'fantasy',
+    icon: '🏰',
+    label: '西幻领主·现代工业魔法基建',
+    title: '穷酸领主：从蒸汽机到魔法工业革命',
+    genre: '西幻领主',
+    setting: '剑与魔法的中世纪边缘贫瘠封地，魔兽横行，贵族盘剥，平民食不果腹。',
+    characters: '罗恩：现代材料学与机械工程博士，意外穿越为偏远落魄小男爵。\n艾米莉：被教会追捕的逃亡火系魔法学者，对元素本质充满探求欲。',
+    storyline: '当魔法元素遇上热力学定律，火球术成为高压锅炉的绝佳热源，风刃被改造成高精度机床。罗恩从冶铁筑城做起，带领贫瘠领地掀起轰轰烈烈的工业魔法革命。',
+    style: '西幻种田基建，硬核推演，科技树攀爬，领主争霸，爽点十足',
+    perspective: '第三人称',
+    chapters: 12,
+    per_words: 2600
+  },
+  {
+    cat: 'fantasy',
+    icon: '🗡️',
+    label: '古风武侠·长安雨夜捉刀人',
+    title: '捉刀人：长安不见天',
+    genre: '古风武侠',
+    setting: '盛唐暮色，江湖豪侠与朝堂权奸交织，暗流涌动的长安城。',
+    characters: '李不言：独眼佩刀的退伍老卒，隐于市井的头号捉刀人，出手极快，刀无虚发。\n薛青衣：大理寺正，身负血仇，行事机敏孤勇。',
+    storyline: '一桩离奇的胡商暴毙案牵扯出边疆军饷亏空与江湖顶级杀手谱。李不言受雇查探，在长安漫天细雨与朱红高墙之下，以一柄断刀斩断权贵翻云覆雨的阴谋。',
+    style: '传统武侠风骨，刀光剑影，市井烟火，悬疑硬朗，家国情怀',
+    perspective: '第三人称',
+    chapters: 10,
+    per_words: 2400
+  }
+];
+
+function generateLocalTropes(category, genre, count) {
+  let pool = [...BACKUP_TROPES_POOL, ...TROPE_TEMPLATES];
+  if (category && category !== 'all') {
+    pool = pool.filter(t => t.cat === category);
+  }
+  if (genre) {
+    const matched = pool.filter(t => t.genre === genre || (t.genre && t.genre.includes(genre)) || (genre.includes(t.genre)));
+    const rest = pool.filter(t => !matched.includes(t));
+    matched.sort(() => Math.random() - 0.5);
+    rest.sort(() => Math.random() - 0.5);
+    pool = [...matched, ...rest];
+  } else {
+    pool.sort(() => Math.random() - 0.5);
+  }
+  return pool.slice(0, count || 5);
+}
+
+let currentTropeCat = 'all';
+let currentTropesList = [...TROPE_TEMPLATES];
+
+function renderTropeList() {
   const container = $('og_trope_pills');
   if (!container) return;
-  container.innerHTML = TROPE_TEMPLATES.map((t, idx) => `
-    <button type="button" class="trope-pill" data-idx="${idx}">
-      <span class="trope-icon">${t.icon}</span>
-      <span>${escapeHtml(t.label)}</span>
-    </button>
-  `).join('');
+
+  // 严格过滤：杜绝任何未定义或空标签对象
+  const validList = currentTropesList.filter(t => t && typeof t === 'object' && ((t.label && strVal(t.label)) || (t.title && strVal(t.title))));
+  const filtered = currentTropeCat === 'all' 
+    ? validList 
+    : validList.filter(t => t.cat === currentTropeCat);
+
+  container.innerHTML = filtered.map(t => {
+    const origIdx = currentTropesList.indexOf(t);
+    const labelText = escapeHtml(strVal(t.label || t.title) || '灵感脑洞');
+    const iconText = escapeHtml(strVal(t.icon) || '💡');
+    return `
+      <button type="button" class="trope-pill" data-idx="${origIdx}">
+        <span class="trope-icon">${iconText}</span>
+        <span>${labelText}</span>
+      </button>
+    `;
+  }).join('');
 
   container.querySelectorAll('.trope-pill').forEach(btn => {
     btn.onclick = () => {
       const idx = parseInt(btn.dataset.idx, 10);
       container.querySelectorAll('.trope-pill').forEach(b => b.classList.toggle('active', b === btn));
-      applyTropeTemplate(TROPE_TEMPLATES[idx]);
+      applyTropeTemplate(currentTropesList[idx]);
     };
   });
+}
+
+async function refreshTropes() {
+  const btn = $('btn_refresh_tropes');
+  if (!btn) return;
+  const origText = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="rd-spin" style="width:11px;height:11px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:4px;"></span>构思中…';
+
+  try {
+    const providerId = $('og_provider') ? $('og_provider').value : null;
+    const currentGenre = $('og_genre') ? $('og_genre').value.trim() : '';
+
+    let newTropes = [];
+    let isFallback = false;
+    let fallbackMsg = '';
+
+    try {
+      const res = await api('/api/suggest-tropes', 'POST', {
+        category: currentTropeCat,
+        genre: currentGenre,
+        provider_id: providerId,
+        count: 5
+      });
+
+      const raw = (res && Array.isArray(res.tropes)) ? res.tropes : [];
+      // 严格清洗并校验每个脑洞对象
+      const parsed = raw.filter(t => t && typeof t === 'object').map(t => {
+        const title = strVal(t.title || t.book_name || t.name);
+        const label = strVal(t.label || t.tag || title);
+        if (!title && !label) return null;
+        return {
+          icon: strVal(t.icon) || '💡',
+          label: label || title,
+          title: title || label,
+          genre: strVal(t.genre || t.category || currentGenre || '都市'),
+          setting: strVal(t.setting || t.background),
+          characters: strVal(t.characters || t.roles),
+          storyline: strVal(t.storyline || t.plot || t.outline),
+          style: strVal(t.style || '生动细腻，节奏明快'),
+          perspective: strVal(t.perspective || '第三人称'),
+          chapters: parseInt(t.chapters, 10) || 10,
+          per_words: parseInt(t.per_words, 10) || 2200,
+          cat: t.cat || (currentTropeCat === 'all' ? 'female' : currentTropeCat)
+        };
+      }).filter(Boolean);
+
+      if (parsed.length) {
+        newTropes = parsed.slice(0, 6);
+      }
+    } catch (apiErr) {
+      console.warn('API /api/suggest-tropes 请求未成功，切换为备选智能构思库：', apiErr);
+      isFallback = true;
+      if (apiErr && (apiErr.message || '').includes('404')) {
+        fallbackMsg = '后端服务尚未重启（404），已先行为您动态生成精选灵感！在命令行重启 python app.py 即可启用大模型实时生成。';
+      } else {
+        fallbackMsg = '大模型调用波动，已动态切换为备选脑洞库为您生成新灵感！';
+      }
+      newTropes = generateLocalTropes(currentTropeCat, currentGenre, 5);
+    }
+
+    if (!newTropes.length) {
+      newTropes = generateLocalTropes(currentTropeCat, currentGenre, 5);
+      isFallback = true;
+    }
+
+    newTropes.forEach(t => {
+      if (!t.cat) t.cat = currentTropeCat === 'all' ? (t.cat || 'female') : currentTropeCat;
+    });
+
+    // 动态灵感直接置于前列，去重展示，最多保留前 30 个脑洞
+    const combined = [...newTropes, ...currentTropesList];
+    const seenTitles = new Set();
+    currentTropesList = combined.filter(t => {
+      if (!t || typeof t !== 'object') return false;
+      const key = strVal(t.title || t.label);
+      if (!key || seenTitles.has(key)) return false;
+      seenTitles.add(key);
+      return true;
+    }).slice(0, 30);
+
+    renderTropeList();
+
+    if (isFallback) {
+      toast(fallbackMsg || '已动态生成一批新灵感脑洞！');
+    } else {
+      toast(`已由 AI 实时生成 ${newTropes.length} 个新灵感脑洞！`);
+    }
+  } catch (e) {
+    toast(`生成新脑洞失败：${e.message}`);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = origText;
+  }
+}
+
+function initTropeTemplates() {
+  const catTabs = document.querySelectorAll('#og_trope_cat_tabs .trope-cat-tab');
+  catTabs.forEach(tab => {
+    tab.onclick = () => {
+      catTabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      currentTropeCat = tab.dataset.cat || 'all';
+      renderTropeList();
+    };
+  });
+
+  renderTropeList();
+
+  const refreshBtn = $('btn_refresh_tropes');
+  if (refreshBtn) {
+    refreshBtn.onclick = refreshTropes;
+  }
 
   const randBtn = $('btn_random_trope');
   if (randBtn) {
     randBtn.onclick = () => {
-      const idx = Math.floor(Math.random() * TROPE_TEMPLATES.length);
-      const pills = container.querySelectorAll('.trope-pill');
-      if (pills[idx]) {
-        pills[idx].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-        pills[idx].click();
+      const candidates = currentTropeCat === 'all'
+        ? currentTropesList
+        : currentTropesList.filter(t => t.cat === currentTropeCat);
+      if (!candidates.length) return;
+      const chosen = candidates[Math.floor(Math.random() * candidates.length)];
+      const origIdx = currentTropesList.indexOf(chosen);
+      applyTropeTemplate(chosen);
+      const pill = document.querySelector(`#og_trope_pills .trope-pill[data-idx="${origIdx}"]`);
+      if (pill) {
+        document.querySelectorAll('#og_trope_pills .trope-pill').forEach(b => b.classList.toggle('active', b === pill));
+        pill.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
       }
     };
   }
 }
+
 initTropeTemplates();
 
 // ==================== P2: 原创表单分步向导 (Stepper) ====================
@@ -418,6 +871,7 @@ function restoreOgDraft() {
     const d = JSON.parse(localStorage.getItem(OG_DRAFT_KEY) || 'null');
     if (!d) return;
     Object.entries(d).forEach(([id, v]) => { const el = $(id); if (el && v !== undefined && v !== null) el.value = v; });
+    syncGenrePillsFromInput();
   } catch (e) { /* 忽略 */ }
 }
 let ogDraftTimer = null;
@@ -440,6 +894,9 @@ $('btn_clear_og').onclick = () => {
   $('og_perspective').value = '第三人称';
   $('og_chapters').value = 10;
   $('og_per_words').value = 1500;
+  syncGenrePillsFromInput();
+  const tWrap = $('og_trope_pills');
+  if (tWrap) tWrap.querySelectorAll('.trope-pill').forEach(p => p.classList.remove('active'));
   try { localStorage.removeItem(OG_DRAFT_KEY); } catch (e) {}
   toast('已清空本页表单');
 };
