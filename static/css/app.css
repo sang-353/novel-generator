@@ -1762,3 +1762,523 @@ button:disabled {
   font-weight: 600;
   box-shadow: var(--shadow-sm);
 }
+
+/* ==========================================================================
+   P3: 三栏沉浸式小说创作工作台 (Studio Workspace)
+   ========================================================================== */
+
+#rd_studio_body {
+  display: flex;
+  height: calc(100vh - 56px);
+  min-height: 560px;
+  overflow: hidden;
+  position: relative;
+  background: var(--bg);
+}
+
+/* 1. 左栏：TOC 卷章目录与大纲备忘 */
+.toc-panel {
+  width: 280px;
+  max-width: 85vw;
+  flex-shrink: 0;
+  background: var(--card);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  transition: transform var(--dur-normal) var(--ease-out), width var(--dur-normal) var(--ease-out);
+  z-index: 20;
+}
+
+.toc-panel.collapsed {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .toc-panel.collapsed {
+    display: flex;
+    width: 0;
+    overflow: hidden;
+    border-right: none;
+  }
+}
+
+.toc-head-tabs {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  padding: 6px 10px;
+  gap: 4px;
+  background: var(--card-subtle);
+}
+
+.toc-tab-btn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color var(--dur-micro) ease, color var(--dur-micro) ease, border-color var(--dur-micro) ease, box-shadow var(--dur-micro) ease, transform var(--dur-micro) ease;
+}
+
+.toc-tab-btn:hover {
+  color: var(--ink);
+}
+
+.toc-tab-btn.active {
+  background: var(--card);
+  color: var(--accent);
+  font-weight: 600;
+  box-shadow: var(--shadow-xs);
+}
+
+.toc-tab-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Volume Grouping in TOC */
+.toc-vol-group {
+  margin-bottom: 6px;
+}
+
+.toc-vol-header {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  padding: 5px 12px;
+  background: var(--card-subtle);
+  border-radius: var(--radius-sm);
+  margin: 6px 6px 2px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  letter-spacing: .02em;
+}
+
+.toc-vol-title {
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toc-vol-count {
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.toc-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--ink);
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+  margin: 1px 6px;
+  cursor: pointer;
+  transition: background-color var(--dur-micro) ease;
+}
+
+.toc-item:hover {
+  background: var(--card-subtle);
+}
+
+.toc-item.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.toc-item-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 6px;
+}
+
+.toc-reorder-btns {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--dur-micro) ease;
+}
+
+.toc-item:hover .toc-reorder-btns {
+  opacity: 1;
+}
+
+.toc-reorder-btn {
+  background: transparent;
+  border: none;
+  font-size: 10px;
+  padding: 2px 4px;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 2px;
+  line-height: 1;
+}
+
+.toc-reorder-btn:hover {
+  background: var(--line);
+  color: var(--ink);
+}
+
+/* 大纲备忘 Panel */
+.rd-outline-memo {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 12px;
+}
+
+.memo-card {
+  padding: 10px 12px;
+  background: var(--card-subtle);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.memo-card-title {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
+/* 2. 中栏：编辑器与状态栏 */
+.rd-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  min-width: 0;
+  position: relative;
+  background: var(--bg);
+}
+
+.rd-editor-statusbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 24px;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--muted);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.rd-status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.rd-status-indicator.saving {
+  color: var(--accent);
+}
+
+/* 3. 右栏：常驻 AI 创作助理与设定集 */
+.rd-assistant-panel {
+  width: 330px;
+  max-width: 90vw;
+  flex-shrink: 0;
+  background: var(--card);
+  border-left: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  transition: transform var(--dur-normal) var(--ease-out), width var(--dur-normal) var(--ease-out);
+  z-index: 20;
+}
+
+.rd-assistant-panel.collapsed {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .rd-assistant-panel.collapsed {
+    display: flex;
+    width: 0;
+    overflow: hidden;
+    border-left: none;
+  }
+}
+
+.rd-ast-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--card-subtle);
+}
+
+.rd-ast-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+}
+
+.rd-ast-tab {
+  background: transparent;
+  border: none;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color var(--dur-micro) ease, color var(--dur-micro) ease, border-color var(--dur-micro) ease, box-shadow var(--dur-micro) ease, transform var(--dur-micro) ease;
+}
+
+.rd-ast-tab:hover {
+  color: var(--ink);
+}
+
+.rd-ast-tab.active {
+  background: var(--card);
+  color: var(--accent);
+  font-weight: 600;
+  box-shadow: var(--shadow-xs);
+}
+
+.rd-ast-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+}
+
+.rd-ast-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.mini-textarea {
+  width: 100%;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  box-sizing: border-box;
+}
+
+.mini-input {
+  width: 100%;
+  font-size: 12px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  box-sizing: border-box;
+}
+
+.ast-chars-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  margin-top: 4px;
+}
+
+.ast-char-card {
+  padding: 8px 10px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  position: relative;
+}
+
+.ast-char-name {
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 2px;
+}
+
+.ast-char-desc {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+/* 4. 行内轻量划词精修浮窗 (Inline Refine) */
+.rd-inline-assist {
+  margin: 16px auto;
+  max-width: 680px;
+  width: 95%;
+  background: var(--card);
+  border: 1px solid var(--accent-ring);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  padding: 14px 16px;
+  box-sizing: border-box;
+  animation: modalPop var(--dur-normal) var(--spring);
+}
+
+.rd-inline-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rd-inline-badge {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.rd-inline-chips {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.rd-inline-diff-preview {
+  padding: 10px 12px;
+  background: var(--card-subtle);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  line-height: 1.7;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.diff-del {
+  background: rgba(239, 68, 68, 0.15);
+  color: #dc2626;
+  text-decoration: line-through;
+  padding: 1px 3px;
+  border-radius: 2px;
+}
+
+.diff-ins {
+  background: rgba(34, 197, 94, 0.18);
+  color: #16a34a;
+  font-weight: 500;
+  padding: 1px 3px;
+  border-radius: 2px;
+}
+
+/* 5. 查找替换结果卡片 */
+.sr-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sr-result-item {
+  padding: 8px 10px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+}
+
+.sr-result-head {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: var(--ink);
+}
+
+.sr-match-snippet {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.4;
+  padding: 2px 4px;
+  background: var(--card);
+  border-radius: 2px;
+  margin-top: 2px;
+}
+
+/* 6. 历史快照卡片 */
+.history-snapshot-card {
+  padding: 10px 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  transition: background-color var(--dur-micro) ease, color var(--dur-micro) ease, border-color var(--dur-micro) ease, box-shadow var(--dur-micro) ease, transform var(--dur-micro) ease;
+}
+
+.history-snapshot-card:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
+}
+
+.snap-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.snap-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.snap-time {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.snap-preview {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 4px 0 8px;
+}
+
+
+/* Web Interface Guidelines Polish */
+.toc-tab-btn, .rd-ast-tab, .history-snapshot-card, .book-card, .rd-chip, .tag-pill, .mini-btn {
+  touch-action: manipulation;
+}
+
+.history-snapshots-grid, .modal-box, .rd-sheet, .rd-ast-body, .toc-tab-panel {
+  overscroll-behavior: contain;
+}
+
+.toc-words, .mini, .snap-time, #rd_words_count {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rd-inline-assist, .toc-panel, .rd-assistant-panel, .history-snapshot-card, .book-card {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+}

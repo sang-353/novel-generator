@@ -141,26 +141,26 @@ async function loadSettings() {
   loadPrivacyState();
   loadWebAuthState();
 }
-$('btn_add_provider').onclick = () => {
+on('btn_add_provider', () => {
   providersState.push({ id: 'p_' + Date.now(), name: '', base_url: '', api_key: '', model: '', temperature: 1.0 });
   if (!activeProviderId) activeProviderId = providersState[0].id;
   renderProviderList();
-};
-$('btn_save_settings').onclick = async () => {
+});
+on('btn_save_settings', async () => {
   setStatus('st_status', '保存中…');
   try {
     await api('/api/settings', 'POST', { providers: providersState, active_provider: activeProviderId });
     setStatus('st_status', '已保存'); loadSettings();
     setTimeout(() => setStatus('st_status', ''), 2500);
   } catch (e) { setStatus('st_status', '失败：' + e.message); }
-};
-$('btn_test').onclick = async () => {
+});
+on('btn_test', async () => {
   setStatus('st_status', '测试中…');
   try {
     const d = await api('/api/test', 'POST', { provider_id: activeProviderId });
     setStatus('st_status', d.ok ? ('连接正常，模型回复：' + d.reply) : ('失败：' + d.error));
   } catch (e) { setStatus('st_status', '失败：' + e.message); }
-};
+});
 
 
 // ==================== 模型选择下拉（原创/续写页共用） ====================
@@ -206,7 +206,7 @@ async function loadPrivacyState() {
       : '尚未设置隐私密码；设置后才能把书移入隐私书架。';
   } catch (e) { $('pv_state').textContent = '读取失败：' + e.message; }
 }
-$('pv_save').onclick = async () => {
+on('pv_save', async () => {
   const oldP = $('pv_old').value, newP = $('pv_new').value, newP2 = $('pv_new2').value;
   if (newP.length < 4) { setStatus('pv_save_status', '新密码至少 4 位'); return; }
   if (newP !== newP2) { setStatus('pv_save_status', '两次输入的新密码不一致'); return; }
@@ -219,7 +219,7 @@ $('pv_save').onclick = async () => {
     setStatus('pv_status', '');
     loadPrivacyState();
   } catch (e) { setStatus('pv_save_status', '失败：' + e.message); }
-};
+});
 
 // ==================== 设置页：全站访问口令 ====================
 async function loadWebAuthState() {

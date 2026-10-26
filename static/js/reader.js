@@ -162,6 +162,8 @@ function setTocOpen(open) {
 function closeReaderPanels() {
   ['rd_settings', 'rd_more'].forEach(id => { const el = $(id); if (el) el.classList.remove('open'); });
   if (!isWide()) $('rd_toc').classList.remove('open');
+  const modal = $('rd_assist_modal');
+  if (modal) modal.style.display = 'none';
   $('rd_mask').classList.remove('open');
 }
 function openSheet(id) {
@@ -224,6 +226,21 @@ async function openReader(name, idx, opts) {
     renderReader();
     closeReaderPanels();
     setTocOpen(isWide());
+    const astPanel = $('rd_assistant');
+    const astToggle = $('rd_assistant_toggle');
+    if (astPanel) {
+      if (isWide()) {
+        astPanel.classList.remove('collapsed');
+        if (astToggle) astToggle.classList.add('active');
+      } else {
+        astPanel.classList.add('collapsed');
+        if (astToggle) astToggle.classList.remove('active');
+      }
+    }
+    syncStudioBible();
+    if (typeof loadProviderSelectsInto === 'function' && $('ast_ct_provider')) {
+      loadProviderSelectsInto('ast_ct_provider', (readerData.meta && readerData.meta.provider_id) || undefined);
+    }
     document.body.classList.remove('rd-immersive');
     if (typeof idx === 'number') window.scrollTo(0, 0);
     syncReaderHash(name, readerIdx, typeof idx === 'number');
@@ -394,8 +411,8 @@ function renderChapter() {
       `<span class="mini" style="color:var(--rd-muted)">第 ${readerIdx + 1} / ${d.chapters.length} 章 · ${hasContent ? `本章 ${words.toLocaleString()} 字` : '加载中…'}</span>` +
     `</div>`;
 
-  $('rd_prev_bottom').onclick = () => gotoChapter(readerIdx - 1);
-  $('rd_next_bottom').onclick = () => gotoChapter(readerIdx + 1);
+  if ($('rd_prev_bottom')) $('rd_prev_bottom').onclick = () => gotoChapter(readerIdx - 1);
+  if ($('rd_next_bottom')) $('rd_next_bottom').onclick = () => gotoChapter(readerIdx + 1);
   ['rd_chapter_sel', 'rd_chapter_sel_m'].forEach(id => { const el = $(id); if (el) el.value = readerIdx; });
   // 桌面工具条上的上下章按钮：到边界时置灰
   const pd = $('rd_prev_d'), nd = $('rd_next_d');
@@ -534,10 +551,16 @@ async function enterChapterEdit() {
 
   const bodyInp = $('rd_edit_body_inp');
   const wordsLive = $('rd_edit_words_live');
+  let autoSaveTimer = null;
   if (bodyInp) {
     bodyInp.oninput = () => {
       const w = bodyInp.value.replace(/\s/g, '').length;
       if (wordsLive) wordsLive.textContent = '当前字数：' + w.toLocaleString() + ' 字';
+      showAutoSaveStatus('saving');
+      clearTimeout(autoSaveTimer);
+      autoSaveTimer = setTimeout(() => {
+        silentAutoSave();
+      }, 1500);
     };
     bodyInp.focus();
   }
@@ -581,6 +604,53 @@ async function saveChapterEdit() {
     toast('保存失败：' + e.message);
   } finally {
     showBusy(null);
+  }
+}
+
+
+function showAutoSaveStatus(status, text) {
+  const el = $('rd_save_status');
+  if (!el) return;
+  if (status === 'saving') {
+    el.className = 'rd-status-indicator saving';
+    el.textContent = '💾 正在自动保存…';
+  } else if (status === 'saved') {
+    el.className = 'rd-status-indicator';
+    const now = new Date();
+    const timeStr = now.toTimeString().split(' ')[0];
+    el.textContent = text || `✅ 已自动保存 (${timeStr})`;
+  } else if (status === 'error') {
+    el.className = 'rd-status-indicator';
+    el.textContent = text || '⚠️ 保存失败';
+  } else {
+    el.className = 'rd-status-indicator';
+    el.textContent = text || '💾 就绪';
+  }
+}
+
+async function silentAutoSave() {
+  if (!isEditingChapter || !readerData) return;
+  const bodyInp = $('rd_edit_body_inp');
+  const titleInp = $('rd_edit_title_inp');
+  if (!bodyInp) return;
+  const newContent = bodyInp.value;
+  const newTitle = titleInp ? titleInp.value.trim() : '';
+  const d = readerData;
+
+  try {
+    const res = await api('/api/novels/' + encodeURIComponent(d.name) + '/chapter/' + readerIdx, 'POST', {
+      title: newTitle,
+      content: newContent
+    });
+    if (res && res.ok) {
+      d.chapters[readerIdx].title = res.title || newTitle;
+      d.chapters[readerIdx].content = res.content || newContent;
+      d.chapters[readerIdx].words = res.words;
+      if (typeof res.total_words === 'number') d.words = res.total_words;
+      showAutoSaveStatus('saved');
+    }
+  } catch (e) {
+    showAutoSaveStatus('error', '⚠️ 自动保存出错');
   }
 }
 
@@ -631,7 +701,22 @@ window.addEventListener('scroll', () => {
   rdSaveTimer = setTimeout(() => { if (readerActive()) saveReaderPos(); }, 400);
 }, { passive: true });
 window.addEventListener('resize', () => {
-  if (readerActive()) { updateReadingProgress(); setTocOpen(isWide()); }
+  if (readerActive()) { updateReadingProgress(); setTocOpen(isWide());
+    const astPanel = $('rd_assistant');
+    const astToggle = $('rd_assistant_toggle');
+    if (astPanel) {
+      if (isWide()) {
+        astPanel.classList.remove('collapsed');
+        if (astToggle) astToggle.classList.add('active');
+      } else {
+        astPanel.classList.add('collapsed');
+        if (astToggle) astToggle.classList.remove('active');
+      }
+    }
+    syncStudioBible();
+    if (typeof loadProviderSelectsInto === 'function' && $('ast_ct_provider')) {
+      loadProviderSelectsInto('ast_ct_provider', (readerData.meta && readerData.meta.provider_id) || undefined);
+    } }
 }, { passive: true });
 
 // ---- 目录（过滤 + 全文搜索）----
@@ -641,19 +726,93 @@ function renderToc(filterText) {
   const list = $('rd_toc_list');
   if (!list) return;
   const q = (filterText || '').trim();
-  if (tocMode === 'search') return; // 搜索模式由 searchNovel 填充
-  const all = d.chapters.map((c, i) => i);
-  const hit = q ? all.filter(i => (chapterRealTitle(i) || '').includes(q)) : all;
-  list.innerHTML = hit.map(i => `
-    <button type="button" class="toc-item ${i === readerIdx ? 'active' : ''}" data-i="${i}">
-      <span class="num">${chapterFolio(i)}</span><span class="t">${escapeHtml(chapterRealTitle(i))}</span>
-    </button>`).join('') || '<p class="mini" style="padding:12px">无匹配章节</p>';
-  list.querySelectorAll('.toc-item').forEach(el => {
-    el.onclick = () => gotoChapter(parseInt(el.dataset.i));
+  if (tocMode === 'search') return;
+
+  const volumes = {};
+  d.chapters.forEach((c, i) => {
+    const vol = (c.volume || '正文').trim();
+    if (!volumes[vol]) volumes[vol] = [];
+    volumes[vol].push({ ch: c, idx: i });
   });
-  // 手机抽屉打开时把当前章滚到可见处
+
+  const volNames = Object.keys(volumes);
+  let html = '';
+
+  volNames.forEach(volName => {
+    const items = volumes[volName];
+    const filteredItems = q ? items.filter(it => (chapterRealTitle(it.idx) || '').includes(q)) : items;
+    if (filteredItems.length === 0) return;
+
+    if (volNames.length > 1 || volName !== '正文') {
+      html += `<div class="toc-vol-header"><span class="toc-vol-title">📖 ${escapeHtml(volName)}</span><span class="toc-vol-count">${items.length} 章</span></div>`;
+    }
+
+    filteredItems.forEach(({ ch: c, idx: i }) => {
+      const words = typeof c.words === 'number' ? c.words : (c.content ? c.content.replace(/\s/g, '').length : 0);
+      html += `
+        <div class="toc-item ${i === readerIdx ? 'active' : ''}">
+          <button type="button" class="toc-title-btn" data-i="${i}" style="background:none;border:none;padding:0;text-align:left;flex:1;cursor:pointer;display:flex;align-items:center;min-width:0;color:inherit;">
+            <span class="num" style="margin-right:6px;font-size:11px;color:var(--muted);">${chapterFolio(i)}</span>
+            <span class="t" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;">${escapeHtml(chapterRealTitle(i))}</span>
+          </button>
+          <div class="toc-reorder-btns">
+            <button type="button" class="toc-reorder-btn" data-act="up" data-idx="${i}" title="上移">▲</button>
+            <button type="button" class="toc-reorder-btn" data-act="down" data-idx="${i}" title="下移">▼</button>
+          </div>
+          <span class="mini" style="font-size:10px;color:var(--muted);margin-left:4px;">${words.toLocaleString()}字</span>
+        </div>`;
+    });
+  });
+
+  list.innerHTML = html || '<p class="mini" style="padding:12px">无匹配章节</p>';
+
+  list.querySelectorAll('.toc-title-btn').forEach(el => {
+    el.onclick = () => gotoChapter(parseInt(el.dataset.i, 10));
+  });
+
+  list.querySelectorAll('.toc-reorder-btn').forEach(btn => {
+    btn.onclick = async (e) => {
+      e.stopPropagation();
+      const act = btn.dataset.act;
+      const fromIdx = parseInt(btn.dataset.idx, 10);
+      const toIdx = act === 'up' ? fromIdx - 1 : fromIdx + 1;
+      if (toIdx < 0 || toIdx >= d.chapters.length) return;
+      await reorderChapterItem(fromIdx, toIdx);
+    };
+  });
+
   const act = list.querySelector('.toc-item.active');
   if (act && !isWide() && $('rd_toc').classList.contains('open')) act.scrollIntoView({ block: 'center' });
+}
+
+async function reorderChapterItem(fromIdx, toIdx) {
+  const d = readerData;
+  if (!d || !d.chapters) return;
+  const item = d.chapters.splice(fromIdx, 1)[0];
+  d.chapters.splice(toIdx, 0, item);
+
+  if (readerIdx === fromIdx) {
+    readerIdx = toIdx;
+  } else if (fromIdx < readerIdx && toIdx >= readerIdx) {
+    readerIdx--;
+  } else if (fromIdx > readerIdx && toIdx <= readerIdx) {
+    readerIdx++;
+  }
+
+  renderToc($('rd_toc_filter') ? $('rd_toc_filter').value : '');
+  renderChapter();
+
+  try {
+    const order = d.chapters.map((c, i) => ({
+      index: i,
+      volume: c.volume || '正文',
+      title: c.title
+    }));
+    await api('/api/novels/' + encodeURIComponent(d.name) + '/reorder-chapters', 'POST', { order });
+    toast('已调整章节顺序');
+  } catch (e) {
+    toast('保存章节顺序失败：' + e.message);
+  }
 }
 
 async function searchNovel(q) {
@@ -684,15 +843,15 @@ async function searchNovel(q) {
     tocMode = 'toc';
   }
 }
-$('rd_toc_filter').addEventListener('input', () => {
+on('rd_toc_filter', 'input', () => {
   tocMode = 'toc';
   renderToc($('rd_toc_filter').value);
 });
-$('rd_toc_filter').addEventListener('keydown', e => {
-  if (e.key === 'Enter') { e.preventDefault(); const q = $('rd_toc_filter').value.trim(); if (q) searchNovel(q); }
+on('rd_toc_filter', 'keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); const q = $('rd_toc_filter') ? $('rd_toc_filter').value.trim() : ''; if (q) searchNovel(q); }
 });
-$('rd_toc_search').onclick = () => { const q = $('rd_toc_filter').value.trim(); if (q) searchNovel(q); };
-$('rd_toc_close').onclick = () => setTocOpen(false);
+on('rd_toc_search', () => { const q = $('rd_toc_filter') ? $('rd_toc_filter').value.trim() : ''; if (q) searchNovel(q); });
+on('rd_toc_close', () => setTocOpen(false));
 
 // ---- 手机手势：点左侧上一章 / 点右侧下一章 / 点中间收起工具栏；左右滑动翻章 ----
 let rdSwipedAt = 0;
@@ -938,11 +1097,11 @@ function collectBmBible() {
   };
 }
 
-$('btn_add_bm_char').onclick = () => {
+on('btn_add_bm_char', () => {
   const b = collectBmBible();
   b.characters.push({ name: '', role: '', desc: '', goal: '' });
   renderBmCharCards(b.characters);
-};
+});
 
 async function openReaderBibleModal() {
   if (!readerData) return;
@@ -962,7 +1121,7 @@ async function openReaderBibleModal() {
   }
 }
 
-$('bm_save').onclick = async () => {
+on('bm_save', async () => {
   if (!readerData) return;
   const b = collectBmBible();
   $('bm_status').textContent = '保存中…';
@@ -975,10 +1134,10 @@ $('bm_save').onclick = async () => {
   } catch (e) {
     $('bm_status').textContent = '保存失败：' + e.message;
   }
-};
+});
 
-$('bm_close').onclick = () => $('bible_modal').classList.remove('show');
-$('bm_cancel').onclick = () => $('bible_modal').classList.remove('show');
+on('bm_close', () => $('bible_modal').classList.remove('show'));
+on('bm_cancel', () => $('bible_modal').classList.remove('show'));
 on('rd_bible_btn', openReaderBibleModal);
 on('rd_bible_btn_m', openReaderBibleModal);
 
@@ -992,17 +1151,75 @@ function hideSelectionToolbar() {
   if (tb) tb.style.display = 'none';
 }
 
+function closeAssistModal() {
+  const modal = $('rd_assist_modal');
+  if (modal) modal.style.display = 'none';
+  const mask = $('rd_mask');
+  if (mask) mask.classList.remove('open');
+  hideSelectionToolbar();
+}
+
+async function runAssist() {
+  if (!readerData || !activeSelectionSnippet) return;
+  const ch = readerData.chapters && readerData.chapters[readerIdx];
+  const fullContent = (ch && ch.content) || '';
+  const idx = fullContent.indexOf(activeSelectionSnippet);
+  const contextBefore = idx !== -1 ? fullContent.slice(Math.max(0, idx - 800), idx) : '';
+  const contextAfter = idx !== -1 ? fullContent.slice(idx + activeSelectionSnippet.length, idx + activeSelectionSnippet.length + 800) : '';
+
+  const payload = {
+    selected_text: activeSelectionSnippet,
+    instruction_type: activeAssistType,
+    style_target: activeAssistStyle,
+    custom_instruction: $('rd_assist_custom_input') ? $('rd_assist_custom_input').value.trim() : '',
+    context_before: contextBefore,
+    context_after: contextAfter,
+    provider_id: (readerData.meta && readerData.meta.provider_id) || undefined
+  };
+
+  const loading = $('rd_assist_loading');
+  const resWrap = $('rd_assist_result_wrap');
+  const runBtn = $('rd_assist_run_btn');
+  if (loading) loading.style.display = 'flex';
+  if (resWrap) resWrap.style.display = 'none';
+  if (runBtn) runBtn.disabled = true;
+
+  try {
+    const res = await api('/api/novels/' + encodeURIComponent(readerData.name) + '/selection-assist', 'POST', payload);
+    if (loading) loading.style.display = 'none';
+    if (runBtn) runBtn.disabled = false;
+    if (res && res.ok && res.result) {
+      if ($('rd_assist_result_text')) $('rd_assist_result_text').value = res.result;
+      const diff = res.result.length - activeSelectionSnippet.length;
+      if ($('rd_assist_diff')) $('rd_assist_diff').textContent = `原有 ${activeSelectionSnippet.length} 字 → 精修 ${res.result.length} 字 (${diff >= 0 ? '+' : ''}${diff} 字)`;
+      if (resWrap) resWrap.style.display = 'flex';
+    } else {
+      toast('未能生成精修结果');
+    }
+  } catch (e) {
+    if (loading) loading.style.display = 'none';
+    if (runBtn) runBtn.disabled = false;
+    toast('精修失败：' + e.message);
+  }
+}
+
 function openAssistModal(defaultType = 'expand') {
+  if (!activeSelectionSnippet) {
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed) {
+      activeSelectionSnippet = sel.toString().trim();
+    }
+  }
   hideSelectionToolbar();
   if (!activeSelectionSnippet) return;
   const modal = $('rd_assist_modal');
   if (!modal) return;
-  $('rd_assist_orig').textContent = activeSelectionSnippet;
-  $('rd_assist_loading').style.display = 'none';
-  $('rd_assist_result_wrap').style.display = 'none';
-  $('rd_assist_result_text').value = '';
+  if ($('rd_assist_orig')) $('rd_assist_orig').textContent = activeSelectionSnippet;
+  if ($('rd_assist_loading')) $('rd_assist_loading').style.display = 'none';
+  if ($('rd_assist_result_wrap')) $('rd_assist_result_wrap').style.display = 'none';
+  if ($('rd_assist_result_text')) $('rd_assist_result_text').value = '';
 
-  activeAssistType = defaultType;
+  activeAssistType = defaultType || 'expand';
   const typeChips = $('rd_assist_types');
   if (typeChips) {
     typeChips.querySelectorAll('.rd-chip').forEach(b => {
@@ -1014,10 +1231,21 @@ function openAssistModal(defaultType = 'expand') {
   const customBox = $('rd_assist_custom_wrap');
   if (customBox) {
     customBox.style.display = activeAssistType === 'custom' ? 'block' : 'none';
-    if (activeAssistType === 'custom') $('rd_assist_custom_input').focus();
+    if (activeAssistType === 'custom') {
+      setTimeout(() => {
+        const inp = $('rd_assist_custom_input');
+        if (inp) inp.focus();
+      }, 50);
+    }
   }
 
   modal.style.display = 'flex';
+  const mask = $('rd_mask');
+  if (mask) mask.classList.add('open');
+
+  if (activeAssistType === 'expand' || activeAssistType === 'concise') {
+    runAssist();
+  }
 }
 
 function initSelectionAssist() {
@@ -1062,13 +1290,18 @@ function initSelectionAssist() {
   document.addEventListener('touchend', checkSelection);
 
   toolbar.querySelectorAll('.rd-sel-btn').forEach(btn => {
+    btn.onmousedown = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
     btn.onclick = (e) => {
+      e.preventDefault();
       e.stopPropagation();
       openAssistModal(btn.dataset.act);
     };
   });
 
-  $('rd_assist_close').onclick = () => { modal.style.display = 'none'; };
+  on('rd_assist_close', closeAssistModal);
 
   const typeChips = $('rd_assist_types');
   if (typeChips) {
@@ -1076,9 +1309,13 @@ function initSelectionAssist() {
       btn.onclick = () => {
         activeAssistType = btn.dataset.type;
         typeChips.querySelectorAll('.rd-chip').forEach(b => b.classList.toggle('active', b === btn));
-        $('rd_assist_style_opts').style.display = activeAssistType === 'style' ? 'block' : 'none';
-        $('rd_assist_custom_wrap').style.display = activeAssistType === 'custom' ? 'block' : 'none';
-        if (activeAssistType === 'custom') $('rd_assist_custom_input').focus();
+        if ($('rd_assist_style_opts')) $('rd_assist_style_opts').style.display = activeAssistType === 'style' ? 'block' : 'none';
+        if ($('rd_assist_custom_wrap')) $('rd_assist_custom_wrap').style.display = activeAssistType === 'custom' ? 'block' : 'none';
+        if (activeAssistType === 'custom') {
+          if ($('rd_assist_custom_input')) $('rd_assist_custom_input').focus();
+        } else if (activeAssistType === 'expand' || activeAssistType === 'concise') {
+          runAssist();
+        }
       };
     });
   }
@@ -1089,98 +1326,672 @@ function initSelectionAssist() {
       pill.onclick = () => {
         activeAssistStyle = pill.dataset.style;
         stylePills.querySelectorAll('.tag-pill').forEach(p => p.classList.toggle('active', p === pill));
+        runAssist();
       };
     });
   }
 
-  const runAssist = async () => {
-    if (!readerData || !activeSelectionSnippet) return;
-    const ch = readerData.chapters && readerData.chapters[readerIdx];
-    const fullContent = (ch && ch.content) || '';
-    const idx = fullContent.indexOf(activeSelectionSnippet);
-    const contextBefore = idx !== -1 ? fullContent.slice(Math.max(0, idx - 800), idx) : '';
-    const contextAfter = idx !== -1 ? fullContent.slice(idx + activeSelectionSnippet.length, idx + activeSelectionSnippet.length + 800) : '';
-
-    const payload = {
-      selected_text: activeSelectionSnippet,
-      instruction_type: activeAssistType,
-      style_target: activeAssistStyle,
-      custom_instruction: $('rd_assist_custom_input') ? $('rd_assist_custom_input').value.trim() : '',
-      context_before: contextBefore,
-      context_after: contextAfter,
-      provider_id: (readerData.meta && readerData.meta.provider_id) || undefined
-    };
-
-    $('rd_assist_loading').style.display = 'flex';
-    $('rd_assist_result_wrap').style.display = 'none';
-    $('rd_assist_run_btn').disabled = true;
-
-    try {
-      const res = await api('/api/novels/' + encodeURIComponent(readerData.name) + '/selection-assist', 'POST', payload);
-      $('rd_assist_loading').style.display = 'none';
-      $('rd_assist_run_btn').disabled = false;
-      if (res && res.ok && res.result) {
-        $('rd_assist_result_text').value = res.result;
-        const diff = res.result.length - activeSelectionSnippet.length;
-        $('rd_assist_diff').textContent = `原有 ${activeSelectionSnippet.length} 字 → 精修 ${res.result.length} 字 (${diff >= 0 ? '+' : ''}${diff} 字)`;
-        $('rd_assist_result_wrap').style.display = 'flex';
-      } else {
-        toast('未能生成精修结果');
+  const customInput = $('rd_assist_custom_input');
+  if (customInput) {
+    customInput.onkeydown = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        runAssist();
       }
-    } catch (e) {
-      $('rd_assist_loading').style.display = 'none';
-      $('rd_assist_run_btn').disabled = false;
-      toast('精修失败：' + e.message);
-    }
-  };
+    };
+  }
 
-  $('rd_assist_run_btn').onclick = runAssist;
-  $('rd_assist_retry_btn').onclick = runAssist;
+  on('rd_assist_run_btn', runAssist);
+  on('rd_assist_retry_btn', runAssist);
 
-  $('rd_assist_copy_btn').onclick = () => {
-    const val = $('rd_assist_result_text').value;
+  on('rd_assist_copy_btn', () => {
+    const val = $('rd_assist_result_text') ? $('rd_assist_result_text').value : '';
     if (!val) return;
     navigator.clipboard.writeText(val).then(() => toast('已复制精修结果到剪贴板'));
-  };
+  });
 
-  $('rd_assist_apply_btn').onclick = async () => {
-    if (!readerData || !activeSelectionSnippet) return;
-    const newText = $('rd_assist_result_text').value.trim();
-    if (!newText) { toast('精修文本不能为空'); return; }
+  on('rd_assist_apply_btn', async () => {
+      if (!readerData || !activeSelectionSnippet) return;
+      const newText = $('rd_assist_result_text') ? $('rd_assist_result_text').value.trim() : '';
+      if (!newText) { toast('精修文本不能为空'); return; }
 
-    const ch = readerData.chapters && readerData.chapters[readerIdx];
-    if (!ch) return;
-
-    if (!ch.content.includes(activeSelectionSnippet)) {
-      toast('未在正文中找到原句（可能已被修改），请手动复制');
-      return;
-    }
-
-    const updatedContent = ch.content.replace(activeSelectionSnippet, newText);
-    const btn = $('rd_assist_apply_btn');
-    btn.disabled = true;
-    btn.textContent = '保存中…';
-
-    try {
-      const res = await api('/api/novels/' + encodeURIComponent(readerData.name) + '/chapter/' + readerIdx, 'POST', {
-        title: ch.title,
-        content: updatedContent
-      });
-      btn.disabled = false;
-      btn.textContent = '✅ 替换原句并保存';
-      if (res && res.ok) {
-        ch.content = res.content || updatedContent;
-        ch.words = typeof res.words === 'number' ? res.words : ch.content.replace(/\s/g, '').length;
-        if (typeof res.book_words === 'number') readerData.words = res.book_words;
-        modal.style.display = 'none';
-        renderChapter();
-        toast('已就地替换并保存！');
+      if (isEditingChapter) {
+        const inp = $('rd_edit_input');
+        if (inp && inp.value.includes(activeSelectionSnippet)) {
+          inp.value = inp.value.replace(activeSelectionSnippet, newText);
+          updateWordCount(inp.value.replace(/\s/g, '').length);
+          closeAssistModal();
+          toast('✅ 已在编辑框中替换原句！');
+          return;
+        }
       }
-    } catch (e) {
-      btn.disabled = false;
-      btn.textContent = '✅ 替换原句并保存';
-      toast('保存失败：' + e.message);
-    }
-  };
+
+      const ch = readerData.chapters && readerData.chapters[readerIdx];
+      if (!ch) return;
+
+      if (!ch.content.includes(activeSelectionSnippet)) {
+        toast('未在正文中找到原句（可能已被修改），请手动复制');
+        return;
+      }
+
+      const updatedContent = ch.content.replace(activeSelectionSnippet, newText);
+      const btn = $('rd_assist_apply_btn');
+      btn.disabled = true;
+      btn.textContent = '保存中…';
+
+      try {
+        const res = await api('/api/novels/' + encodeURIComponent(readerData.name) + '/chapter/' + readerIdx, 'POST', {
+          title: ch.title,
+          content: updatedContent
+        });
+        btn.disabled = false;
+        btn.textContent = '✅ 替换原句并保存';
+        if (res && res.ok) {
+          ch.content = res.content || updatedContent;
+          ch.words = typeof res.words === 'number' ? res.words : ch.content.replace(/\s/g, '').length;
+          if (typeof res.book_words === 'number') readerData.words = res.book_words;
+          closeAssistModal();
+          renderChapter();
+          toast('已就地替换并保存！');
+        }
+      } catch (e) {
+        btn.disabled = false;
+        btn.textContent = '✅ 替换原句并保存';
+        toast('保存失败：' + e.message);
+      }
+    });
 }
 initSelectionAssist();
+
+
+// ==================== P3: Studio 工作台全能交互 ====================
+
+function initStudioPanels() {
+  const tocToggle = $('rd_toc_toggle');
+  const tocPanel = $('rd_toc');
+  const tocClose = $('rd_toc_close');
+
+  if (tocToggle) {
+    tocToggle.onclick = () => {
+      if (tocPanel) {
+        tocPanel.classList.toggle('collapsed');
+        tocToggle.classList.toggle('active', !tocPanel.classList.contains('collapsed'));
+      }
+    };
+  }
+  if (tocClose && tocPanel) {
+    tocClose.onclick = () => {
+      tocPanel.classList.add('collapsed');
+      if (tocToggle) tocToggle.classList.remove('active');
+    };
+  }
+
+  const astToggle = $('rd_assistant_toggle');
+  const astPanel = $('rd_assistant');
+  const astClose = $('rd_ast_close');
+
+  if (astToggle) {
+    astToggle.onclick = () => {
+      if (astPanel) {
+        astPanel.classList.toggle('collapsed');
+        astToggle.classList.toggle('active', !astPanel.classList.contains('collapsed'));
+      }
+    };
+  }
+  if (astClose && astPanel) {
+    astClose.onclick = () => {
+      astPanel.classList.add('collapsed');
+      if (astToggle) astToggle.classList.remove('active');
+    };
+  }
+
+  const tabDirs = $('rd_toc_tab_dirs');
+  const tabOutline = $('rd_toc_tab_outline');
+  const panelDirs = $('rd_toc_panel_dirs');
+  const panelOutline = $('rd_toc_panel_outline');
+
+  if (tabDirs && tabOutline) {
+    tabDirs.onclick = () => {
+      tabDirs.classList.add('active');
+      tabOutline.classList.remove('active');
+      if (panelDirs) panelDirs.style.display = 'flex';
+      if (panelOutline) panelOutline.style.display = 'none';
+    };
+    tabOutline.onclick = () => {
+      tabOutline.classList.add('active');
+      tabDirs.classList.remove('active');
+      if (panelDirs) panelDirs.style.display = 'none';
+      if (panelOutline) {
+        panelOutline.style.display = 'flex';
+        renderOutlineMemo();
+      }
+    };
+  }
+
+  const addChBtn = $('rd_toc_add_ch_btn');
+  if (addChBtn) {
+    addChBtn.onclick = async () => {
+      if (!readerData) return;
+      const chNum = (readerData.chapters ? readerData.chapters.length : 0) + 1;
+      const newTitle = prompt('请输入新章节标题：', `第${chNum}章 `);
+      if (!newTitle) return;
+      readerData.chapters.push({
+        title: newTitle.trim(),
+        content: '',
+        volume: '正文',
+        words: 0
+      });
+      renderToc();
+      gotoChapter(readerData.chapters.length - 1, false);
+      enterChapterEdit();
+      toast('已新增章节，请开始创作！');
+    };
+  }
+
+  const addVolBtn = $('rd_toc_add_vol_btn');
+  if (addVolBtn) {
+    addVolBtn.onclick = async () => {
+      if (!readerData) return;
+      const volTitle = prompt('请输入新分卷名称（例如：第二卷 龙争虎斗）：');
+      if (!volTitle) return;
+      if (readerData.chapters && readerData.chapters[readerIdx]) {
+        readerData.chapters[readerIdx].volume = volTitle.trim();
+        renderToc();
+        toast(`已将当前第 ${readerIdx + 1} 章划分至【${volTitle.trim()}】`);
+        try {
+          const order = readerData.chapters.map((c, i) => ({
+            index: i,
+            volume: c.volume || '正文',
+            title: c.title
+          }));
+          await api('/api/novels/' + encodeURIComponent(readerData.name) + '/reorder-chapters', 'POST', { order });
+        } catch (e) {}
+      }
+    };
+  }
+
+  const astTabs = document.querySelectorAll('.rd-ast-tab');
+  astTabs.forEach(tab => {
+    tab.onclick = () => {
+      astTabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      const targetPanel = tab.dataset.panel;
+      document.querySelectorAll('.rd-ast-panel').forEach(p => p.style.display = 'none');
+      const panelEl = $('rd_ast_panel_' + targetPanel);
+      if (panelEl) panelEl.style.display = 'flex';
+      if (targetPanel === 'bible') syncStudioBible();
+    };
+  });
+
+  const saveBibleBtn = $('btn_save_ast_bible');
+  if (saveBibleBtn) {
+    saveBibleBtn.onclick = async () => {
+      if (!readerData) return;
+      const bible = {
+        setting: $('ast_bible_setting') ? $('ast_bible_setting').value.trim() : '',
+        conflict: $('ast_bible_conflict') ? $('ast_bible_conflict').value.trim() : '',
+        tone: $('ast_bible_tone') ? $('ast_bible_tone').value.trim() : '',
+        characters: collectStudioBibleChars()
+      };
+      saveBibleBtn.disabled = true;
+      saveBibleBtn.textContent = '保存中…';
+      try {
+        await api('/api/novels/' + encodeURIComponent(readerData.name) + '/bible', 'POST', { bible });
+        readerData.bible = bible;
+        toast('设定档案已同步保存！');
+      } catch (e) {
+        toast('保存设定失败：' + e.message);
+      } finally {
+        saveBibleBtn.disabled = false;
+        saveBibleBtn.textContent = '💾 保存设定';
+      }
+    };
+  }
+
+  const addCharBtn = $('btn_add_ast_char');
+  if (addCharBtn) {
+    addCharBtn.onclick = () => {
+      const name = prompt('角色姓名：');
+      if (!name) return;
+      const desc = prompt('角色身份、性格与目标：') || '';
+      const list = $('ast_bible_chars');
+      if (list) {
+        const card = document.createElement('div');
+        card.className = 'ast-char-card';
+        card.innerHTML = `<div class="ast-char-name">${escapeHtml(name)}</div><div class="ast-char-desc">${escapeHtml(desc)}</div>`;
+        list.appendChild(card);
+      }
+    };
+  }
+
+  const srPrevBtn = $('sr_preview_btn');
+  const srExecBtn = $('sr_execute_btn');
+  if (srPrevBtn) srPrevBtn.onclick = () => runSearchReplace(true);
+  if (srExecBtn) srExecBtn.onclick = () => runSearchReplace(false);
+
+  const astStartCtBtn = $('btn_ast_start_continue');
+  if (astStartCtBtn) {
+    astStartCtBtn.onclick = () => {
+      triggerQuickContinue();
+    };
+  }
+
+  const triggerVarBtn = $('btn_ast_trigger_variants');
+  const retryVarBtn = $('btn_ast_variants_retry');
+  const variantsBox = $('ast_variants_box');
+  const variantsCards = $('ast_variants_cards');
+
+  const doVariants = async () => {
+    if (!readerData) return;
+    const instruction = $('ast_ct_instruction') ? $('ast_ct_instruction').value.trim() : '';
+    const ch = readerData.chapters && readerData.chapters[readerIdx];
+    const prevText = (ch && ch.content) ? ch.content.slice(-2000) : '';
+
+    if (triggerVarBtn) {
+      triggerVarBtn.disabled = true;
+      triggerVarBtn.textContent = '正在推演走向小样…';
+    }
+    if (variantsBox) variantsBox.style.display = 'block';
+    if (variantsCards) variantsCards.innerHTML = '<div class="spinner" style="margin:12px auto;"></div><div style="font-size:12px;text-align:center;color:var(--muted)">AI 正在构思两种不同的剧情走向小样…</div>';
+
+    try {
+      const res = await api('/api/generate-variants', 'POST', {
+        title: readerData.name,
+        context: prevText,
+        instruction: instruction,
+        provider_id: $('ast_ct_provider') ? $('ast_ct_provider').value : undefined
+      });
+      if (res && res.variants && res.variants.length) {
+        if (variantsCards) {
+          variantsCards.innerHTML = '';
+          res.variants.forEach((v, vIdx) => {
+            const card = document.createElement('div');
+            card.className = 'variant-card';
+            card.innerHTML = `
+              <div class="variant-head" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                <span class="variant-tag" style="font-weight:700;color:var(--accent);">走向 ${vIdx === 0 ? 'A' : 'B'}</span>
+                <span class="variant-label" style="font-size:12px;font-weight:600;">${escapeHtml(v.label || '剧情分支')}</span>
+              </div>
+              <div class="variant-body" style="font-size:12px;line-height:1.5;color:var(--ink);margin-bottom:8px;">${escapeHtml(v.content || v.sample || '')}</div>
+              <button type="button" class="primary mini-btn variant-choose-btn" style="width:100%;">选用此走向继续写作</button>
+            `;
+            card.querySelector('.variant-choose-btn').onclick = () => {
+              if ($('ast_ct_instruction')) {
+                $('ast_ct_instruction').value = (instruction ? instruction + '\n' : '') + `【选用剧情走向】：${v.label}。${v.content || v.sample || ''}`;
+              }
+              variantsCards.querySelectorAll('.variant-card').forEach(c => c.classList.remove('selected'));
+              card.classList.add('selected');
+              toast(`已选用走向 ${vIdx === 0 ? 'A' : 'B'} 作为后续创作指引！`);
+            };
+            variantsCards.appendChild(card);
+          });
+        }
+      } else {
+        if (variantsCards) variantsCards.innerHTML = '<div style="font-size:12px;color:var(--muted);text-align:center;padding:10px;">未能生成有效分支小样，请重试</div>';
+      }
+    } catch (e) {
+      if (variantsCards) variantsCards.innerHTML = `<div style="font-size:12px;color:var(--accent);text-align:center;padding:10px;">生成失败：${escapeHtml(e.message)}</div>`;
+    } finally {
+      if (triggerVarBtn) {
+        triggerVarBtn.disabled = false;
+        triggerVarBtn.textContent = '🎲 2 选 1 分支小样';
+      }
+    }
+  };
+
+  if (triggerVarBtn) triggerVarBtn.onclick = doVariants;
+  if (retryVarBtn) retryVarBtn.onclick = doVariants;
+
+  const histBtn = $('rd_history_btn');
+  if (histBtn) histBtn.onclick = openChapterHistoryModal;
+
+  const srToolbarBtn = $('rd_search_replace_btn');
+  if (srToolbarBtn) {
+    srToolbarBtn.onclick = () => {
+      if (astPanel && astPanel.classList.contains('collapsed')) {
+        astPanel.classList.remove('collapsed');
+        if (astToggle) astToggle.classList.add('active');
+      }
+      const searchTab = $('rd_ast_tab_search');
+      if (searchTab) searchTab.click();
+      if ($('sr_find_input')) $('sr_find_input').focus();
+    };
+  }
+
+  const shortcutsBtn = $('rd_shortcuts_btn');
+  if (shortcutsBtn) {
+    shortcutsBtn.onclick = () => {
+      const modal = $('shortcuts_modal');
+      if (modal) modal.style.display = 'flex';
+    };
+  }
+  const smClose = $('sm_close');
+  const smDone = $('sm_done_btn');
+  if (smClose) smClose.onclick = () => { $('shortcuts_modal').style.display = 'none'; };
+  if (smDone) smDone.onclick = () => { $('shortcuts_modal').style.display = 'none'; };
+}
+
+function renderOutlineMemo() {
+  const container = $('rd_outline_memo_content');
+  if (!container || !readerData) return;
+  const d = readerData;
+  const meta = d.meta || {};
+  const bible = d.bible || meta.bible || {};
+
+  container.innerHTML = `
+    <div class="memo-card">
+      <div class="memo-card-title">📖 作品设定</div>
+      <p style="margin:0;color:var(--ink);">${escapeHtml(meta.setting || bible.setting || '暂无设定描述')}</p>
+    </div>
+    <div class="memo-card">
+      <div class="memo-card-title">⚔️ 核心冲突</div>
+      <p style="margin:0;color:var(--ink);">${escapeHtml(meta.storyline || bible.conflict || '暂无主线冲突')}</p>
+    </div>
+    <div class="memo-card">
+      <div class="memo-card-title">👥 主要角色</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">
+        ${(bible.characters || []).map(c => `<span class="tag-pill" style="font-size:11px;">${escapeHtml(typeof c === 'string' ? c : c.name || '')}</span>`).join('') || '<span style="color:var(--muted)">暂无角色档案</span>'}
+      </div>
+    </div>
+  `;
+}
+
+function syncStudioBible() {
+  if (!readerData) return;
+  const bible = readerData.bible || (readerData.meta && readerData.meta.bible) || {};
+  if ($('ast_bible_setting')) $('ast_bible_setting').value = bible.setting || (readerData.meta && readerData.meta.setting) || '';
+  if ($('ast_bible_conflict')) $('ast_bible_conflict').value = bible.conflict || (readerData.meta && readerData.meta.storyline) || '';
+  if ($('ast_bible_tone')) $('ast_bible_tone').value = bible.tone || (readerData.meta && readerData.meta.style) || '';
+
+  const list = $('ast_bible_chars');
+  if (list) {
+    list.innerHTML = '';
+    const chars = bible.characters || [];
+    chars.forEach(c => {
+      const card = document.createElement('div');
+      card.className = 'ast-char-card';
+      const name = typeof c === 'string' ? c.split('：')[0] : (c.name || '角色');
+      const desc = typeof c === 'string' ? (c.split('：')[1] || '') : (c.identity || c.personality || '');
+      card.innerHTML = `<div class="ast-char-name">${escapeHtml(name)}</div><div class="ast-char-desc">${escapeHtml(desc)}</div>`;
+      list.appendChild(card);
+    });
+  }
+}
+
+function collectStudioBibleChars() {
+  const list = $('ast_bible_chars');
+  if (!list) return [];
+  const cards = list.querySelectorAll('.ast-char-card');
+  const res = [];
+  cards.forEach(card => {
+    const nameEl = card.querySelector('.ast-char-name');
+    const descEl = card.querySelector('.ast-char-desc');
+    if (nameEl) {
+      res.push({
+        name: nameEl.textContent.trim(),
+        identity: descEl ? descEl.textContent.trim() : ''
+      });
+    }
+  });
+  return res;
+}
+
+async function runSearchReplace(previewOnly = true) {
+  if (!readerData) return;
+  const findText = $('sr_find_input') ? $('sr_find_input').value.trim() : '';
+  const replaceText = $('sr_replace_input') ? $('sr_replace_input').value : '';
+  const caseSensitive = $('sr_case_sensitive') ? $('sr_case_sensitive').checked : false;
+  const isRegex = $('sr_regex') ? $('sr_regex').checked : false;
+  const statusEl = $('sr_status');
+  const resultsEl = $('sr_results_list');
+
+  if (!findText) {
+    toast('请输入查找内容');
+    return;
+  }
+
+  if (!previewOnly && !confirm(`确定要在全书各章节中将【${findText}】全部替换为【${replaceText}】吗？\n（系统将自动创建快照备份）`)) {
+    return;
+  }
+
+  if (statusEl) statusEl.textContent = '正在检索全书章节…';
+  try {
+    const res = await api('/api/novels/' + encodeURIComponent(readerData.name) + '/search-replace', 'POST', {
+      find: findText,
+      replace: replaceText,
+      case_sensitive: caseSensitive,
+      regex: isRegex,
+      preview_only: previewOnly
+    });
+
+    if (res && res.ok) {
+      if (statusEl) {
+        statusEl.textContent = previewOnly
+          ? `共发现 ${res.total_matches} 处匹配（分布在 ${res.modified_chapters} 个章节中）`
+          : `✅ 全书替换完成！共修改 ${res.modified_chapters} 章，替换 ${res.total_matches} 处`;
+      }
+      if (resultsEl) {
+        resultsEl.innerHTML = '';
+        (res.results || []).forEach(r => {
+          const item = document.createElement('div');
+          item.className = 'sr-result-item';
+          item.innerHTML = `
+            <div class="sr-result-head">
+              <span>${escapeHtml(r.chapter_title)}</span>
+              <span style="color:var(--accent);">${r.matches_count} 处</span>
+            </div>
+            ${(r.snippets || []).map(s => `<div class="sr-match-snippet">…${escapeHtml(s)}…</div>`).join('')}
+          `;
+          item.onclick = () => gotoChapter(r.chapter_index, false);
+          resultsEl.appendChild(item);
+        });
+      }
+      if (!previewOnly) {
+        toast(`全书替换成功！共替换 ${res.total_matches} 处`);
+        await ensureChapterContent(readerData.name, readerIdx);
+        renderChapter();
+      }
+    }
+  } catch (e) {
+    if (statusEl) statusEl.textContent = '操作失败：' + e.message;
+    toast('替换请求失败：' + e.message);
+  }
+}
+
+async function openChapterHistoryModal() {
+  if (!readerData) return;
+  const modal = $('history_modal');
+  const listEl = $('hm_snapshots_list');
+  if (!modal || !listEl) return;
+
+  listEl.innerHTML = '<p class="mini">正在拉取本章历史快照记录…</p>';
+  modal.style.display = 'flex';
+
+  try {
+    const res = await api('/api/novels/' + encodeURIComponent(readerData.name) + '/chapters/' + readerIdx + '/history', 'GET');
+    if (res && res.ok && res.snapshots) {
+      if (!res.snapshots.length) {
+        listEl.innerHTML = '<p class="mini" style="color:var(--muted);padding:14px 0;">本章尚无历史快照备份。在您每次编辑保存、AI 精修或重写时，系统将自动留存快照。</p>';
+        return;
+      }
+      listEl.innerHTML = '';
+      res.snapshots.forEach(s => {
+        const card = document.createElement('div');
+        card.className = 'history-snapshot-card';
+        card.innerHTML = `
+          <div class="snap-head">
+            <span class="snap-title">${escapeHtml(s.title || '章节快照')} (${s.words} 字)</span>
+            <span class="snap-time">${escapeHtml(s.ts || '')}</span>
+          </div>
+          <div class="snap-preview">“${escapeHtml(s.preview || '')}”</div>
+          <div style="display:flex;justify-content:flex-end;gap:8px;">
+            <button type="button" class="primary mini-btn snap-restore-btn" data-id="${escapeHtml(s.id)}">⏪ 一键还原至此快照</button>
+          </div>
+        `;
+        card.querySelector('.snap-restore-btn').onclick = async () => {
+          if (!confirm(`确定要将第 ${readerIdx + 1} 章还原到 ${s.ts} 的快照吗？当前内容会自动生成新备份。`)) return;
+          try {
+            const restoreRes = await api('/api/novels/' + encodeURIComponent(readerData.name) + '/chapters/' + readerIdx + '/restore-snapshot', 'POST', {
+              snapshot_id: s.id
+            });
+            if (restoreRes && restoreRes.ok) {
+              readerData.chapters[readerIdx].content = restoreRes.content;
+              readerData.chapters[readerIdx].words = restoreRes.words;
+              modal.style.display = 'none';
+              renderChapter();
+              toast('已成功还原至历史快照！');
+            }
+          } catch (err) {
+            toast('恢复快照失败：' + err.message);
+          }
+        };
+        listEl.appendChild(card);
+      });
+    }
+  } catch (e) {
+    listEl.innerHTML = `<p class="mini" style="color:var(--accent);">读取历史快照失败：${escapeHtml(e.message)}</p>`;
+  }
+
+  const cancelBtn = $('hm_cancel_btn');
+  const closeBtn = $('hm_close');
+  if (cancelBtn) cancelBtn.onclick = () => { modal.style.display = 'none'; };
+  if (closeBtn) closeBtn.onclick = () => { modal.style.display = 'none'; };
+}
+
+async function triggerQuickContinue() {
+  if (!readerData) return;
+  const instruction = $('ast_ct_instruction') ? $('ast_ct_instruction').value.trim() : '';
+  const chaptersCount = $('ast_ct_chapters') ? parseInt($('ast_ct_chapters').value, 10) || 1 : 1;
+  const perWords = $('ast_ct_per_words') ? parseInt($('ast_ct_per_words').value, 10) || 2000 : 2000;
+  const providerId = $('ast_ct_provider') ? $('ast_ct_provider').value : undefined;
+
+  const btn = $('btn_ast_start_continue');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '正在启动续写…';
+  }
+
+  const payload = {
+    mode: 'continuation',
+    novel_name: readerData.name,
+    instruction: instruction,
+    chapters: chaptersCount,
+    per_chapter_words: perWords,
+    provider_id: providerId
+  };
+
+  try {
+    const res = await api('/api/generate', 'POST', payload);
+    if (res && res.job_id) {
+      toast('⚡ 续写任务已在后台启动！');
+      const streamWrap = $('ast_stream_wrap');
+      if (streamWrap) streamWrap.style.display = 'block';
+      subscribeAstStream(res.job_id);
+    }
+  } catch (e) {
+    toast('启动续写失败：' + e.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '⚡ 立即开始续写 (Ctrl+Enter)';
+    }
+  }
+}
+
+function subscribeAstStream(jobId) {
+  const streamBody = $('ast_stream_body');
+  const streamCh = $('ast_stream_ch');
+  const wordsEl = $('ast_stream_words');
+
+  const es = new EventSource('/api/jobs/' + jobId + '/stream');
+  let totalChars = 0;
+
+  es.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      if (data.type === 'chunk' && data.chunk) {
+        if (streamBody) {
+          streamBody.textContent += data.chunk;
+          streamBody.scrollTop = streamBody.scrollHeight;
+        }
+        totalChars += data.chunk.length;
+        if (wordsEl) wordsEl.textContent = `${totalChars} 字`;
+      } else if (data.type === 'chapter_start') {
+        if (streamCh) streamCh.textContent = `正在创作：${data.title || ''}`;
+      } else if (data.type === 'done') {
+        es.close();
+        toast('🎉 续写任务创作完成！已添加至目录。');
+        openReader(readerData.name, readerIdx);
+      } else if (data.type === 'error') {
+        es.close();
+        toast('续写任务出错：' + (data.error || '未知错误'));
+      }
+    } catch (e) {}
+  };
+  es.onerror = () => {
+    es.close();
+  };
+}
+
+document.addEventListener('keydown', (e) => {
+  if (!readerActive()) return;
+
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+    e.preventDefault();
+    if (isEditingChapter) {
+      saveChapterEdit();
+    } else {
+      enterChapterEdit();
+    }
+    return;
+  }
+
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault();
+    triggerQuickContinue();
+    return;
+  }
+
+  const assistModal = $('rd_assist_modal');
+  if (assistModal && assistModal.style.display !== 'none') {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeAssistModal();
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      const applyBtn = $('rd_assist_apply_btn');
+      const resWrap = $('rd_assist_result_wrap');
+      if (resWrap && resWrap.style.display !== 'none' && applyBtn && !applyBtn.disabled) {
+        applyBtn.click();
+      } else {
+        runAssist();
+      }
+      return;
+    }
+  }
+
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+    e.preventDefault();
+    const tocToggle = $('rd_toc_toggle');
+    if (tocToggle) tocToggle.click();
+    return;
+  }
+
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'j') {
+    e.preventDefault();
+    const astToggle = $('rd_assistant_toggle');
+    if (astToggle) astToggle.click();
+    return;
+  }
+
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+    e.preventDefault();
+    const srBtn = $('rd_search_replace_btn');
+    if (srBtn) srBtn.click();
+    return;
+  }
+});
+
+initStudioPanels();

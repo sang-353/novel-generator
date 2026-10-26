@@ -721,7 +721,7 @@ function initOriginalStepper() {
 }
 initOriginalStepper();
 
-$('btn_suggest_titles').onclick = async () => {
+on('btn_suggest_titles', async () => {
   const btn = $('btn_suggest_titles');
   btn.disabled = true;
   btn.textContent = '✨ 拟名中…';
@@ -751,7 +751,7 @@ $('btn_suggest_titles').onclick = async () => {
     btn.disabled = false;
     toast('拟名失败：' + e.message);
   }
-};
+});
 
 // ==================== 设定档案 (World Bible) 可视化编辑 ====================
 let currentBible = null;
@@ -823,19 +823,22 @@ function syncBibleRawJson() {
   if (rawEl) rawEl.value = JSON.stringify(data, null, 2);
 }
 
-$('btn_add_bible_char').onclick = () => {
+on('btn_add_bible_char', () => {
   const b = collectBible();
   b.characters.push({ name: '', role: '', desc: '', goal: '' });
   renderBibleCharCards(b.characters);
   syncBibleRawJson();
-};
+});
 
-$('btn_toggle_bible_raw').onclick = () => {
+on('btn_toggle_bible_raw', () => {
   const el = $('og_bible_raw');
+  if (!el) return;
   const isHidden = el.style.display === 'none';
   el.style.display = isHidden ? 'block' : 'none';
-  $('btn_toggle_bible_raw').textContent = isHidden ? '收起原始 JSON' : '查看原始 JSON';
-};
+  if ($('btn_toggle_bible_raw')) {
+    $('btn_toggle_bible_raw').textContent = isHidden ? '收起原始 JSON' : '查看原始 JSON';
+  }
+});
 
 // ==================== 原创生成 ====================
 let currentOutline = null;
@@ -886,7 +889,7 @@ let ogDraftTimer = null;
     }, 500);
   });
 });
-$('btn_clear_og').onclick = () => {
+on('btn_clear_og', () => {
   if (!confirm('确定清空本页所有输入？（不会影响已生成的小说）')) return;
   ['og_title','og_genre','og_setting','og_characters','og_storyline','og_style','og_extra'].forEach(id => {
     const el = $(id); if (el) el.value = '';
@@ -899,7 +902,7 @@ $('btn_clear_og').onclick = () => {
   if (tWrap) tWrap.querySelectorAll('.trope-pill').forEach(p => p.classList.remove('active'));
   try { localStorage.removeItem(OG_DRAFT_KEY); } catch (e) {}
   toast('已清空本页表单');
-};
+});
 
 // ---- 大纲可视化编辑 ----
 let ogTimer = null;
@@ -1002,14 +1005,14 @@ function collectOutline() {
   return { logline: $('og_logline_input').value.trim(), chapters: chs };
 }
 
-$('btn_add_outline_ch').onclick = () => {
+on('btn_add_outline_ch', () => {
   const cur = collectOutline();
   const nextIdx = cur.chapters.length + 1;
   cur.chapters.push({ title: '第 ' + nextIdx + ' 章', points: '' });
   renderOutlineEditor(cur);
-};
+});
 
-$('btn_outline').onclick = async () => {
+on('btn_outline', async () => {
   const btn = $('btn_outline');
   btn.disabled = true;
   const startAt = Date.now();
@@ -1058,10 +1061,13 @@ $('btn_outline').onclick = async () => {
   } finally {
     btn.disabled = false;
   }
-};
-$('btn_regenerate').onclick = $('btn_outline').onclick;
+});
+on('btn_regenerate', () => {
+  const btn = $('btn_outline');
+  if (btn) btn.click();
+});
 
-$('btn_write').onclick = async () => {
+on('btn_write', async () => {
   const payload = originalPayload();
   try {
     payload.title = $('og_title').value.trim() || '未命名小说';
@@ -1072,7 +1078,7 @@ $('btn_write').onclick = async () => {
     const d = await api('/api/generate', 'POST', payload);
     startPolling('og', d.job_id, 'og_progress_card', payload.title || '未命名小说');
   } catch (e) { toast(e.message); }
-};
+});
 
 
 // ==================== 续写 / 同人 ====================
@@ -1133,9 +1139,9 @@ function updateShortHint() {
     status.textContent = '';
   }
 }
-$('ct_source_text').addEventListener('input', countParagraphs);
+on('ct_source_text', 'input', countParagraphs);
 
-$('ct_file').addEventListener('change', e => {
+on('ct_file', 'change', e => {
   const f = e.target.files[0]; if (!f) return;
   const rd = new FileReader();
   rd.onload = () => {
@@ -1194,7 +1200,7 @@ function parseStyleProfile(sp) {
   try { return JSON.parse(sp); } catch (e) { return null; }
 }
 
-$('btn_analyze').onclick = async () => {
+on('btn_analyze', async () => {
   const btn = $('btn_analyze'); btn.disabled = true;
   setStatus('ct_status', '通读分析中…');
   $('ct_analyze_progress').style.display = 'block';
@@ -1268,8 +1274,11 @@ $('btn_analyze').onclick = async () => {
     }, 1200);
   } catch (e) { setStatus('ct_status', '失败：' + e.message); toast(e.message); }
   btn.disabled = false;
-};
-$('btn_reanalyze').onclick = $('btn_analyze').onclick;
+});
+on('btn_reanalyze', () => {
+  const btn = $('btn_analyze');
+  if (btn) btn.click();
+});
 
 // ==================== 续写设定档案 (Bible) 编辑器 ====================
 function renderCtBibleEditor(bible) {
@@ -1337,19 +1346,22 @@ function syncCtBibleRawJson() {
   if (rawEl) rawEl.value = JSON.stringify(data, null, 2);
 }
 
-$('btn_add_ct_bible_char').onclick = () => {
+on('btn_add_ct_bible_char', () => {
   const b = collectCtBible();
   b.characters.push({ name: '', role: '', desc: '', goal: '' });
   renderCtBibleCharCards(b.characters);
   syncCtBibleRawJson();
-};
+});
 
-$('btn_toggle_ct_bible_raw').onclick = () => {
+on('btn_toggle_ct_bible_raw', () => {
   const el = $('ct_bible_raw');
+  if (!el) return;
   const isHidden = el.style.display === 'none';
   el.style.display = isHidden ? 'block' : 'none';
-  $('btn_toggle_ct_bible_raw').textContent = isHidden ? '收起原始 JSON' : '查看原始 JSON';
-};
+  if ($('btn_toggle_ct_bible_raw')) {
+    $('btn_toggle_ct_bible_raw').textContent = isHidden ? '收起原始 JSON' : '查看原始 JSON';
+  }
+});
 
 function profileToBible(sp) {
   if (!sp) return { setting: '', characters: [], conflict: '', tone: '' };
@@ -1426,20 +1438,18 @@ async function runVariantsFlow(payload) {
       };
     });
 
-    $('ct_variants_retry_btn').onclick = () => runVariantsFlow(payload);
+    on('ct_variants_retry_btn', () => runVariantsFlow(payload));
   } catch (e) {
     cardsBox.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:16px;color:var(--err);">生成小样失败：${escapeHtml(e.message)}</div>`;
   }
 }
 
-if ($('btn_continue_variants')) {
-  $('btn_continue_variants').onclick = async () => {
-    const payload = continuationPayload();
-    payload.style_profile = styleProfile;
-    payload.bible = collectCtBible();
-    await runVariantsFlow(payload);
-  };
-}
+on('btn_continue_variants', async () => {
+  const payload = continuationPayload();
+  payload.style_profile = styleProfile;
+  payload.bible = collectCtBible();
+  await runVariantsFlow(payload);
+});
 
 async function loadExistingNovelsIntoContinuation() {
   const sel = $('ct_existing_sel');
@@ -1453,23 +1463,20 @@ async function loadExistingNovelsIntoContinuation() {
   } catch (e) {}
 }
 
-if ($('ct_open_round_btn')) {
-  $('ct_open_round_btn').onclick = () => {
-    const name = $('ct_existing_sel').value;
-    if (!name) { toast('请先在下拉列表中选择要续写的小说'); return; }
-    openContinueCard(name, 'continuation');
-  };
-}
-if ($('ct_open_variants_btn')) {
-  $('ct_open_variants_btn').onclick = async () => {
-    const name = $('ct_existing_sel').value;
-    if (!name) { toast('请先在下拉列表中选择要续写的小说'); return; }
-    await openContinueCard(name, 'continuation');
-    await runRoundVariantsFlow();
-  };
-}
+on('ct_open_round_btn', () => {
+  const name = $('ct_existing_sel') ? $('ct_existing_sel').value : '';
+  if (!name) { toast('请先在下拉列表中选择要续写的小说'); return; }
+  openContinueCard(name, 'continuation');
+});
 
-$('btn_continue').onclick = async () => {
+on('ct_open_variants_btn', async () => {
+  const name = $('ct_existing_sel') ? $('ct_existing_sel').value : '';
+  if (!name) { toast('请先在下拉列表中选择要续写的小说'); return; }
+  await openContinueCard(name, 'continuation');
+  await runRoundVariantsFlow();
+});
+
+on('btn_continue', async () => {
   const payload = continuationPayload();
   payload.style_profile = styleProfile;
   payload.bible = collectCtBible();
@@ -1482,7 +1489,7 @@ $('btn_continue').onclick = async () => {
     const d = await api('/api/generate', 'POST', payload);
     startPolling('ct', d.job_id, 'ct_progress_card', payload.source_title || '未命名续写', 'round');
   } catch (e) { toast(e.message); }
-};
+});
 
 
 // ==================== 任务轮询 ====================
@@ -1725,8 +1732,8 @@ function closeRoundModal() {
   roundNovelName = null; roundMode = null; roundChapterIdx = null;
 }
 
-$('rm_cancel').onclick = closeRoundModal;
-$('rm_close').onclick = closeRoundModal;
+on('rm_cancel', closeRoundModal);
+on('rm_close', closeRoundModal);
 
 async function runRoundVariantsFlow() {
   if (!roundNovelName) { toast('请先选择要续写的小说'); return; }
@@ -1773,24 +1780,22 @@ async function runRoundVariantsFlow() {
       };
     });
 
-    if ($('rm_variants_retry_btn')) {
-      $('rm_variants_retry_btn').onclick = () => runRoundVariantsFlow();
-    }
+    on('rm_variants_retry_btn', () => runRoundVariantsFlow());
   } catch (e) {
     cardsBox.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:16px;color:var(--err);">生成小样失败：${escapeHtml(e.message)}</div>`;
   }
 }
 
-if ($('rm_variants_btn')) $('rm_variants_btn').onclick = () => runRoundVariantsFlow();
-if ($('rm_trigger_variants_btn')) $('rm_trigger_variants_btn').onclick = () => runRoundVariantsFlow();
+on('rm_variants_btn', () => runRoundVariantsFlow());
+on('rm_trigger_variants_btn', () => runRoundVariantsFlow());
 
-$('rm_start').onclick = async () => {
+on('rm_start', async () => {
   if ($('rm_use_variants') && $('rm_use_variants').checked && roundMode !== 'rewrite') {
     await runRoundVariantsFlow();
     return;
   }
   await startRoundJob();
-};
+});
 
 async function startRoundJob(extraInstruction = null) {
   if (!roundNovelName) return;

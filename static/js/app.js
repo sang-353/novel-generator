@@ -37,8 +37,8 @@ function onHashChange() {
   if (VIEW_NAMES.includes(v)) switchView(v);
 }
 window.addEventListener('hashchange', onHashChange);
-$('btn_manage_og').onclick = () => { location.hash = 'settings'; };
-$('btn_manage_ct').onclick = () => { location.hash = 'settings'; };
+on('btn_manage_og', () => { location.hash = 'settings'; });
+on('btn_manage_ct', () => { location.hash = 'settings'; });
 
 
 // ==================== 初始化 ====================
@@ -59,7 +59,7 @@ function restoreProfileFromStorage() {
   } catch (e) { /* 忽略恢复失败 */ }
 }
 // 输入书名时尝试恢复已保存的档案
-$('ct_source_title').addEventListener('input', restoreProfileFromStorage);
+on('ct_source_title', 'input', restoreProfileFromStorage);
 restoreProfileFromStorage();
 restoreOgDraft();
 applyTheme();
@@ -73,18 +73,18 @@ document.querySelectorAll('input, select, textarea').forEach(el => {
 onHashChange();
 loadLibrary();
 updateLibTrashBadge();
-$('lib_refresh_btn').onclick = () => { loadLibrary(); updateLibTrashBadge(); };
-$('lib_trash_toggle_btn').onclick = () => {
+on('lib_refresh_btn', () => { loadLibrary(); updateLibTrashBadge(); });
+on('lib_trash_toggle_btn', () => {
   const card = $('lib_trash_card');
   if (!card) return;
   const isShow = card.style.display !== 'none';
   card.style.display = isShow ? 'none' : 'block';
   if (!isShow) loadLibTrash();
-};
-$('lib_trash_close_btn').onclick = () => {
+});
+on('lib_trash_close_btn', () => {
   const card = $('lib_trash_card');
   if (card) card.style.display = 'none';
-};
+});
 
 window.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
@@ -138,3 +138,108 @@ if (authLoginBtn) {
     });
   }
 }
+
+// ==================== P3: 文风与提示词模板设置 ====================
+
+let promptTemplatesData = {};
+let activePromptTid = 'default';
+
+async function loadPromptSettings() {
+  const pillsWrap = $('prompt_template_pills');
+  const descEl = $('prompt_template_desc');
+  const customInp = $('prompt_custom_instruction');
+  const statusEl = $('prompt_settings_status');
+
+  if (!pillsWrap) return;
+
+  try {
+    const res = await api('/api/settings/prompts', 'GET');
+    if (res && res.ok && res.templates) {
+      promptTemplatesData = res.templates;
+      activePromptTid = res.active || 'default';
+      renderPromptPills();
+    }
+  } catch (e) {
+    if (statusEl) statusEl.textContent = '加载文风模板失败：' + e.message;
+  }
+}
+
+function renderPromptPills() {
+  const pillsWrap = $('prompt_template_pills');
+  const descEl = $('prompt_template_desc');
+  const customInp = $('prompt_custom_instruction');
+  if (!pillsWrap) return;
+
+  pillsWrap.innerHTML = '';
+  Object.keys(promptTemplatesData).forEach(tid => {
+    const tmpl = promptTemplatesData[tid];
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'tag-pill' + (tid === activePromptTid ? ' active' : '');
+    btn.textContent = tmpl.name || tid;
+    btn.onclick = () => {
+      activePromptTid = tid;
+      renderPromptPills();
+    };
+    pillsWrap.appendChild(btn);
+  });
+
+  const cur = promptTemplatesData[activePromptTid];
+  if (cur) {
+    if (descEl) descEl.innerHTML = `<b>【${escapeHtml(cur.name || activePromptTid)}】</b> ${escapeHtml(cur.desc || '')}`;
+    if (customInp) customInp.value = cur.instruction || '';
+  }
+}
+
+function initPromptSettings() {
+  const saveBtn = $('btn_save_prompt_settings');
+  const customInp = $('prompt_custom_instruction');
+  const statusEl = $('prompt_settings_status');
+
+  if (saveBtn) {
+    saveBtn.onclick = async () => {
+      const instruction = customInp ? customInp.value.trim() : '';
+      saveBtn.disabled = true;
+      saveBtn.textContent = '正在保存…';
+      if (statusEl) statusEl.textContent = '保存中…';
+
+      try {
+        const payload = {
+          active: activePromptTid,
+          custom_template: {
+            id: activePromptTid,
+            name: (promptTemplatesData[activePromptTid] && promptTemplatesData[activePromptTid].name) || activePromptTid,
+            instruction: instruction
+          }
+        };
+        const res = await api('/api/settings/prompts', 'POST', payload);
+        if (res && res.ok) {
+          promptTemplatesData = res.templates;
+          activePromptTid = res.active;
+          renderPromptPills();
+          toast('✅ 文风模板已成功保存！');
+          if (statusEl) statusEl.textContent = '已保存！';
+        }
+      } catch (e) {
+        toast('保存失败：' + e.message);
+        if (statusEl) statusEl.textContent = '保存失败：' + e.message;
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = '保存文风模板';
+      }
+    };
+  }
+}
+
+// Hook into switchView
+const origSwitchView = window.switchView;
+if (typeof origSwitchView === 'function') {
+  window.switchView = function(name) {
+    origSwitchView(name);
+    if (name === 'settings') {
+      loadPromptSettings();
+    }
+  };
+}
+
+initPromptSettings();

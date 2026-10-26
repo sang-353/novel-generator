@@ -434,6 +434,7 @@
           <button type="button" class="ghost mini-btn active" id="lib_view_grid_btn" title="封面卡片视图">⊞ 卡片</button>
           <button type="button" class="ghost mini-btn" id="lib_view_table_btn" title="列表表格视图">☰ 列表</button>
         </div>
+        <button type="button" class="primary mini-btn" id="lib_import_btn" title="导入外部 TXT 小说并智能分章">📥 导入 TXT</button>
         <button class="ghost mini-btn" id="lib_refresh_btn" title="刷新书架">刷新</button>
         <button class="ghost mini-btn" id="lib_trash_toggle_btn" title="查看回收站">
           回收站 <span class="badge" id="lib_trash_badge" style="display:none">0</span>
@@ -515,36 +516,159 @@
       </div>
       <div class="rd-bar-right">
         <div class="rd-desktop-actions" id="rd_desktop_actions">
-          <button class="rd-btn rd-btn-primary" id="rd_continue">继续续写</button>
+          <button class="rd-btn rd-btn-primary" id="rd_continue">⚡ 快速续写</button>
           <button class="rd-btn secondary" id="rd_resume" style="display:none">继续生成</button>
-          <button class="rd-btn ghost" id="rd_edit_btn" title="就地编辑本章 (快捷键 E)">✏️ 编辑本章</button>
-          <button class="rd-btn ghost" id="rd_bible_btn" title="查看与编辑设定档案">设定集</button>
+          <button class="rd-btn ghost" id="rd_edit_btn" title="切换编辑/阅读模式 (快捷键 E)">✏️ 编辑本章</button>
+          <button class="rd-btn ghost" id="rd_history_btn" title="章节版本历史与快照 (快捷键 H)">📜 版本历史</button>
+          <button class="rd-btn ghost" id="rd_search_replace_btn" title="全书查找与替换 (Ctrl+F)">🔍 全书替换</button>
+          <button class="rd-btn ghost" id="rd_shortcuts_btn" title="快捷键速查">⌨️ 快捷键</button>
           <button class="rd-btn ghost" id="rd_export_txt" title="导出 TXT">TXT</button>
           <button class="rd-btn ghost" id="rd_export_md" title="导出 Markdown">MD</button>
           <button class="rd-btn ghost" id="rd_export_epub" title="导出 EPUB 标准电子书">EPUB</button>
         </div>
-        <button class="rd-icon" id="rd_toc_toggle" title="目录（T）" aria-label="目录">☰</button>
+        <button class="rd-icon" id="rd_toc_toggle" title="目录与大纲（Ctrl+B）" aria-label="目录与大纲">☰</button>
+        <button class="rd-icon active" id="rd_assistant_toggle" title="AI 创作助理与设定集（Ctrl+J）" aria-label="AI 创作助理">🤖</button>
         <button class="rd-icon" id="rd_settings_toggle" title="阅读设置" aria-label="阅读设置">Aa</button>
         <button class="rd-icon" id="rd_more_toggle" title="更多操作" aria-label="更多">⋯</button>
       </div>
     </div>
     <div class="reader-progress"><div id="rd_progress_fill"></div></div>
 
-    <div class="rd-body">
-      <!-- 目录：桌面为左侧栏；手机为全屏抽屉 -->
-      <aside class="toc-panel collapsed" id="rd_toc" aria-label="目录">
-        <div class="toc-head">
-          <input id="rd_toc_filter" aria-label="过滤章节或搜索正文" placeholder="过滤章节…（Enter 搜正文）" autocomplete="off">
-          <button class="ghost" id="rd_toc_search" title="搜索全书正文">搜索</button>
-          <button class="ghost" id="rd_toc_close" title="关闭目录">关闭</button>
+    <div class="rd-body" id="rd_studio_body">
+      <!-- 左栏：目录与大纲备忘 -->
+      <aside class="toc-panel collapsed" id="rd_toc" aria-label="目录与大纲">
+        <div class="toc-head-tabs">
+          <button type="button" class="toc-tab-btn active" id="rd_toc_tab_dirs">章节目录</button>
+          <button type="button" class="toc-tab-btn" id="rd_toc_tab_outline">大纲备忘</button>
+          <button type="button" class="ghost mini-btn" id="rd_toc_close" title="收起目录" aria-label="收起目录侧栏">✕</button>
         </div>
-        <div class="toc-list" id="rd_toc_list"></div>
+        <div class="toc-tab-panel active" id="rd_toc_panel_dirs">
+          <div class="toc-head">
+            <input id="rd_toc_filter" aria-label="过滤章节" placeholder="过滤章节标题… (Enter 搜正文)" autocomplete="off">
+            <button type="button" class="ghost mini-btn" id="rd_toc_search" title="全书搜索正文" aria-label="搜索全书正文">搜索</button>
+            <button type="button" class="ghost mini-btn" id="rd_toc_add_ch_btn" title="在文末添加新章节" aria-label="添加新章节">+ 加章</button>
+            <button type="button" class="ghost mini-btn" id="rd_toc_add_vol_btn" title="新建分卷" aria-label="新建分卷">+ 分卷</button>
+          </div>
+          <div class="toc-list" id="rd_toc_list"></div>
+        </div>
+        <div class="toc-tab-panel" id="rd_toc_panel_outline" style="display:none;">
+          <div class="rd-outline-memo" id="rd_outline_memo_content">
+            <div class="memo-empty">加载大纲中…</div>
+          </div>
+        </div>
       </aside>
 
-      <div class="rd-main">
+      <!-- 中栏：沉浸式编辑器与阅读区 -->
+      <div class="rd-main" id="rd_main">
+        <div class="rd-editor-statusbar" id="rd_editor_statusbar">
+          <div class="rd-editor-status-left">
+            <span class="rd-status-indicator" id="rd_save_status" role="status" aria-live="polite">💾 就绪</span>
+          </div>
+          <div class="rd-editor-status-right">
+            <span class="mini" id="rd_words_count">0 字</span>
+            <span class="mini" id="rd_hotkey_hint" style="color:var(--muted);margin-left:8px;">Ctrl+S 保存 · Ctrl+Enter 续写</span>
+          </div>
+        </div>
         <div id="rd_toolbar" style="display:none"></div>
         <div class="chapter-content" id="rd_content"></div>
       </div>
+
+      <!-- 右栏：常驻 AI 创作助理与设定集工作台 -->
+      <aside class="rd-assistant-panel" id="rd_assistant" aria-label="AI创作助理与设定集">
+        <div class="rd-ast-head">
+          <div class="rd-ast-tabs">
+            <button type="button" class="rd-ast-tab active" data-panel="bible" id="rd_ast_tab_bible">设定档案</button>
+            <button type="button" class="rd-ast-tab" data-panel="continue" id="rd_ast_tab_continue">AI 续写</button>
+            <button type="button" class="rd-ast-tab" data-panel="search" id="rd_ast_tab_search">全局替换</button>
+          </div>
+          <button type="button" class="ghost mini-btn" id="rd_ast_close" title="收起助理栏" aria-label="收起创作助理栏">✕</button>
+        </div>
+        <div class="rd-ast-body">
+          <!-- Tab 1: 设定档案 (Story Bible) -->
+          <div class="rd-ast-panel active" id="rd_ast_panel_bible">
+            <div class="rd-ast-section">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                <label style="margin:0;font-size:12px;font-weight:600">世界观与背景</label>
+                <button type="button" class="ghost mini-btn" id="btn_save_ast_bible">💾 保存设定</button>
+              </div>
+              <textarea id="ast_bible_setting" aria-label="世界观与背景设定" rows="3" placeholder="世界观、时代背景、法则体系…" class="mini-textarea"></textarea>
+            </div>
+            <div class="rd-ast-section" style="margin-top:10px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                <label style="margin:0;font-size:12px;font-weight:600">主要人物卡片</label>
+                <button type="button" class="secondary mini-btn" id="btn_add_ast_char">+ 加角色</button>
+              </div>
+              <div id="ast_bible_chars" class="ast-chars-list"></div>
+            </div>
+            <div class="rd-ast-section" style="margin-top:10px;">
+              <label style="font-size:12px;font-weight:600">主线冲突</label>
+              <input type="text" id="ast_bible_conflict" aria-label="主线冲突" placeholder="核心矛盾交锋与目标…" class="mini-input" autocomplete="off">
+            </div>
+            <div class="rd-ast-section" style="margin-top:8px;">
+              <label style="font-size:12px;font-weight:600">故事基调</label>
+              <input type="text" id="ast_bible_tone" aria-label="故事基调与文风" placeholder="叙事基调与语言特色…" class="mini-input" autocomplete="off">
+            </div>
+          </div>
+
+          <!-- Tab 2: AI 续写推演 -->
+          <div class="rd-ast-panel" id="rd_ast_panel_continue" style="display:none">
+            <div class="rd-ast-section">
+              <label style="font-size:12px;font-weight:600">续写剧情指示</label>
+              <textarea id="ast_ct_instruction" aria-label="续写剧情指示" rows="3" placeholder="如：让主角发现某处线索 / 剧情反转 / 引入新势力…" class="mini-textarea"></textarea>
+            </div>
+            <div class="row" style="margin-top:8px">
+              <div><label style="font-size:11px">续写章节数</label><input type="number" id="ast_ct_chapters" aria-label="续写章节数" value="1" min="1" max="20" class="mini-input"></div>
+              <div><label style="font-size:11px">每章字数</label><input type="number" id="ast_ct_per_words" aria-label="每章字数" value="2000" min="200" step="100" class="mini-input"></div>
+            </div>
+            <div class="rd-ast-section" style="margin-top:8px">
+              <label style="font-size:11px">创作模型</label>
+              <select id="ast_ct_provider" aria-label="创作模型" class="mini-input"></select>
+            </div>
+            <div class="rd-ast-actions" style="margin-top:12px;display:flex;flex-direction:column;gap:6px;">
+              <button type="button" class="primary" id="btn_ast_start_continue">⚡ 立即开始续写 (Ctrl+Enter)</button>
+              <button type="button" class="secondary" id="btn_ast_trigger_variants">🎲 2 选 1 分支小样</button>
+            </div>
+            <!-- 2 选 1 分支小样卡片区域 -->
+            <div id="ast_variants_box" style="display:none;margin-top:10px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                <span style="font-size:12px;font-weight:600">剧情走向小样 (2 选 1)</span>
+                <button type="button" class="ghost mini-btn" id="btn_ast_variants_retry">↺ 换一批</button>
+              </div>
+              <div id="ast_variants_cards" class="variants-cards-grid"></div>
+            </div>
+            <!-- 实时打字机窗口 -->
+            <div class="stream-preview-box" id="ast_stream_wrap" style="display:none;margin-top:10px;">
+              <div class="stream-preview-head">
+                <span class="stream-preview-ch" id="ast_stream_ch">续写进行中…</span>
+                <span class="stream-preview-words" id="ast_stream_words"></span>
+              </div>
+              <pre class="stream-preview-body" id="ast_stream_body" style="max-height:180px;"></pre>
+            </div>
+          </div>
+
+          <!-- Tab 3: 全局查找与替换 -->
+          <div class="rd-ast-panel" id="rd_ast_panel_search" style="display:none">
+            <div class="rd-ast-section">
+              <label style="font-size:12px;font-weight:600">查找内容</label>
+              <input type="text" id="sr_find_input" aria-label="查找内容" placeholder="输入要查找的词句…" class="mini-input" autocomplete="off">
+            </div>
+            <div class="rd-ast-section" style="margin-top:8px">
+              <label style="font-size:12px;font-weight:600">替换为</label>
+              <input type="text" id="sr_replace_input" aria-label="替换为" placeholder="输入替换后的文本…" class="mini-input" autocomplete="off">
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;margin:8px 0;">
+              <label style="font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" id="sr_case_sensitive" style="width:auto;margin:0"> 区分大小写</label>
+              <label style="font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" id="sr_regex" style="width:auto;margin:0"> 正则匹配</label>
+            </div>
+            <div style="display:flex;gap:6px;margin-top:8px;">
+              <button type="button" class="secondary mini-btn" id="sr_preview_btn" style="flex:1">🔍 预览匹配</button>
+              <button type="button" class="primary mini-btn" id="sr_execute_btn" style="flex:1">⚡ 全书替换</button>
+            </div>
+            <div id="sr_status" role="status" aria-live="polite" style="font-size:12px;color:var(--muted);margin-top:6px;"></div>
+            <div id="sr_results_list" class="sr-results-list" style="margin-top:8px;max-height:300px;overflow-y:auto;"></div>
+          </div>
+        </div>
+      </aside>
     </div>
 
     <!-- 底栏（手机）：上一章 / 位置 / 下一章 -->
@@ -756,6 +880,20 @@
     <p class="hint">密码以加盐哈希保存在本机 config.json（不存明文）。隐私书籍的正文仍以明文存在于 novels/ 目录，本工具只在界面与接口层按密码隐藏。</p>
   </div>
 
+  <!-- P3: 文风与提示词模板管理 -->
+  <div class="card" id="prompt_settings_card">
+    <h2><span class="h2-folio">07</span>文风与提示词模板管理</h2>
+    <p class="mini" style="color:var(--muted)">选择创作时默认附带的网文文风写作指令，或定制专属的自定义系统提示词，让 AI 输出地道网文质感。</p>
+    <div class="tag-pills" id="prompt_template_pills" style="margin:12px 0;"></div>
+    <div id="prompt_template_desc" style="font-size:12px;color:var(--ink);margin-bottom:8px;padding:8px 12px;background:var(--card-subtle);border-radius:var(--radius-sm);"></div>
+    <label for="prompt_custom_instruction">文风核心写作规范</label>
+    <textarea id="prompt_custom_instruction" aria-label="文风核心写作规范" rows="4" placeholder="在此输入定制化的文风规则、对白习惯与节奏要求…"></textarea>
+    <div class="actions" style="margin-top:12px;">
+      <button class="primary" id="btn_save_prompt_settings">保存文风模板</button>
+      <span class="mini" id="prompt_settings_status" role="status" aria-live="polite"></span>
+    </div>
+  </div>
+
   <!-- P2: 全站轻量访问口令 (Web Access Protection) -->
   <div class="card" id="web_auth_settings_card">
     <h2><span class="h2-folio">07</span>全站访问口令</h2>
@@ -935,6 +1073,77 @@
     <div class="web-auth-err" id="web_auth_err"></div>
   </div>
 </div>
+
+<!-- ================= P3: 章节版本快照历史模态框 ================= -->
+<div class="modal-mask" id="history_modal" role="dialog" aria-modal="true" aria-labelledby="hm_title" style="display:none;">
+  <div class="modal-box" style="max-width:760px;width:92%;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <h3 style="margin:0" id="hm_title">📜 章节快照历史与版本回退</h3>
+      <button class="ghost mini-btn" id="hm_close" aria-label="关闭">✕</button>
+    </div>
+    <p class="mini" style="color:var(--muted);margin-bottom:12px;">每次执行 AI 重写、精修或手动保存时均会自动记录快照。可随时查看对比并一键还原回退。</p>
+    <div class="history-snapshots-grid" id="hm_snapshots_list" style="max-height:55vh;overflow-y:auto;display:flex;flex-direction:column;gap:8px;"></div>
+    <div class="actions" style="margin-top:14px;">
+      <button class="secondary" id="hm_cancel_btn">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= P3: 导入外部 TXT 小说模态框 ================= -->
+<div class="modal-mask" id="import_modal" role="dialog" aria-modal="true" aria-labelledby="im_title" style="display:none;">
+  <div class="modal-box" style="max-width:580px;width:92%;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <h3 style="margin:0" id="im_title">📥 导入外部 TXT 小说</h3>
+      <button class="ghost mini-btn" id="im_close" aria-label="关闭">✕</button>
+    </div>
+    <p class="mini" style="color:var(--muted);margin-bottom:10px;">支持上传带有“第一章、Chapter 1、引子”等标准章节标识的 TXT 纯文本，系统将智能分章导入书架。</p>
+    <div style="margin-bottom:8px;">
+      <label for="im_title_inp">小说书名</label>
+      <input type="text" id="im_title_inp" placeholder="输入书名（可自动从文件名提取）" autocomplete="off">
+    </div>
+    <div style="margin-bottom:8px;">
+      <label for="im_genre_inp">题材分类</label>
+      <input type="text" id="im_genre_inp" value="都市言情" placeholder="如：都市言情 / 玄幻修真 / 悬疑推理" autocomplete="off">
+    </div>
+    <div style="margin-bottom:10px;">
+      <label for="im_file_inp">选择 TXT 文件</label>
+      <input type="file" id="im_file_inp" accept=".txt,.md">
+    </div>
+    <div>
+      <label for="im_text_inp">或直接粘贴全文内容</label>
+      <textarea id="im_text_inp" rows="5" placeholder="在此粘贴小说正文…"></textarea>
+    </div>
+    <div id="im_preview_box" class="import-preview-box" style="display:none;margin-top:10px;padding:8px 12px;background:var(--card-subtle);border-radius:var(--radius-sm);font-size:12px;"></div>
+    <div class="actions" style="margin-top:16px;">
+      <button class="primary" id="im_confirm_btn">开始智能分章导入</button>
+      <button class="secondary" id="im_cancel_btn">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= P3: 快捷键速查模态框 ================= -->
+<div class="modal-mask" id="shortcuts_modal" role="dialog" aria-modal="true" aria-labelledby="sm_title" style="display:none;">
+  <div class="modal-box" style="max-width:480px;width:90%;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <h3 style="margin:0" id="sm_title">⌨️ 创作工作台快捷键速查</h3>
+      <button class="ghost mini-btn" id="sm_close" aria-label="关闭">✕</button>
+    </div>
+    <div class="shortcuts-table" style="font-size:13px;display:flex;flex-direction:column;gap:8px;">
+      <div class="shortcut-row" style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--line);"><span>保存当前章节</span><kbd style="background:var(--card-subtle);padding:2px 8px;border-radius:4px;border:1px solid var(--line);font-weight:600;">Ctrl + S</kbd></div>
+      <div class="shortcut-row" style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--line);"><span>触发 AI 续写</span><kbd style="background:var(--card-subtle);padding:2px 8px;border-radius:4px;border:1px solid var(--line);font-weight:600;">Ctrl + Enter</kbd></div>
+      <div class="shortcut-row" style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--line);"><span>采纳行内精修建议</span><kbd style="background:var(--card-subtle);padding:2px 8px;border-radius:4px;border:1px solid var(--line);font-weight:600;">Tab / Enter</kbd></div>
+      <div class="shortcut-row" style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--line);"><span>关闭浮窗 / 放弃精修</span><kbd style="background:var(--card-subtle);padding:2px 8px;border-radius:4px;border:1px solid var(--line);font-weight:600;">Esc</kbd></div>
+      <div class="shortcut-row" style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--line);"><span>切换章节目录与大纲</span><kbd style="background:var(--card-subtle);padding:2px 8px;border-radius:4px;border:1px solid var(--line);font-weight:600;">Ctrl + B</kbd></div>
+      <div class="shortcut-row" style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--line);"><span>切换 AI 助理与设定集</span><kbd style="background:var(--card-subtle);padding:2px 8px;border-radius:4px;border:1px solid var(--line);font-weight:600;">Ctrl + J</kbd></div>
+      <div class="shortcut-row" style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--line);"><span>全书查找与替换</span><kbd style="background:var(--card-subtle);padding:2px 8px;border-radius:4px;border:1px solid var(--line);font-weight:600;">Ctrl + F</kbd></div>
+      <div class="shortcut-row" style="display:flex;justify-content:space-between;padding:5px 0;"><span>上一章 / 下一章</span><kbd style="background:var(--card-subtle);padding:2px 8px;border-radius:4px;border:1px solid var(--line);font-weight:600;">← / →</kbd></div>
+    </div>
+    <div class="actions" style="margin-top:16px;">
+      <button class="primary" id="sm_done_btn">我知道了</button>
+    </div>
+  </div>
+</div>
+
   <script src="/static/js/util.js"></script>
   <script src="/static/js/state.js"></script>
   <script src="/static/js/generator.js"></script>

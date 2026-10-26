@@ -71,15 +71,15 @@ async function loadCacheStats() {
     $('cache_stats').textContent = '分析缓存 ' + d.count + ' 项';
   } catch (e) { /* 忽略 */ }
 }
-$('btn_clear_cache').onclick = async () => {
+on('btn_clear_cache', async () => {
   if (!confirm('清理分析缓存？（书内已保存的创作档案不受影响，仅释放磁盘）')) return;
   try {
     const d = await api('/api/cache', 'DELETE');
     toast('已清理 ' + d.removed + ' 项缓存');
     loadCacheStats();
   } catch (e) { toast(e.message); }
-};
-$('btn_refresh_trash').onclick = () => { loadTrash(); loadChapterBackups(); };
+});
+on('btn_refresh_trash', () => { loadTrash(); loadChapterBackups(); });
 
 
 // ==================== 书架 ====================
@@ -507,16 +507,16 @@ async function unlockPrivate() {
   }
   $('pv_unlock').disabled = false;
 }
-$('pv_unlock').onclick = unlockPrivate;
-$('pv_password').addEventListener('keydown', e => {
+on('pv_unlock', unlockPrivate);
+on('pv_password', 'keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); unlockPrivate(); }
 });
-$('pv_lock').onclick = async () => {
+on('pv_lock', async () => {
   try { await api('/api/privacy/lock', 'POST'); } catch (e) { /* 忽略 */ }
   setPrivacyToken('');
   await loadPrivateShelf();
   toast('隐私书架已锁定');
-};
+});
 
 
 // ==================== 导出 ====================
@@ -558,8 +558,8 @@ function closeRenameModal() {
   renameCallback = null;
 }
 
-$('btn_cancel_rename').onclick = closeRenameModal;
-$('btn_confirm_rename').onclick = async () => {
+on('btn_cancel_rename', closeRenameModal);
+on('btn_confirm_rename', async () => {
   const newTitle = $('rename_input').value.trim();
   if (!newTitle) { toast('标题不能为空'); return; }
   const oldName = renameTargetName;
@@ -575,4 +575,133 @@ $('btn_confirm_rename').onclick = async () => {
   } catch (e) {
     toast(e.message);
   }
-};
+});
+
+// ==================== P3: 外部 TXT 小说智能分章导入 ====================
+
+function initImportTxtModal() {
+  const importBtn = $('lib_import_btn');
+  const modal = $('import_modal');
+  const closeBtn = $('im_close');
+  const cancelBtn = $('im_cancel_btn');
+  const confirmBtn = $('im_confirm_btn');
+  const fileInp = $('im_file_inp');
+  const titleInp = $('im_title_inp');
+  const genreInp = $('im_genre_inp');
+  const textInp = $('im_text_inp');
+  const previewBox = $('im_preview_box');
+
+  if (!modal) return;
+
+  function openImportModal() {
+    modal.style.display = 'flex';
+    if (fileInp) fileInp.value = '';
+    if (textInp) textInp.value = '';
+    if (titleInp) titleInp.value = '';
+    if (previewBox) {
+      previewBox.style.display = 'none';
+      previewBox.textContent = '';
+    }
+  }
+
+  function closeImportModal() {
+    modal.style.display = 'none';
+  }
+
+  if (importBtn) importBtn.onclick = openImportModal;
+  if (closeBtn) closeBtn.onclick = closeImportModal;
+  if (cancelBtn) cancelBtn.onclick = closeImportModal;
+
+  if (fileInp) {
+    fileInp.onchange = () => {
+      const file = fileInp.files && fileInp.files[0];
+      if (!file) return;
+      if (titleInp && !titleInp.value.trim()) {
+        const baseName = file.name.replace(/\.[^/.]+$/, '');
+        titleInp.value = baseName;
+      }
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target.result;
+        updateImportPreview(text);
+      };
+      reader.readAsText(file);
+    };
+  }
+
+  if (textInp) {
+    textInp.oninput = () => {
+      updateImportPreview(textInp.value);
+    };
+  }
+
+  function updateImportPreview(content) {
+    if (!previewBox) return;
+    if (!content.trim()) {
+      previewBox.style.display = 'none';
+      return;
+    }
+    const regex = /(?:^|\r?\n)[ \t]*(第[0-9零一二三四五六七八九十百千万]+[章节回集卷篇节][^\r\n]*|Chapter\s+[0-9]+[^\r\n]*|[【\[（(]第[0-9零一二三四五六七八九十百千万]+[章节回集卷][】\]）)][^\r\n]*|引子[^\r\n]*|序章[^\r\n]*|尾声[^\r\n]*|番外[^\r\n]*)/gi;
+    const matches = content.match(regex);
+    const count = matches ? matches.length : Math.ceil(content.length / 3000);
+    const words = content.replace(/\s/g, '').length;
+    previewBox.innerHTML = `<strong>识别预览：</strong> 检测到约 <b>${count}</b> 个章节，总字数 <b>${words.toLocaleString()}</b> 字。<br><span style="color:var(--muted)">前三个章节：${matches ? matches.slice(0, 3).map(m => escapeHtml(m.trim())).join(' · ') : '按篇幅均匀切分'}</span>`;
+    previewBox.style.display = 'block';
+  }
+
+  if (confirmBtn) {
+    confirmBtn.onclick = async () => {
+      const title = titleInp ? titleInp.value.trim() : '';
+      const genre = genreInp ? genreInp.value.trim() : '都市言情';
+      const file = fileInp && fileInp.files && fileInp.files[0];
+      const text = textInp ? textInp.value.trim() : '';
+
+      if (!file && !text) {
+        toast('请选择 TXT 文件或粘贴全文内容');
+        return;
+      }
+
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = '正在智能分章导入…';
+
+      try {
+        let res;
+        if (file) {
+          const fd = new FormData();
+          fd.append('file', file);
+          if (title) fd.append('title', title);
+          if (genre) fd.append('genre', genre);
+          const resp = await fetch('/api/novels/import-txt', {
+            method: 'POST',
+            body: fd
+          });
+          res = await resp.json();
+        } else {
+          res = await api('/api/novels/import-txt', 'POST', {
+            title: title || '未命名导入作品',
+            genre: genre,
+            text: text
+          });
+        }
+
+        if (res && res.ok) {
+          toast(`🎉 成功导入《${res.title}》（共 ${res.chapters_count} 章，${res.total_words.toLocaleString()} 字）！`);
+          closeImportModal();
+          await loadLibrary();
+          // Open directly in Studio
+          if (typeof openReader === 'function') {
+            openReader(res.name, 0);
+          }
+        } else {
+          toast('导入失败：' + (res && res.error ? res.error : '未知错误'));
+        }
+      } catch (e) {
+        toast('导入请求失败：' + e.message);
+      } finally {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = '开始智能分章导入';
+      }
+    };
+  }
+}
+initImportTxtModal();

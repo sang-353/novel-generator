@@ -34,10 +34,12 @@ import requests
 from flask import Flask, Response, jsonify, request, send_from_directory, stream_with_context
 
 BASE_DIR = Path(__file__).resolve().parent
-NOVELS_DIR = BASE_DIR / "novels"
+_data_dir_env = os.environ.get("NOVEL_DATA_DIR")
+DATA_DIR = Path(_data_dir_env).resolve() if _data_dir_env else BASE_DIR
+NOVELS_DIR = Path(os.environ.get("NOVEL_NOVELS_DIR", DATA_DIR / "novels")).resolve()
 STATIC_DIR = BASE_DIR / "static"
-CONFIG_FILE = BASE_DIR / "config.json"
-NOVELS_DIR.mkdir(exist_ok=True)
+CONFIG_FILE = Path(os.environ.get("NOVEL_CONFIG_FILE", DATA_DIR / "config.json")).resolve()
+NOVELS_DIR.mkdir(parents=True, exist_ok=True)
 
 app = Flask(__name__, static_folder=str(STATIC_DIR), static_url_path="/static")
 
@@ -60,10 +62,15 @@ def now_iso():
 
 def _migrate_legacy_config(data):
     """旧版 config.json 结构迁移为 providers 数组。"""
+    if not isinstance(data, dict):
+        return {"providers": [dict(DEFAULT_PROVIDER)], "active_provider": "deepseek"}
     if "providers" in data and isinstance(data["providers"], list):
         return data
     legacy = {**DEFAULT_PROVIDER, **{k: v for k, v in data.items() if k in DEFAULT_PROVIDER}}
-    return {"providers": [legacy], "active_provider": legacy["id"]}
+    res = dict(data)
+    res["providers"] = [legacy]
+    res.setdefault("active_provider", legacy["id"])
+    return res
 
 
 def load_config():
@@ -359,9 +366,9 @@ def generate_text(messages_fn, max_chars, max_tokens_per_call=8000, temperature=
 
 
 def extract_json(text):
-    """从模型输出中提取 JSON 对象（容忍 ```json 围栏、中文全角标点、不完整截断与多余文字）。
+    """从模型输出中提取 JSON 对象或数组（容忍 ```json 围栏、中文全角标点、不完整截断与多余文字）。
 
-    只接受对象（dict）；`null`/数组/标量视为无效；遇到截断时尽全力自动闭合修复或正则抢救。
+    接受对象（dict）或数组（list）；`null`/标量视为无效；遇到截断时尽全力自动闭合修复或正则抢救。
     """
     if not text or not str(text).strip():
         raise RuntimeError("模型返回内容为空，未生成有效内容。")
@@ -372,17 +379,24 @@ def extract_json(text):
     # 1. 直接尝试标准解析
     try:
         obj = json.loads(text)
-        if isinstance(obj, dict):
+        if isinstance(obj, (dict, list)):
             return obj
     except Exception:
         pass
 
-    # 2. 匹配最外层完整的大括号
-    m = re.search(r"\{.*\}", text, re.S)
+    # 2. 匹配最外层完整的大括号或中括号
+    first_brace = text.find("{")
+    first_bracket = text.find("[")
+    m = None
+    if first_brace != -1 and (first_bracket == -1 or first_brace < first_bracket):
+        m = re.search(r"\{.*\}", text, re.S)
+    elif first_bracket != -1:
+        m = re.search(r"\[.*\]", text, re.S)
+
     if m:
         try:
             obj = json.loads(m.group(0))
-            if isinstance(obj, dict):
+            if isinstance(obj, (dict, list)):
                 return obj
         except Exception:
             pass
@@ -401,19 +415,33 @@ def extract_json(text):
     # 去除数组/对象尾随多余逗号
     cleaned = re.sub(r",\s*([\}\]])", r"\1", cleaned)
 
-    m = re.search(r"\{.*\}", cleaned, re.S)
+    first_brace = cleaned.find("{")
+    first_bracket = cleaned.find("[")
+    m = None
+    if first_brace != -1 and (first_bracket == -1 or first_brace < first_bracket):
+        m = re.search(r"\{.*\}", cleaned, re.S)
+    elif first_bracket != -1:
+        m = re.search(r"\[.*\]", cleaned, re.S)
+
     if m:
         try:
             obj = json.loads(m.group(0))
-            if isinstance(obj, dict):
+            if isinstance(obj, (dict, list)):
                 return obj
         except Exception:
             pass
 
     # 4. 截断闭合修复（当输出触及 max_tokens 未闭合字符串或括号时）
     first_brace = cleaned.find("{")
-    if first_brace != -1:
-        s = cleaned[first_brace:]
+    first_bracket = cleaned.find("[")
+    start_pos = -1
+    if first_brace != -1 and (first_bracket == -1 or first_brace < first_bracket):
+        start_pos = first_brace
+    elif first_bracket != -1:
+        start_pos = first_bracket
+
+    if start_pos != -1:
+        s = cleaned[start_pos:]
         # 去除末尾不完整的 key、冒号或逗号
         s = re.sub(r"[,:\s]+$", "", s)
 
@@ -455,7 +483,7 @@ def extract_json(text):
 
         try:
             obj = json.loads(s)
-            if isinstance(obj, dict):
+            if isinstance(obj, (dict, list)):
                 return obj
         except Exception:
             pass
@@ -526,11 +554,49 @@ def unique_path(title):
     return p
 
 
+def escape_content_line(line):
+    """转义正文行开头的 Markdown 标题定界符，防止误识别为章节/分卷结构。"""
+    end = ""
+    if line.endswith("\r\n"):
+        end = "\r\n"
+        content_part = line[:-2]
+    elif line.endswith("\n") or line.endswith("\r"):
+        end = line[-1]
+        content_part = line[:-1]
+    else:
+        content_part = line
+
+    m = re.match(r"^(\s*)(\\*)(#.*)$", content_part)
+    if m:
+        indent, slashes, rest = m.groups()
+        return f"{indent}\\{slashes}{rest}{end}"
+    return line
+
+
+def unescape_content_line(line):
+    """还原正文行首被转义的 Markdown 标题定界符。"""
+    end = ""
+    if line.endswith("\r\n"):
+        end = "\r\n"
+        content_part = line[:-2]
+    elif line.endswith("\n") or line.endswith("\r"):
+        end = line[-1]
+        content_part = line[:-1]
+    else:
+        content_part = line
+
+    m = re.match(r"^(\s*)\\(\\*)(#.*)$", content_part)
+    if m:
+        indent, slashes, rest = m.groups()
+        return f"{indent}{slashes}{rest}{end}"
+    return line
+
+
 def parse_novel(path, repair=True):
     """解析 novels/*.md -> (meta, chapters, words)
 
     repair=True 时自动修正「标题被误当正文」的存量章节；返回的 chapters
-    已修正，调用方可写回文件。
+    已修正，调用方可写回文件。支持分卷 (## 卷：...) 解析。
     """
     text = path.read_text(encoding="utf-8")
     meta = {}
@@ -546,16 +612,31 @@ def parse_novel(path, repair=True):
     chapters = []
     cur_title = None
     cur_lines = []
+    cur_volume = ""
 
     def flush():
-        nonlocal cur_title
+        nonlocal cur_title, cur_volume
         if cur_title is not None:
-            chapters.append({"title": cur_title, "content": "".join(cur_lines).strip()})
+            unescaped_content = "".join(unescape_content_line(l) for l in cur_lines).strip()
+            chapters.append({
+                "title": cur_title,
+                "content": unescaped_content,
+                "volume": cur_volume or "正文"
+            })
         cur_title = None
         cur_lines.clear()
 
     for line in body.splitlines(keepends=True):
-        if line.startswith("# "):
+        stripped = line.strip()
+        if stripped.startswith("## 卷：") or stripped.startswith("## 卷名：") or stripped.startswith("## Volume:"):
+            flush()
+            if stripped.startswith("## 卷："):
+                cur_volume = stripped[len("## 卷："):].strip()
+            elif stripped.startswith("## 卷名："):
+                cur_volume = stripped[len("## 卷名："):].strip()
+            else:
+                cur_volume = stripped[len("## Volume:"):].strip()
+        elif line.startswith("# "):
             flush()
             cur_title = line[2:].strip()
         else:
@@ -570,15 +651,38 @@ def parse_novel(path, repair=True):
 
 
 def write_novel(path, meta, chapters):
+    """原子写入小说 Markdown 文件，正文行首敏感结构符自动转义。"""
     meta = dict(meta)
     meta["updated"] = now_iso()
     parts = ["---", json.dumps(meta, ensure_ascii=False), "---", ""]
+    last_volume = None
     for c in chapters:
+        vol = (c.get("volume") or "").strip()
+        if vol and vol != "正文" and vol != last_volume:
+            parts.append(f"## 卷：{vol}")
+            parts.append("")
+            last_volume = vol
+        elif not vol and last_volume is not None:
+            last_volume = None
         parts.append(f"# {c['title']}")
         parts.append("")
-        parts.append(c["content"])
+        escaped_lines = [escape_content_line(l) for l in c["content"].splitlines(keepends=True)]
+        parts.append("".join(escaped_lines))
         parts.append("")
-    path.write_text("\n".join(parts), encoding="utf-8")
+
+    # 原子写入：同目录下写入临时文件再用 os.replace 替换，避免并发中断造成文件损坏
+    dir_name = path.parent
+    tmp_p = dir_name / f".tmp_{path.stem}_{os.getpid()}_{time.time_ns()}.tmp"
+    try:
+        tmp_p.write_text("\n".join(parts), encoding="utf-8")
+        os.replace(str(tmp_p), str(path))
+    except Exception:
+        try:
+            if tmp_p.exists():
+                tmp_p.unlink()
+        except Exception:
+            pass
+        raise
 
 
 def safe_novel_path(name):
@@ -1002,8 +1106,8 @@ SAMPLE_HEAD_RATIO = 0.15   # 开头精读比例
 SAMPLE_TAIL_RATIO = 0.10   # 结尾精读比例
 SAMPLE_MID_EVERY = 3       # 中间每 3 块取 1 块
 
-CACHE_DIR = BASE_DIR / "analysis_cache"
-CACHE_DIR.mkdir(exist_ok=True)
+CACHE_DIR = Path(os.environ.get("NOVEL_CACHE_DIR", DATA_DIR / "analysis_cache")).resolve()
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def analysis_cache_key(title, text):
@@ -1059,6 +1163,8 @@ def analyze_style(data, on_progress=None, provider_id=None, cancel_check=None):
             provider_id=provider_id,
         )
         profile = extract_json(content)
+        if not isinstance(profile, dict):
+            profile = {"人物表": profile}
         profile.setdefault("备注", "无原文，风格为推断结果，可能与原作有偏差。")
         return profile
 
@@ -1239,6 +1345,8 @@ def analyze_long_text(text, title, author="", on_progress=None, provider_id=None
     if on_progress:
         on_progress(len(selected), len(selected), total_chars, total_chars, 0)
     profile = _merge_profile(merged, title, author, provider_id=provider_id)
+    if not isinstance(profile, dict):
+        profile = {"总结": profile}
     if sampled:
         profile.setdefault("备注", "本次为抽样通读：精读开头与结尾、中间按比例抽样，未逐字通读全文。")
     return profile
@@ -1259,6 +1367,69 @@ def _merge_half(merged, title, author, which, provider_id=None):
         provider_id=provider_id,
     )
     return json.dumps(extract_json(content), ensure_ascii=False, indent=1)
+
+
+DEFAULT_PROMPT_TEMPLATES = {
+    "default": {
+        "id": "default",
+        "name": "标准网文风",
+        "desc": "文笔流畅通俗，叙事节奏明晰，适度环境渲染与人物对白。",
+        "instruction": "语言自然流畅，节奏分明，富有画面感与感染力。"
+    },
+    "zhihu": {
+        "id": "zhihu",
+        "name": "知乎爽文风",
+        "desc": "强第一人称/贴身视角，高压开局，反转密集，情绪拉扯与痛快打脸。",
+        "instruction": "文风采用知乎热榜第一人称/贴身视角爽文风格。开局迅速切入核心冲突或不公待遇，节奏极快，心理反差剧烈，短句居多，每千字必有剧情反转或伏笔揭示，情绪张力饱满。"
+    },
+    "qidian": {
+        "id": "qidian",
+        "name": "起点硬核升级流",
+        "desc": "世界法则严密，设定扎实，文风沉稳老辣，升级与谋略并重。",
+        "instruction": "文风沉稳老辣，细节扎实严谨。力量体系、地缘势力与功法设定逻辑自洽，战斗描写具有极强动作感与策略博弈，拒绝无脑弱智反派，侧重主角心性成长与长线经营。"
+    },
+    "jjwx": {
+        "id": "jjwx",
+        "name": "晋江唯美治愈流",
+        "desc": "细腻心理刻画，眼神与微表情交锋，情感拉扯拉满，语言优美含蓄。",
+        "instruction": "文风唯美细腻，擅长捕捉微表情与眼神暗流。情感拉扯深刻，注重角色间独特的张力与宿命感，描写富有诗意与余韵，注重心理变化与生活细节。"
+    },
+    "fanqie": {
+        "id": "fanqie",
+        "name": "番茄快节奏脑洞",
+        "desc": "黄金三章快节奏，三段一钩子，打脸解压，直切主题爽点连贯。",
+        "instruction": "节奏极其轻快，开门见山，毫不拖泥带水。语言生动接地气，冲突与金手指爽点紧凑连贯，段落简练，悬念密集，让读者欲罢不能。"
+    },
+    "traditional": {
+        "id": "traditional",
+        "name": "传统文学质感",
+        "desc": "现实主义群像刻画，文字凝练厚重，时代风貌与人生命运交织。",
+        "instruction": "语言凝练厚重，富有现实主义文学质感。人物群像立体，避免网文套路化脸谱，重在社会风貌与人性复杂度的真实呈现。"
+    }
+}
+
+
+def get_prompt_templates():
+    cfg = load_config()
+    custom = cfg.get("prompt_templates") or {}
+    merged = {k: dict(v) for k, v in DEFAULT_PROMPT_TEMPLATES.items()}
+    for k, v in custom.items():
+        if isinstance(v, dict):
+            if k in merged:
+                merged[k].update(v)
+            else:
+                merged[k] = v
+    active = cfg.get("active_prompt_template", "default")
+    return merged, active
+
+
+def build_style_instruction(template_id=None):
+    templates, active = get_prompt_templates()
+    tid = template_id or active
+    tmpl = templates.get(tid)
+    if tmpl and tmpl.get("instruction"):
+        return f"\n\n【特定文风与写作规范】\n{tmpl['instruction']}"
+    return ""
 
 
 ORIGINAL_SYS = (
@@ -1339,7 +1510,7 @@ def run_original_job(job, data):
 
             def mk_msgs(sofar, i=i, prev=prev):
                 msgs = [
-                    {"role": "system", "content": ORIGINAL_SYS},
+                    {"role": "system", "content": ORIGINAL_SYS + build_style_instruction(data.get("style_template") or data.get("prompt_template"))},
                     {"role": "user", "content": (
                         f"【小说设定】\n{setup}\n\n"
                         f"【章节大纲】\n{outline_text}\n\n"
@@ -2034,7 +2205,11 @@ def api_get_novel(name):
     # 轻量目录模式：仅返回元数据与章节标题/字数，不返回长文本正文
     if request.args.get("toc") or request.args.get("outline"):
         chapter_summaries = [
-            {"title": c.get("title", ""), "words": len(re.sub(r"\s+", "", c.get("content", "")))}
+            {
+                "title": c.get("title", ""),
+                "words": len(re.sub(r"\s+", "", c.get("content", ""))),
+                "volume": c.get("volume", "正文")
+            }
             for c in chapters
         ]
         return jsonify({
@@ -2122,6 +2297,8 @@ def api_delete_novel(name):
         return jsonify({"error": "小说不存在"}), 404
     if _deny_private(read_meta_only(p), token):
         return jsonify({"error": "隐私书架已锁定，请先输入隐私密码", "locked": True}), 403
+    if book_busy(p.stem):
+        return jsonify({"error": "小说正在生成中，暂时无法删除小说"}), 409
     # 不直接删除：移入回收站（_trash），可恢复
     try:
         TRASH_DIR.mkdir(parents=True, exist_ok=True)
@@ -2197,6 +2374,368 @@ def api_novel_bible(name):
     write_novel(p, meta, chapters)
     return jsonify({"ok": True, "bible": bible})
 
+@app.post("/api/novels/<name>/preferences")
+def api_set_novel_preferences(name):
+    token = _request_token()
+    p = safe_novel_path(name)
+    if not p:
+        return jsonify({"error": "小说不存在"}), 404
+    meta, chapters, words = parse_novel(p, repair=False)
+    if _deny_private(meta, token):
+        return jsonify({"error": "未解锁隐私小说", "locked": True}), 403
+
+    data = request.get_json(force=True) or {}
+    for k in ["preferred_style", "preferred_style_template", "preferred_model", "preferred_perspective", "preferred_words"]:
+        if k in data:
+            meta[k] = data[k]
+    write_novel(p, meta, chapters)
+    return jsonify({"ok": True, "meta": meta})
+
+
+@app.post("/api/novels/<name>/reorder-chapters")
+def api_reorder_chapters(name):
+    token = _request_token()
+    p = safe_novel_path(name)
+    if not p:
+        return jsonify({"error": "小说不存在"}), 404
+    meta, chapters, words = parse_novel(p, repair=False)
+    if _deny_private(meta, token):
+        return jsonify({"error": "未解锁隐私小说", "locked": True}), 403
+    if book_busy(p.stem):
+        return jsonify({"error": "小说正在生成中，暂时无法调整章节"}), 409
+
+    data = request.get_json(force=True) or {}
+    order = data.get("order")
+    if not isinstance(order, list):
+        return jsonify({"error": "参数 order 必须为列表"}), 400
+
+    if all(isinstance(x, int) for x in order):
+        if set(order) != set(range(len(chapters))):
+            return jsonify({"error": "章节索引不完整或越界"}), 400
+        chapters = [chapters[i] for i in order]
+    elif all(isinstance(x, dict) for x in order):
+        reordered = []
+        for item in order:
+            idx = item.get("index")
+            if idx is None or not isinstance(idx, int) or idx < 0 or idx >= len(chapters):
+                return jsonify({"error": f"章节索引无效: {idx}"}), 400
+            ch = dict(chapters[idx])
+            if "volume" in item and item["volume"] is not None:
+                ch["volume"] = str(item["volume"]).strip() or "正文"
+            if "title" in item and item["title"]:
+                ch["title"] = str(item["title"]).strip()
+            reordered.append(ch)
+        chapters = reordered
+    else:
+        return jsonify({"error": "order 格式不支持"}), 400
+
+    write_novel(p, meta, chapters)
+    return jsonify({"ok": True, "count": len(chapters), "chapters": [{"title": c["title"], "volume": c.get("volume", "正文")} for c in chapters]})
+
+
+@app.get("/api/novels/<name>/chapters/<int:idx>/history")
+def api_chapter_history(name, idx):
+    token = _request_token()
+    p = safe_novel_path(name)
+    if not p:
+        return jsonify({"error": "小说不存在"}), 404
+    meta, chapters, words = parse_novel(p, repair=False)
+    if _deny_private(meta, token):
+        return jsonify({"error": "未解锁隐私小说", "locked": True}), 403
+    if idx < 0 or idx >= len(chapters):
+        return jsonify({"error": "章节不存在"}), 404
+
+    prefix = f"{sanitize_filename(name)}_{idx}_"
+    snapshots = []
+    if CHAPTER_BACKUP_DIR.exists():
+        for f in CHAPTER_BACKUP_DIR.glob(f"{prefix}*.json"):
+            try:
+                data = json.loads(f.read_text(encoding="utf-8"))
+                content = data.get("content", "")
+                snapshots.append({
+                    "id": f.name,
+                    "title": data.get("title", ""),
+                    "ts": data.get("ts", ""),
+                    "words": len(re.sub(r"\s+", "", content)),
+                    "preview": content[:120] + ("..." if len(content) > 120 else ""),
+                    "content": content
+                })
+            except Exception:
+                continue
+    snapshots.sort(key=lambda s: s["ts"], reverse=True)
+    return jsonify({
+        "ok": True,
+        "index": idx,
+        "current_title": chapters[idx].get("title", ""),
+        "current_words": len(re.sub(r"\s+", "", chapters[idx].get("content", ""))),
+        "snapshots": snapshots
+    })
+
+
+@app.post("/api/novels/<name>/chapters/<int:idx>/restore-snapshot")
+def api_restore_chapter_snapshot(name, idx):
+    token = _request_token()
+    p = safe_novel_path(name)
+    if not p:
+        return jsonify({"error": "小说不存在"}), 404
+    meta, chapters, words = parse_novel(p, repair=False)
+    if _deny_private(meta, token):
+        return jsonify({"error": "未解锁隐私小说", "locked": True}), 403
+    if idx < 0 or idx >= len(chapters):
+        return jsonify({"error": "章节不存在"}), 404
+    if book_busy(p.stem):
+        return jsonify({"error": "小说正在生成中，暂时无法恢复快照"}), 409
+
+    data = request.get_json(force=True) or {}
+    snapshot_id = data.get("snapshot_id")
+    if not snapshot_id:
+        return jsonify({"error": "缺少 snapshot_id 参数"}), 400
+
+    target_file = CHAPTER_BACKUP_DIR / sanitize_filename(snapshot_id)
+    if not target_file.exists():
+        return jsonify({"error": "快照不存在"}), 404
+
+    try:
+        snap_data = json.loads(target_file.read_text(encoding="utf-8"))
+    except Exception as e:
+        return jsonify({"error": f"读取快照失败: {e}"}), 500
+
+    _backup_chapter(p.stem, idx, chapters[idx])
+    if snap_data.get("title"):
+        chapters[idx]["title"] = snap_data["title"]
+    chapters[idx]["content"] = snap_data.get("content", "")
+    meta["words"] = sum(len(re.sub(r"\s+", "", c.get("content", ""))) for c in chapters)
+    write_novel(p, meta, chapters)
+
+    return jsonify({
+        "ok": True,
+        "index": idx,
+        "title": chapters[idx]["title"],
+        "content": chapters[idx]["content"],
+        "words": len(re.sub(r"\s+", "", chapters[idx]["content"]))
+    })
+
+
+@app.post("/api/novels/import-txt")
+def api_import_txt():
+    token = _request_token()
+    raw_text = ""
+    title = ""
+    genre = "都市言情"
+
+    if "file" in request.files:
+        f = request.files["file"]
+        title = Path(f.filename).stem
+        raw_text = f.read().decode("utf-8", errors="replace")
+    else:
+        data = request.get_json(silent=True) or {}
+        raw_text = data.get("text", "")
+        title = data.get("title", "")
+        genre = data.get("genre", "都市言情")
+
+    if request.form:
+        if request.form.get("title"):
+            title = request.form.get("title")
+        if request.form.get("genre"):
+            genre = request.form.get("genre")
+
+    title = sanitize_filename(title.strip() or "未命名导入作品")
+    if not raw_text.strip():
+        return jsonify({"error": "导入内容不能为空"}), 400
+
+    candidate_title = title
+    counter = 1
+    while (NOVELS_DIR / f"{candidate_title}.md").exists():
+        candidate_title = f"{title}_{counter}"
+        counter += 1
+    title = candidate_title
+
+    pattern = re.compile(
+        r'(?:^|\r?\n)[ \t]*(第[0-9零一二三四五六七八九十百千万]+[章节回集卷篇节][^\r\n]*|Chapter\s+[0-9]+[^\r\n]*|[【\[（(]第[0-9零一二三四五六七八九十百千万]+[章节回集卷][】\]）)][^\r\n]*|引子[^\r\n]*|序章[^\r\n]*|尾声[^\r\n]*|番外[^\r\n]*)',
+        re.IGNORECASE
+    )
+
+    matches = list(pattern.finditer(raw_text))
+    chapters = []
+    if matches:
+        first_start = matches[0].start()
+        preamble = raw_text[:first_start].strip()
+        if preamble:
+            chapters.append({
+                "title": "序章",
+                "content": preamble,
+                "volume": "正文"
+            })
+        for i, match in enumerate(matches):
+            ch_title = match.group(1).strip()
+            start_pos = match.end()
+            end_pos = matches[i + 1].start() if i + 1 < len(matches) else len(raw_text)
+            ch_content = raw_text[start_pos:end_pos].strip()
+            chapters.append({
+                "title": ch_title,
+                "content": ch_content,
+                "volume": "正文"
+            })
+    else:
+        paragraphs = raw_text.splitlines()
+        chunks = []
+        cur_chunk = []
+        cur_len = 0
+        for p_line in paragraphs:
+            cur_chunk.append(p_line)
+            cur_len += len(p_line)
+            if cur_len >= 3000:
+                chunks.append("\n".join(cur_chunk).strip())
+                cur_chunk = []
+                cur_len = 0
+        if cur_chunk:
+            chunks.append("\n".join(cur_chunk).strip())
+        if not chunks:
+            chunks = [raw_text.strip()]
+        for i, ch_text in enumerate(chunks):
+            chapters.append({
+                "title": f"第{i+1}章",
+                "content": ch_text,
+                "volume": "正文"
+            })
+
+    total_words = sum(len(re.sub(r"\s+", "", c["content"])) for c in chapters)
+    meta = {
+        "title": title,
+        "type": "imported",
+        "genre": genre,
+        "status": "completed",
+        "created": now_iso(),
+        "updated": now_iso(),
+        "chapters": len(chapters),
+        "words": total_words
+    }
+    p = NOVELS_DIR / f"{title}.md"
+    write_novel(p, meta, chapters)
+
+    bible_path = NOVELS_DIR / f"{title}.bible.json"
+    bible_data = {
+        "setting": f"根据导入作品《{title}》自适应提取世界观设定。",
+        "characters": [],
+        "conflict": "",
+        "tone": "自然流畅"
+    }
+    try:
+        bible_path.write_text(json.dumps(bible_data, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+    return jsonify({
+        "ok": True,
+        "name": title,
+        "title": title,
+        "chapters_count": len(chapters),
+        "total_words": total_words,
+        "sample_chapters": [c["title"] for c in chapters[:5]]
+    })
+
+
+@app.post("/api/novels/<name>/search-replace")
+def api_search_replace(name):
+    token = _request_token()
+    p = safe_novel_path(name)
+    if not p:
+        return jsonify({"error": "小说不存在"}), 404
+    meta, chapters, words = parse_novel(p, repair=False)
+    if _deny_private(meta, token):
+        return jsonify({"error": "未解锁隐私小说", "locked": True}), 403
+    if book_busy(p.stem):
+        return jsonify({"error": "小说正在生成中，暂时无法进行全书替换"}), 409
+
+    data = request.get_json(force=True) or {}
+    find_text = str(data.get("find", "")).strip()
+    replace_text = str(data.get("replace", ""))
+    case_sensitive = bool(data.get("case_sensitive", False))
+    use_regex = bool(data.get("regex", False))
+    preview_only = bool(data.get("preview_only", True))
+
+    if not find_text:
+        return jsonify({"error": "查找内容不能为空"}), 400
+
+    try:
+        flags = 0 if case_sensitive else re.IGNORECASE
+        pattern = re.compile(find_text if use_regex else re.escape(find_text), flags)
+    except Exception as e:
+        return jsonify({"error": f"正则表达式错误: {e}"}), 400
+
+    results = []
+    total_matches = 0
+    modified_chapters = 0
+
+    for idx, ch in enumerate(chapters):
+        content = ch.get("content", "")
+        matches = list(pattern.finditer(content))
+        if matches:
+            total_matches += len(matches)
+            modified_chapters += 1
+            snippets = []
+            for m in matches[:4]:
+                s = max(0, m.start() - 25)
+                e = min(len(content), m.end() + 25)
+                snippets.append(content[s:e].replace("\n", " "))
+            results.append({
+                "chapter_index": idx,
+                "chapter_title": ch.get("title", f"第{idx+1}章"),
+                "volume": ch.get("volume", "正文"),
+                "matches_count": len(matches),
+                "snippets": snippets
+            })
+            if not preview_only:
+                _backup_chapter(p.stem, idx, ch)
+                ch["content"] = pattern.sub(replace_text, content)
+
+    if not preview_only and modified_chapters > 0:
+        meta["words"] = sum(len(re.sub(r"\s+", "", c.get("content", ""))) for c in chapters)
+        write_novel(p, meta, chapters)
+
+    return jsonify({
+        "ok": True,
+        "preview_only": preview_only,
+        "find": find_text,
+        "replace": replace_text,
+        "total_matches": total_matches,
+        "modified_chapters": modified_chapters,
+        "results": results
+    })
+
+
+@app.get("/api/settings/prompts")
+def api_get_prompt_settings():
+    templates, active = get_prompt_templates()
+    return jsonify({
+        "ok": True,
+        "active": active,
+        "templates": templates
+    })
+
+
+@app.post("/api/settings/prompts")
+def api_save_prompt_settings():
+    data = request.get_json(force=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "请求体格式错误，必须为 JSON 对象"}), 400
+    cfg = load_config()
+    if "active" in data and str(data["active"]).strip():
+        cfg["active_prompt_template"] = str(data["active"]).strip()
+    if "custom_template" in data and isinstance(data["custom_template"], dict):
+        cfg.setdefault("prompt_templates", {})
+        ct = data["custom_template"]
+        tid = ct.get("id", "custom")
+        cfg["prompt_templates"][tid] = ct
+    save_config(cfg)
+    templates, active = get_prompt_templates()
+    return jsonify({
+        "ok": True,
+        "active": active,
+        "templates": templates
+    })
+
+
 
 # ---------- 回收站（整本） ----------
 @app.get("/api/trash")
@@ -2223,6 +2762,9 @@ def api_restore_trash(name):
     p = TRASH_DIR / f"{name}.md"
     if not p.exists():
         return jsonify({"error": "回收站中不存在该书"}), 404
+    data = request.get_json(silent=True) or {}
+    if _deny_private(read_meta_only(p), _request_token(data)):
+        return jsonify({"error": "隐私书架已锁定，请先输入隐私密码", "locked": True}), 403
     target = unique_path(p.stem)
     p.rename(target)
     return jsonify({"ok": True, "name": target.stem})
@@ -2233,6 +2775,8 @@ def api_purge_trash(name):
     p = TRASH_DIR / f"{name}.md"
     if not p.exists():
         return jsonify({"error": "回收站中不存在该书"}), 404
+    if _deny_private(read_meta_only(p), _request_token()):
+        return jsonify({"error": "隐私书架已锁定，请先输入隐私密码", "locked": True}), 403
     p.unlink()
     return jsonify({"ok": True})
 
@@ -2297,6 +2841,12 @@ def api_delete_chapter_backup(fname):
     p = CHAPTER_BACKUP_DIR / fname
     if not p.exists() or Path(fname).name != fname:
         return jsonify({"error": "快照不存在"}), 404
+    snap = load_chapter_backup(fname) or {}
+    novel_name = snap.get("novel", "")
+    if novel_name:
+        novel_p = safe_novel_path(novel_name)
+        if novel_p and _deny_private(read_meta_only(novel_p), _request_token()):
+            return jsonify({"error": "隐私书架已锁定，请先输入隐私密码", "locked": True}), 403
     p.unlink()
     return jsonify({"ok": True})
 
@@ -2606,6 +3156,9 @@ def api_selection_assist(name):
     if not p:
         return jsonify({"error": "小说不存在"}), 404
     data = request.get_json(force=True) or {}
+    meta, _, _ = parse_novel(p)
+    if _deny_private(meta, _request_token(data)):
+        return jsonify({"error": "隐私书架已锁定，请先输入隐私密码", "locked": True}), 403
     selected_text = (data.get("selected_text") or "").strip()
     if not selected_text:
         return jsonify({"error": "未提供选中的文本片段"}), 400
@@ -2681,6 +3234,8 @@ def api_delete_chapter(name):
     meta, chapters, _ = parse_novel(p)
     if _deny_private(meta, _request_token(data)):
         return jsonify({"error": "隐私书架已锁定，请先输入隐私密码", "locked": True}), 403
+    if book_busy(p.stem):
+        return jsonify({"error": "小说正在生成中，暂时无法删除章节"}), 409
     original_count = int(meta.get("original_count") or 0)
     if idx < original_count:
         return jsonify({"error": "原作章节不可删除"}), 400
@@ -2710,6 +3265,8 @@ def api_rewrite_chapter(name):
     meta, chapters, _ = parse_novel(p)
     if _deny_private(meta, _request_token(data)):
         return jsonify({"error": "隐私书架已锁定，请先输入隐私密码", "locked": True}), 403
+    if book_busy(p.stem):
+        return jsonify({"error": "小说正在生成中，暂时无法重写章节"}), 409
     original_count = int(meta.get("original_count") or 0)
     if idx < original_count:
         return jsonify({"error": "原作章节不可重写"}), 400
@@ -2920,6 +3477,10 @@ def api_generate_bible():
             provider_id=provider_id,
         )
         bible = extract_json(content)
+        if isinstance(bible, list):
+            bible = {"characters": bible}
+        elif not isinstance(bible, dict):
+            bible = {}
         return jsonify({"ok": True, "bible": bible})
     except Exception as e:
         return jsonify({"error": "生成设定档案失败：" + str(e)}), 500
@@ -2948,6 +3509,10 @@ def api_outline():
             provider_id=provider_id,
         )
         outline = extract_json(content)
+        if isinstance(outline, list):
+            outline = {"logline": "", "chapters": outline}
+        elif not isinstance(outline, dict):
+            outline = {"logline": "", "chapters": []}
         return jsonify({"outline": outline})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -2992,6 +3557,8 @@ def api_generate_variants():
         p = safe_novel_path(novel_name)
         if p and p.exists():
             meta, chapters, _ = parse_novel(p)
+            if _deny_private(meta, _request_token(data)):
+                return jsonify({"error": "隐私书架已锁定，请先输入隐私密码", "locked": True}), 403
             if chapters:
                 title = meta.get("title", p.stem)
                 last_ch = chapters[-1]
@@ -3037,7 +3604,7 @@ def api_generate_variants():
             {"role": "user", "content": user_prompt}
         ], max_tokens=1500, temperature=1.0, json_mode=True, provider_id=provider_id)
         obj = extract_json(content)
-        variants = obj.get("variants") or []
+        variants = obj.get("variants") if isinstance(obj, dict) else (obj if isinstance(obj, list) else [])
         if not variants or len(variants) < 2:
             variants = [
                 {"id": "A", "title": "方向 A：顺承推进", "synopsis": "顺应前文线索展开调查", "preview": content[:300]},
@@ -3053,7 +3620,7 @@ def api_generate():
     data = request.get_json(force=True) or {}
 
     # 隐私书架：续写/断点续跑目标书为隐私书时必须已解锁
-    _target = data.get("resume_novel") or data.get("novel_name")
+    _target = data.get("resume_novel") or data.get("novel_name") or data.get("source_title") or data.get("target_novel")
     if _target:
         _tp = safe_novel_path(_target)
         if _tp and _deny_private(read_meta_only(_tp), _request_token(data)):

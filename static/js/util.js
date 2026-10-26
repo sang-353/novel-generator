@@ -1,6 +1,14 @@
 // ==================== 工具 ====================
 const $ = id => document.getElementById(id);
-const on = (id, fn) => { const el = $(id); if (el) el.onclick = fn; };
+const on = (id, evOrFn, maybeFn) => {
+  const el = $(id);
+  if (!el) return;
+  if (typeof evOrFn === 'function') {
+    el.onclick = evOrFn;
+  } else if (typeof maybeFn === 'function') {
+    el.addEventListener(evOrFn, maybeFn);
+  }
+};
 function toast(msg) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
   clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2600);
