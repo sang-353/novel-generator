@@ -194,8 +194,39 @@ def test_chaos_rapid_clicks_on_generate(page, live_server, test_env_setup):
 
     page.wait_for_timeout(1000)
     assert len(generate_requests) == 1, f"狂点 10 次后发出了 {len(generate_requests)} 次 /api/generate 请求，预期只发出 1 次"
-    created_jobs = [j for j in test_env_setup["app_module"].JOBS.values() if "防连击测试书" in str(j)]
-    assert len(created_jobs) <= 1, f"后端创建了多余任务: {len(created_jobs)} 个"
+    jobs_dict = test_env_setup["app_module"].JOBS
+    matching_jobs = [
+        j for j in jobs_dict.values()
+        if j.get("novel_name") == "防连击测试书" or (j.get("data") and j.get("data").get("title") == "防连击测试书")
+    ]
+    assert len(matching_jobs) == 1, f"后端创建了多余任务: {len(matching_jobs)} 个, jobs={matching_jobs}"
+
+
+def test_chaos_backend_direct_concurrent_generate_returns_409(live_server):
+    """后端直连并发防重入测试：用 requests 连发 3 次 POST /api/generate（同一本书），断言只有 1 个成功(200)，其余返回 409。"""
+    import requests
+    import concurrent.futures
+
+    payload = {
+        "mode": "original",
+        "title": "并发接口冲突测试书",
+        "genre": "科幻",
+        "setting": "测试直连并发",
+        "chapters": 1,
+        "outline": json.dumps({"chapters": [{"title": "第1章 序", "points": "要点"}]})
+    }
+
+    url = f"{live_server}/api/generate"
+    def send_req():
+        return requests.post(url, json=payload, timeout=10)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        futures = [executor.submit(send_req) for _ in range(3)]
+        responses = [f.result() for f in futures]
+
+    status_codes = [r.status_code for r in responses]
+    assert status_codes.count(200) == 1, f"预期严格只有 1 个成功(200)，实际状态码分布: {status_codes}"
+    assert status_codes.count(409) == 2, f"预期其余 2 个返回 409 Conflict，实际状态码分布: {status_codes}"
 
 
 def test_chaos_navigation_and_invalid_hash(page, live_server):
@@ -216,7 +247,7 @@ def test_chaos_navigation_and_invalid_hash(page, live_server):
     assert len(monitor.page_errors) == 0, f"导航前进后退发生未捕获 JS 异常: {monitor.page_errors}"
 
 
-def test_multi_user_concurrent_editing(browser, live_server):
+def test_multi_user_concurrent_editing(browser, live_server, test_env_setup):
     """
     多用户并发测试：两个独立 Browser Context 同时编辑同一本小说的不同章节与相同章节，
     验证数据完整性与持久化稳定性。
@@ -299,12 +330,27 @@ def test_multi_user_concurrent_editing(browser, live_server):
     page2.locator("#rd_edit_save_btn").click()
     page2.wait_for_timeout(500)
 
+    # (1) 断言磁盘上该章内容等于后提交的 B 版修改
+    app_module = test_env_setup["app_module"]
+    novel_path = app_module.safe_novel_path(title)
+    assert novel_path and novel_path.exists(), f"小说文件不存在: {novel_path}"
+    _, disk_chapters, _ = app_module.parse_novel(novel_path, repair=False)
+    assert disk_chapters[0]["content"] == "【并发冲突-B版修改】", f"磁盘正文不等于最新提交的B版: {disk_chapters[0]['content']}"
+
+    # (2) 断言单章备份目录 (CHAPTER_BACKUP_DIR) 里存在先保存的 A 版内容快照
+    backup_dir = app_module.CHAPTER_BACKUP_DIR
+    assert backup_dir.exists(), f"单章备份目录不存在: {backup_dir}"
+    backup_files = list(backup_dir.glob(f"{app_module.sanitize_filename(title)}_0_*.json"))
+    assert len(backup_files) >= 1, f"未在单章备份目录找到第0章的历史快照: {list(backup_dir.glob('*'))}"
+    backup_contents = [json.loads(bf.read_text(encoding="utf-8")).get("content", "") for bf in backup_files]
+    assert any("【并发冲突-A版修改】" in c for c in backup_contents), f"单章备份中未找到先保存的A版内容！快照包含: {backup_contents}"
+
     ctx1.close()
     ctx2.close()
 
 
-def test_chaos_refresh_during_generation(page, live_server):
-    """捣乱测试：任务生成中途刷新浏览器页面，断言页面优雅重连与无死锁。"""
+def test_chaos_refresh_during_generation(page, live_server, test_env_setup):
+    """捣乱测试：任务生成中途刷新浏览器页面，断言页面优雅重连、后台任务正常执行且无死锁。"""
     monitor = PageMonitor(page, "chaos_refresh_generating")
     page.goto(f"{live_server}/#original")
     page.wait_for_load_state("networkidle")
@@ -323,12 +369,26 @@ def test_chaos_refresh_during_generation(page, live_server):
     page.locator("#btn_step2_next").click()
     page.wait_for_timeout(200)
 
+    job_ids = []
+    def on_gen_response(resp):
+        if "/api/generate" in resp.url and resp.status == 200:
+            try:
+                data = resp.json()
+                if "job_id" in data:
+                    job_ids.append(data["job_id"])
+            except Exception:
+                pass
+    page.on("response", on_gen_response)
+
     submit_btn = page.locator("#btn_write_all")
     assert submit_btn.is_visible()
     submit_btn.click()
 
     # 等待进度卡片出现即刻刷新页面
     page.locator("#og_progress_card").wait_for(state="visible", timeout=5000)
+    assert len(job_ids) > 0, "未能捕获到生成任务 job_id"
+    active_job_id = job_ids[0]
+
     page.reload()
     page.wait_for_load_state("networkidle")
     page.wait_for_timeout(500)
@@ -336,8 +396,28 @@ def test_chaos_refresh_during_generation(page, live_server):
     # 刷新后页面应正常可用，无崩溃报错
     monitor.assert_no_errors("生成中途强制刷新页面")
 
+    # 刷新后请求 /api/jobs/<job_id>，断言 job 状态（running / done / cancelled）
+    job_info = page.evaluate(f"""() => {{
+        return fetch('/api/jobs/{active_job_id}').then(r => r.json());
+    }}""")
+    assert job_info.get("status") in ("running", "done", "cancelled"), f"Job 状态异常: {job_info}"
 
-def test_chaos_cancel_during_generation(page, live_server):
+    # 等待后台任务结束后断言已生成章节完整落盘、书籍锁已释放
+    app_module = test_env_setup["app_module"]
+    for _ in range(30):
+        if not app_module.book_busy("刷新中断测试书"):
+            break
+        time.sleep(0.5)
+
+    assert not app_module.book_busy("刷新中断测试书"), "任务结束后书籍锁未被释放！"
+    novel_path = app_module.safe_novel_path("刷新中断测试书")
+    assert novel_path and novel_path.exists(), "刷新中断后已生成的小说未落盘！"
+    _, chapters, _ = app_module.parse_novel(novel_path, repair=False)
+    assert len(chapters) >= 1, f"已落盘小说无有效章节: {chapters}"
+    assert len(chapters[0].get("content", "").strip()) > 0, "落盘章节正文为空"
+
+
+def test_chaos_cancel_during_generation(page, live_server, test_env_setup):
     """捣乱测试：生成任务进行中点击取消，验证取消指令即刻送达且状态更新。"""
     monitor = PageMonitor(page, "chaos_cancel_generating")
     page.goto(f"{live_server}/#original")
@@ -357,6 +437,17 @@ def test_chaos_cancel_during_generation(page, live_server):
     page.locator("#btn_step2_next").click()
     page.wait_for_timeout(200)
 
+    job_ids = []
+    def on_gen_response(resp):
+        if "/api/generate" in resp.url and resp.status == 200:
+            try:
+                data = resp.json()
+                if "job_id" in data:
+                    job_ids.append(data["job_id"])
+            except Exception:
+                pass
+    page.on("response", on_gen_response)
+
     submit_btn = page.locator("#btn_write_all")
     assert submit_btn.is_visible()
     submit_btn.click()
@@ -364,6 +455,9 @@ def test_chaos_cancel_during_generation(page, live_server):
     # 等待取消按钮出现并点击
     cancel_btn = page.locator("#og_cancel_job")
     cancel_btn.wait_for(state="visible", timeout=5000)
+    assert len(job_ids) > 0, "未能捕获到任务 job_id"
+    active_job_id = job_ids[0]
+
     cancel_btn.click()
     page.wait_for_timeout(600)
 
@@ -372,3 +466,115 @@ def test_chaos_cancel_during_generation(page, live_server):
     progress_text = page.locator("#og_progress_text").text_content() or ""
     assert "取消" in toast_text or "取消" in progress_text, f"未见取消响应: toast={toast_text}, progress={progress_text}"
     monitor.assert_no_errors("生成中途点击取消")
+
+    # 取消后断言后端 job 状态为已取消
+    app_module = test_env_setup["app_module"]
+    for _ in range(25):
+        job = app_module.JOBS.get(active_job_id)
+        if job and job.get("status") == "cancelled":
+            break
+        time.sleep(0.2)
+    job = app_module.JOBS.get(active_job_id)
+    assert job and job.get("status") == "cancelled", f"后端 Job 状态未变为 cancelled: {job}"
+
+    # 书籍锁已释放（再次调用 /api/generate 不再返回 409）
+    assert not app_module.book_busy("取消停止测试书"), "取消后书籍锁未被释放！"
+    retry_resp = page.evaluate("""() => {
+        return fetch('/api/generate', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                mode: 'original',
+                title: '取消停止测试书',
+                chapters: 1,
+                outline: JSON.stringify({ chapters: [{ title: '第1章', points: '...' }] })
+            })
+        }).then(r => r.status);
+    }""")
+    assert retry_resp != 409, f"书籍锁释放失败，再次提交仍返回 409: {retry_resp}"
+
+    # 已生成章节仍在（若落盘）
+    novel_path = app_module.safe_novel_path("取消停止测试书")
+    if novel_path and novel_path.exists():
+        _, chs, _ = app_module.parse_novel(novel_path, repair=False)
+        assert len(chs) >= 0
+
+
+def test_concurrent_multithreaded_same_chapter_save(live_server, test_env_setup):
+    """
+    真正同时并发保存同一章的测试：
+    两个线程使用 Barrier 同步并在同一瞬间 POST 保存同一章，
+    断言最终小说文件没有损坏、格式解析正常，
+    断言两版修改内容（A版与B版）在磁盘当前正文或单章备份快照（CHAPTER_BACKUP_DIR）中都能找到。
+    如果有一版被后写覆盖且未进入任何备份快照，则记录为并发保存缺陷。
+    """
+    import threading
+    import requests
+    import concurrent.futures
+
+    app_module = test_env_setup["app_module"]
+    title = "真多线程并发同章测试书"
+
+    # 1. 初始化小说与第 0 章
+    init_res = requests.post(
+        f"{live_server}/api/novels/import-txt",
+        json={
+            "title": title,
+            "text": "第1章 初始序章\n这是初始的正文内容，等待并发覆盖测试。"
+        },
+        timeout=10
+    )
+    assert init_res.status_code == 200, f"创建测试小说失败: {init_res.text}"
+
+    # 2. 准备两个线程并发提交不同内容
+    v1_content = "【线程1并发保存的正文内容_AAA】"
+    v2_content = "【线程2并发保存的正文内容_BBB】"
+
+    barrier = threading.Barrier(2)
+
+    def worker(content_text):
+        barrier.wait()  # 确保两线程在同一毫秒发起请求
+        return requests.post(
+            f"{live_server}/api/novels/{title}/chapter/0",
+            json={"content": content_text},
+            timeout=10
+        )
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        f1 = executor.submit(worker, v1_content)
+        f2 = executor.submit(worker, v2_content)
+        r1 = f1.result()
+        r2 = f2.result()
+
+    # 两个请求响应状态码
+    assert r1.status_code in (200, 409), f"请求1响应异常: {r1.status_code} {r1.text}"
+    assert r2.status_code in (200, 409), f"请求2响应异常: {r2.status_code} {r2.text}"
+
+    # 3. 断言磁盘小说文件未被损坏
+    novel_path = app_module.safe_novel_path(title)
+    assert novel_path and novel_path.exists(), "小说文件丢失"
+    meta, chapters, _ = app_module.parse_novel(novel_path, repair=False)
+    assert len(chapters) == 1, f"章节数量异常: {len(chapters)}"
+    disk_text = chapters[0].get("content", "")
+
+    # 4. 检查快照目录
+    backup_dir = app_module.CHAPTER_BACKUP_DIR
+    backup_files = list(backup_dir.glob(f"{app_module.sanitize_filename(title)}_0_*.json")) if backup_dir.exists() else []
+    snapshot_contents = []
+    for bf in backup_files:
+        try:
+            c = json.loads(bf.read_text(encoding="utf-8")).get("content", "")
+            snapshot_contents.append(c)
+        except Exception:
+            pass
+
+    # 5. 断言两版内容在磁盘或快照中都能找到
+    v1_found = (v1_content == disk_text) or any(v1_content in c for c in snapshot_contents)
+    v2_found = (v2_content == disk_text) or any(v2_content in c for c in snapshot_contents)
+
+    assert v1_found and v2_found, (
+        f"真并发保存数据丢失缺陷！\n"
+        f"v1_found={v1_found}, v2_found={v2_found}\n"
+        f"磁盘当前内容: {disk_text}\n"
+        f"快照库内容: {snapshot_contents}"
+    )

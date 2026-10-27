@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 class FakeLLMState:
     """全局控制状态，用于指导假 LLM 返回正常或特定的异常数据。"""
     mode = "normal"  # normal, missing_fields, field_drift, top_level_array, malformed_json, empty
+    target_feature = None
     custom_response = None
     call_history = []
     lock = threading.Lock()
@@ -23,14 +24,16 @@ class FakeLLMState:
     def reset(cls):
         with cls.lock:
             cls.mode = "normal"
+            cls.target_feature = None
             cls.custom_response = None
             cls.call_history.clear()
 
     @classmethod
-    def set_mode(cls, mode, custom_response=None):
+    def set_mode(cls, mode, custom_response=None, target_feature=None):
         with cls.lock:
             cls.mode = mode
             cls.custom_response = custom_response
+            cls.target_feature = target_feature
 
 
 class FakeLLMHandler(BaseHTTPRequestHandler):
@@ -84,11 +87,12 @@ class FakeLLMHandler(BaseHTTPRequestHandler):
             FakeLLMState.call_history.append(payload)
             mode = FakeLLMState.mode
             custom_response = FakeLLMState.custom_response
+            target_feature = getattr(FakeLLMState, "target_feature", None)
 
         messages = payload.get("messages", [])
         is_stream = bool(payload.get("stream", False))
 
-        content = self._generate_response_content(messages, mode, custom_response)
+        content = self._generate_response_content(messages, mode, custom_response, target_feature)
 
         if is_stream:
             self.send_response(200)
@@ -134,21 +138,36 @@ class FakeLLMHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(resp, ensure_ascii=False).encode("utf-8"))
             self.close_connection = True
 
-    def _generate_response_content(self, messages, mode, custom_response):
+    def _generate_response_content(self, messages, mode, custom_response, target_feature=None):
         if custom_response:
             return custom_response
 
+        full_prompt = " ".join([m.get("content", "") for m in messages])
+
+        # 如果指定了 target_feature，检查当前请求是否针对该功能；若不匹配则按 normal 处理
+        feature_matches = True
+        if target_feature:
+            if target_feature == "suggest-tropes":
+                feature_matches = any(k in full_prompt for k in ["灵感开局", "策划", "suggest-tropes"])
+            elif target_feature == "generate-bible":
+                feature_matches = any(k in full_prompt for k in ["世界观与角色设定集", "World & Character Bible", "generate-bible"])
+            elif target_feature == "outline":
+                feature_matches = any(k in full_prompt for k in ["章节大纲", "outline"]) and not any(k in full_prompt for k in ["世界观与角色设定集", "World & Character Bible"])
+            elif target_feature == "generate-variants":
+                feature_matches = any(k in full_prompt for k in ["剧情小样", "variants"])
+
         # 检查是否为异常模拟模式
-        if mode == "malformed_json":
-            return "This is a malformed non-JSON response from LLM ```bad format"
-        elif mode == "empty":
-            return ""
-        elif mode == "top_level_array":
-            return '[{"title": "顶层数组书", "label": "测试标签", "genre": "都市", "icon": "💡"}]'
-        elif mode == "field_drift":
-            return '{"templates": [{"book_name": "字段漂移小说", "tag": "新标签", "category": "科幻"}]}'
-        elif mode == "missing_fields":
-            return '{"tropes": [{"unknown_key": "缺少核心字段"}]}'
+        if feature_matches and mode != "normal":
+            if mode == "malformed_json":
+                return "This is a malformed non-JSON response from LLM ```bad format"
+            elif mode == "empty":
+                return ""
+            elif mode == "top_level_array":
+                return '[{"title": "顶层数组书", "label": "测试标签", "genre": "都市", "icon": "💡"}]'
+            elif mode == "field_drift":
+                return '{"templates": [{"book_name": "字段漂移小说", "tag": "新标签", "category": "科幻"}]}'
+            elif mode == "missing_fields":
+                return '{"tropes": [{"unknown_key": "缺少核心字段"}]}'
 
         # 正常模式：根据提示词特征智能返回结构
         full_prompt = " ".join([m.get("content", "") for m in messages])

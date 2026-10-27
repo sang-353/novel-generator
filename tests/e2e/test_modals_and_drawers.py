@@ -118,7 +118,14 @@ def _setup_modal_state(page, live_server, modal_id, data_state):
                 }}).then(() => openContinueCard({json.dumps(title)}, 'continuation'));
             }}""")
         else:
-            page.evaluate("openContinueCard('', 'continuation')")
+            empty_title = "空数据续写书"
+            page.evaluate(f"""() => {{
+                return fetch('/api/novels/import-txt', {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{ title: {json.dumps(empty_title)}, text: '第1章 序\\n无' }})
+                }}).then(() => openContinueCard({json.dumps(empty_title)}, 'continuation'));
+            }}""")
 
     elif modal_id == "#rename_modal":
         page.goto(f"{live_server}/#library")
