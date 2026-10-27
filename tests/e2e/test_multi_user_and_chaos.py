@@ -693,3 +693,60 @@ def test_concurrent_save_during_generation_job_integrity(live_server, test_env_s
     meta, chapters, _ = app_module.parse_novel(novel_path, repair=False)
     assert len(chapters) == 4, f"最终章节数量异常，预期4章，实际: {len(chapters)}"
     assert not app_module.book_busy(title), "生成完成后书籍锁未释放"
+
+
+def test_auto_save_during_generation_retains_content_and_shows_status(page, live_server, test_env_setup):
+    """
+    复现生成期间前端自动保存遇到 409 的行为：
+    1. 在已有小说上触发后台续写生成任务；
+    2. 用户在前端 Studio 编辑模式下修改正文；
+    3. 等待防抖（1.5s）自动保存触发；
+    4. 断言：
+       - 保存状态指示器显示明确错误（⚠️ 自动保存出错），而非假装成功；
+       - 编辑框内的用户修改内容未被静默丢弃；
+       - 观察并记录是否弹出 Toast 提示（核查静默/明确度）。
+    """
+    import requests
+    app_module = test_env_setup["app_module"]
+    title = "自动保存并发测试书"
+
+    # 1. 预置一本已有小说
+    novel_path = app_module.NOVELS_DIR / f"{app_module.sanitize_filename(title)}.md"
+    app_module.write_novel(
+        novel_path,
+        {"title": title, "status": "idle", "mode": "continuation"},
+        [{"title": "第1章 原有章节", "content": "这是初始正文内容。"}]
+    )
+
+    # 2. 打开阅读器并进入该书，点击「编辑本章」进入编辑模式
+    page.goto(f"{live_server}/#read/{urllib.parse.quote(title)}/0")
+    page.wait_for_load_state("networkidle")
+    page.wait_for_timeout(300)
+
+    page.locator("#rd_edit_btn").click()
+    page.wait_for_selector("#rd_edit_body_inp")
+
+    # 3. 模拟后台生成任务正在执行（书籍被锁定处于 busy 状态）
+    assert app_module.acquire_book(title, holder="active_generation_job"), "加锁失败"
+    try:
+        # 4. 在编辑框输入新内容
+        typed_content = "【用户正在输入的新段落，生成中并发测试】"
+        page.fill("#rd_edit_body_inp", typed_content)
+
+        # 5. 等待 2.2 秒（超过 1.5 秒防抖时间以触发 silentAutoSave）
+        page.wait_for_timeout(2200)
+
+        # 6. 断言：用户的编辑内容完好保留在输入框内，绝没有被冲掉或清空
+        current_content = page.locator("#rd_edit_body_inp").input_value()
+        assert current_content == typed_content, f"编辑内容被静默丢弃，当前输入框为: {current_content}"
+
+        # 7. 断言：保存状态指示器显示明确的错误警示（⚠️ 自动保存出错），而非假装成功（✅ 已自动保存）
+        status_text = page.locator("#rd_save_status").text_content()
+        assert "出错" in status_text or "失败" in status_text, f"状态指示器未显示保存出错，实际显示: '{status_text}'"
+
+        # 8. 核查是否有 Toast 弹出（实测与代码分析：silentAutoSave 没有调用 toast()）
+        toasts = page.locator(".toast:visible").all_text_contents()
+        has_specific_toast = any("生成中" in t or "无法" in t for t in toasts)
+        print(f"\n[AutoSave 409 Probe] Status indicator: '{status_text.encode('ascii', 'replace').decode()}', Has Toast: {has_specific_toast}")
+    finally:
+        app_module.release_book(title)
