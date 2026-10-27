@@ -512,7 +512,7 @@ def test_core_flow_studio_keyboard_shortcuts(page, live_server):
     monitor.assert_no_errors("阅读器全部快捷键")
 
 
-def test_core_flow_library_export_three_formats(page, live_server):
+def test_core_flow_library_export_three_formats(page, live_server, tmp_path):
     """书架流程：三种格式（TXT, Markdown, EPUB）导出，并严格校验下载得到的文件内容与结构。"""
     monitor = PageMonitor(page, "flow_export_formats")
     title = "格式导出测试书"
@@ -537,7 +537,7 @@ def test_core_flow_library_export_three_formats(page, live_server):
     with page.expect_download() as txt_info:
         page.evaluate(f"exportNovel({json.dumps(title)}, 'txt')")
     txt_download = txt_info.value
-    txt_path = ARTIFACTS_DIR / txt_download.suggested_filename
+    txt_path = tmp_path / txt_download.suggested_filename
     txt_download.save_as(str(txt_path))
     txt_content = txt_path.read_text(encoding="utf-8")
     assert "碧海潮生按玉箫" in txt_content, f"导出的 TXT 缺少章节内容: {txt_content}"
@@ -546,7 +546,7 @@ def test_core_flow_library_export_three_formats(page, live_server):
     with page.expect_download() as md_info:
         page.evaluate(f"exportNovel({json.dumps(title)}, 'md')")
     md_download = md_info.value
-    md_path = ARTIFACTS_DIR / md_download.suggested_filename
+    md_path = tmp_path / md_download.suggested_filename
     md_download.save_as(str(md_path))
     md_content = md_path.read_text(encoding="utf-8")
     assert f"# {title}" in md_content or "## " in md_content, f"导出的 Markdown 缺少标题格式: {md_content}"
@@ -556,7 +556,7 @@ def test_core_flow_library_export_three_formats(page, live_server):
     with page.expect_download() as epub_info:
         page.evaluate(f"exportNovel({json.dumps(title)}, 'epub')")
     epub_download = epub_info.value
-    epub_path = ARTIFACTS_DIR / epub_download.suggested_filename
+    epub_path = tmp_path / epub_download.suggested_filename
     epub_download.save_as(str(epub_path))
     epub_bytes = epub_path.read_bytes()
     assert epub_bytes.startswith(b"PK\x03\x04"), "导出的 EPUB 文件魔数不正确，非标准 ZIP/EPUB 容器"
@@ -786,7 +786,7 @@ def test_core_flow_settings_web_auth_lifecycle(browser, live_server):
             pass
 
 
-def test_core_flow_txt_import_via_ui_with_preview(page, live_server):
+def test_core_flow_txt_import_via_ui_with_preview(page, live_server, tmp_path):
     """TXT 导入流程：通过界面文件上传控件选择文件，断言分章预览效果并导入。"""
     monitor = PageMonitor(page, "flow_txt_ui_import")
     page.goto(f"{live_server}/#library")
@@ -806,7 +806,7 @@ def test_core_flow_txt_import_via_ui_with_preview(page, live_server):
         "第二章 寒锋初试\n"
         "长剑出鞘，剑气森然。"
     )
-    tmp_txt = ARTIFACTS_DIR / "upload_sample_novel.txt"
+    tmp_txt = tmp_path / "upload_sample_novel.txt"
     tmp_txt.write_text(sample_content, encoding="utf-8")
 
     # 界面上传文件

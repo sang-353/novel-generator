@@ -95,6 +95,8 @@ def test_smoke_visible_buttons_click_response(page, live_server):
         (f"#read/{urllib.parse.quote(test_title)}/0", "#rd_main"),
     ]
 
+    total_buttons_clicked = 0
+
     for view_hash, container_sel in views:
         page.goto(f"{live_server}/{view_hash}")
         page.wait_for_load_state("networkidle")
@@ -118,6 +120,7 @@ def test_smoke_visible_buttons_click_response(page, live_server):
         ).all()
 
         assert len(button_elements) > 0, f"视图 {view_hash} 下未找到任何可见按钮"
+        view_clicked = 0
 
         for idx, btn in enumerate(button_elements):
             if not btn.is_visible():
@@ -141,6 +144,8 @@ def test_smoke_visible_buttons_click_response(page, live_server):
                     pass
 
             page.wait_for_timeout(200)
+            view_clicked += 1
+            total_buttons_clicked += 1
 
             # 1. 验证无控制台报错
             monitor.assert_no_errors(f"视图 {view_hash} 点击按钮 [{btn_text}] (#{btn_id})")
@@ -184,6 +189,10 @@ def test_smoke_visible_buttons_click_response(page, live_server):
                 page.goto(f"{live_server}/{view_hash}")
                 page.wait_for_load_state("networkidle")
                 page.wait_for_timeout(200)
+
+        print(f"\n[Smoke Button Traversal] 视图 {view_hash}: 发现可见按钮 {len(button_elements)} 个，已点击测试 {view_clicked} 个")
+
+    print(f"\n[Smoke Button Traversal] 冒烟测试全视图按钮遍历完毕，共覆盖点击测试了 {total_buttons_clicked} 个交互按钮/链接")
 
 
 def test_smoke_consecutive_modals_no_interference(page, live_server):

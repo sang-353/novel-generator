@@ -15,7 +15,7 @@ import json
 import time
 from pathlib import Path
 import pytest
-from tests.e2e.conftest import PageMonitor, ARTIFACTS_DIR
+from tests.e2e.conftest import PageMonitor
 
 
 MODAL_TARGETS = [
@@ -25,7 +25,6 @@ MODAL_TARGETS = [
     "#history_modal",
     "#import_modal",
     "#shortcuts_modal",
-    "#web_auth_modal",
     "#rd_assist_modal",
     "#rd_settings",
     "#rd_more",
@@ -255,3 +254,25 @@ def test_modal_and_drawer_lifecycle_and_cleanup(page, live_server, modal_id, dat
         assert False, f"缺陷发现：{modal_id} ({data_state}) 经由 [{close_path}] 关闭后，页面中心仍有残留遮罩层拦截点击: {top_element}"
 
     monitor.assert_no_errors(f"{modal_id} [{data_state}] via [{close_path}]")
+
+
+def test_web_auth_modal_cannot_be_bypassed_by_escape_or_mask(page, live_server):
+    """安全门禁弹窗专项验证：产品设计上 web_auth_modal 绝不可通过 Esc、点遮罩关闭。"""
+    page.goto(f"{live_server}/#settings")
+    page.wait_for_load_state("networkidle")
+    page.evaluate("showWebAuthModal()")
+    modal = page.locator("#web_auth_modal")
+    assert modal.is_visible()
+
+    # 尝试按 Esc
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(300)
+    assert modal.is_visible(), "安全缺陷：全站口令弹窗被 Esc 键绕过关闭！"
+
+    # 尝试点遮罩
+    modal.click(position={"x": 10, "y": 10}, force=True)
+    page.wait_for_timeout(300)
+    assert modal.is_visible(), "安全缺陷：全站口令弹窗被点击遮罩绕过关闭！"
+
+    # 恢复隐藏
+    page.evaluate("document.getElementById('web_auth_modal').style.display = 'none'")
