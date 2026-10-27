@@ -2225,13 +2225,6 @@ def api_get_novel(name):
     meta, chapters, words = parse_novel(p, repair=True)
     if _deny_private(meta, token):
         return jsonify({"error": "隐私书架已锁定，请先输入隐私密码", "locked": True}), 403
-    # 若发生了标题修正，写回文件使其持久化
-    raw_meta, raw_chapters, _ = parse_novel(p, repair=False)
-    if [c["title"] for c in raw_chapters] != [c["title"] for c in chapters]:
-        try:
-            write_novel(p, meta, chapters)
-        except Exception:
-            pass
     # 轻量目录模式：仅返回元数据与章节标题/字数，不返回长文本正文
     if request.args.get("toc") or request.args.get("outline"):
         chapter_summaries = [

@@ -650,7 +650,11 @@ async function silentAutoSave() {
       showAutoSaveStatus('saved');
     }
   } catch (e) {
-    showAutoSaveStatus('error', '⚠️ 自动保存出错');
+    if (e.status === 409 || (e.message && e.message.includes('生成中'))) {
+      showAutoSaveStatus('error', '⚠️ 生成中，暂时无法保存');
+    } else {
+      showAutoSaveStatus('error', '⚠️ 自动保存出错');
+    }
   }
 }
 

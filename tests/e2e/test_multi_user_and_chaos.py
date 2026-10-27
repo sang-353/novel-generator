@@ -740,9 +740,9 @@ def test_auto_save_during_generation_retains_content_and_shows_status(page, live
         current_content = page.locator("#rd_edit_body_inp").input_value()
         assert current_content == typed_content, f"编辑内容被静默丢弃，当前输入框为: {current_content}"
 
-        # 7. 断言：保存状态指示器显示明确的错误警示（⚠️ 自动保存出错），而非假装成功（✅ 已自动保存）
+        # 7. 断言：保存状态指示器显示明确的409提示（⚠️ 生成中，暂时无法保存），而非假装成功或泛化报错
         status_text = page.locator("#rd_save_status").text_content()
-        assert "出错" in status_text or "失败" in status_text, f"状态指示器未显示保存出错，实际显示: '{status_text}'"
+        assert "生成中，暂时无法保存" in status_text, f"状态指示器未显示生成中提示，实际显示: '{status_text}'"
 
         # 8. 核查是否有 Toast 弹出（实测与代码分析：silentAutoSave 没有调用 toast()）
         toasts = page.locator(".toast:visible").all_text_contents()
@@ -750,3 +750,51 @@ def test_auto_save_during_generation_retains_content_and_shows_status(page, live
         print(f"\n[AutoSave 409 Probe] Status indicator: '{status_text.encode('ascii', 'replace').decode()}', Has Toast: {has_specific_toast}")
     finally:
         app_module.release_book(title)
+
+
+def test_concurrent_get_and_post_chapter_no_overwrite(live_server, test_env_setup):
+    """
+    小修复 A 验证测试：
+    初始化包含未规范标题（旧标题）的小说；
+    连续并发执行 50 次 GET（请求触发内存标题规范化逻辑）与 50 次 POST 保存同一章；
+    断言最终磁盘上的正文是最新 POST 写入的内容，没有被并发 GET 的只读调用意外覆盖回滚。
+    """
+    import requests
+    import concurrent.futures
+
+    app_module = test_env_setup["app_module"]
+    title = "并发GET与POST测试书"
+    novel_path = app_module.NOVELS_DIR / f"{app_module.sanitize_filename(title)}.md"
+    app_module.write_novel(
+        novel_path,
+        {"title": title, "status": "idle"},
+        [{"title": "第1章【未规范旧标题】", "content": "【初始正文_旧版本】"}]
+    )
+
+    post_contents = [f"【最新修改正文_版本_{i:02d}】" for i in range(50)]
+
+    def do_get():
+        return requests.get(f"{live_server}/api/novels/{title}", timeout=10)
+
+    def do_post(idx, content):
+        return requests.post(
+            f"{live_server}/api/novels/{title}/chapter/0",
+            json={"title": f"第1章 规范新标题_{idx:02d}", "content": content},
+            timeout=10
+        )
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+        futures = []
+        for i in range(50):
+            futures.append(executor.submit(do_get))
+            futures.append(executor.submit(do_post, i, post_contents[i]))
+        concurrent.futures.wait(futures)
+
+    # 验证磁盘最终状态
+    meta, chapters, _ = app_module.parse_novel(novel_path, repair=False)
+    assert len(chapters) == 1
+    disk_content = chapters[0]["content"]
+
+    # 断言：磁盘上的内容绝不是初始旧版本，而是 POST 写入的最新版本之一
+    assert disk_content != "【初始正文_旧版本】", "严重缺陷：并发 GET 覆盖了 POST 保存的新正文！"
+    assert "最新修改正文" in disk_content, f"磁盘内容异常: {disk_content}"

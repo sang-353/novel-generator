@@ -28,6 +28,7 @@ async function api(path, method = 'GET', body = null) {
   }
   if (!r.ok) {
     const err = new Error(data.error || ('请求失败 ' + r.status));
+    err.status = r.status;
     err.locked = !!data.locked;       // 隐私书架未解锁
     throw err;
   }
