@@ -24,6 +24,7 @@ import uuid
 import zipfile
 from datetime import datetime
 from pathlib import Path
+from contextlib import contextmanager
 
 # 依赖引导：优先使用工作区 pylibs 目录中安装的依赖（pip --target 安装）
 _LIBS = Path(__file__).resolve().parent / "pylibs"
@@ -852,6 +853,21 @@ def book_busy(name):
         return name in ACTIVE_BOOKS
 
 
+# 按小说名划分的读-备-写互斥锁（使用 RLock 防重入）
+_NOVEL_IO_LOCKS = {}
+_NOVEL_IO_LOCKS_LOCK = threading.Lock()
+
+
+@contextmanager
+def lock_novel(name_or_stem: str):
+    """按小说文件名获取临界区重入互斥锁（RLock），确保‘读取旧内容 -> 备份快照 -> 写入新内容’成为原子操作。"""
+    stem = sanitize_filename(name_or_stem) if name_or_stem else "default"
+    with _NOVEL_IO_LOCKS_LOCK:
+        lock = _NOVEL_IO_LOCKS.setdefault(stem, threading.RLock())
+    with lock:
+        yield
+
+
 TRASH_DIR = NOVELS_DIR / "_trash"
 CHAPTER_BACKUP_DIR = TRASH_DIR / "chapters"
 
@@ -1527,13 +1543,15 @@ def run_original_job(job, data):
 
             content = generate_text(mk_msgs, max_chars=int(per * 1.6), provider_id=provider_id, on_chunk=on_chunk)
             title_line, body = chapter_title_from(content, i)
-            chapters.append({"title": title_line, "content": body})
-            meta["status"] = "generating"
-            write_novel(path, meta, chapters)
+            with lock_novel(path.stem):
+                chapters.append({"title": title_line, "content": body})
+                meta["status"] = "generating"
+                write_novel(path, meta, chapters)
 
-        meta["status"] = "done"
-        meta["words"] = sum(len(re.sub(r"\s", "", c["content"])) for c in chapters)
-        write_novel(path, meta, chapters)
+        with lock_novel(path.stem):
+            meta["status"] = "done"
+            meta["words"] = sum(len(re.sub(r"\s", "", c["content"])) for c in chapters)
+            write_novel(path, meta, chapters)
         update_job(job, status="done", step="完成", message="生成完成", novel_name=path.stem)
     finally:
         release_book(path.stem)
@@ -1541,9 +1559,10 @@ def run_original_job(job, data):
 
 def _finalize_cancelled(job, path, meta, chapters):
     """任务取消收尾：书标记为 cancelled（保留已生成章节），job 标记已取消。"""
-    meta["status"] = "cancelled"
-    meta["words"] = sum(len(re.sub(r"\s", "", c["content"])) for c in chapters)
-    write_novel(path, meta, chapters)
+    with lock_novel(path.stem):
+        meta["status"] = "cancelled"
+        meta["words"] = sum(len(re.sub(r"\s", "", c["content"])) for c in chapters)
+        write_novel(path, meta, chapters)
     update_job(job, status="cancelled", step="已取消", message="任务已取消", novel_name=path.stem)
 
 
@@ -1590,7 +1609,8 @@ def run_continuation_job(job, data):
                     "备注": "自动继承自原创设定与已有章节",
                 }
             meta["style_profile"] = style_profile
-            write_novel(path, meta, chapters)
+            with lock_novel(path.stem):
+                write_novel(path, meta, chapters)
         if data.get("bible"):
             meta["bible"] = data.get("bible")
         elif "bible" not in data and meta.get("bible"):
@@ -1705,9 +1725,10 @@ def run_continuation_job(job, data):
 
             content = generate_text(mk_msgs, max_chars=int(per * 1.6), provider_id=provider_id, on_chunk=on_chunk)
             title_line, body = chapter_title_from(content, i)
-            chapters.append({"title": title_line, "content": body})
-            meta["status"] = "generating"
-            write_novel(path, meta, chapters)
+            with lock_novel(path.stem):
+                chapters.append({"title": title_line, "content": body})
+                meta["status"] = "generating"
+                write_novel(path, meta, chapters)
 
         meta["rounds"] = meta.get("rounds", []) + [{
             "start": round_start, "end": start + n - 1,
@@ -1719,8 +1740,9 @@ def run_continuation_job(job, data):
         # 滚动摘要：续写内容累计超阈值时增量压缩
         maybe_rollup_summary(meta, chapters, job, provider_id=provider_id)
 
-        meta["status"] = "done"
-        write_novel(path, meta, chapters)
+        with lock_novel(path.stem):
+            meta["status"] = "done"
+            write_novel(path, meta, chapters)
         update_job(job, status="done", step="完成", message="生成完成", novel_name=path.stem)
     finally:
         release_book(path.stem)
@@ -1884,13 +1906,14 @@ def run_rewrite_job(job, data):
 
         content = generate_text(mk_msgs, max_chars=int(per * 1.6), provider_id=provider_id, on_chunk=on_chunk)
         title_line, body = chapter_title_from(content, num)
-        chapters[idx] = {"title": title_line, "content": body}
-        meta["words"] = sum(len(re.sub(r"\s", "", c["content"])) for c in chapters)
-        meta["story_summary"] = ""
-        meta["summary_upto"] = 0
-        meta["status"] = "done"
-        meta.pop("error", None)
-        write_novel(p, meta, chapters)
+        with lock_novel(p.stem):
+            chapters[idx] = {"title": title_line, "content": body}
+            meta["words"] = sum(len(re.sub(r"\s", "", c["content"])) for c in chapters)
+            meta["story_summary"] = ""
+            meta["summary_upto"] = 0
+            meta["status"] = "done"
+            meta.pop("error", None)
+            write_novel(p, meta, chapters)
         update_job(job, status="done", step="重写完成", message=f"第 {num} 章已重写", novel_name=p.stem)
     finally:
         release_book(p.stem)
@@ -1915,10 +1938,11 @@ def run_job_safe(job, data, target_book=None):
             if job.get("novel_name"):
                 p = safe_novel_path(job["novel_name"])
                 if p:
-                    meta, chapters, _ = parse_novel(p)
-                    meta["status"] = "error"
-                    meta["error"] = str(e)
-                    write_novel(p, meta, chapters)
+                    with lock_novel(p.stem):
+                        meta, chapters, _ = parse_novel(p)
+                        meta["status"] = "error"
+                        meta["error"] = str(e)
+                        write_novel(p, meta, chapters)
         except Exception:
             pass
         update_job(job, status="error", step="失败", message=str(e), error=str(e))
@@ -2182,12 +2206,13 @@ def api_set_novel_privacy(name):
     want = bool(data.get("private"))
     if want and not privacy_enabled():
         return jsonify({"error": "请先在「设置 → 隐私密码」中设置密码"}), 400
-    meta, chapters, _ = parse_novel(p)
-    if want:
-        meta["private"] = True
-    else:
-        meta.pop("private", None)
-    write_novel(p, meta, chapters)
+    with lock_novel(p.stem):
+        meta, chapters, _ = parse_novel(p)
+        if want:
+            meta["private"] = True
+        else:
+            meta.pop("private", None)
+        write_novel(p, meta, chapters)
     return jsonify({"ok": True, "private": want, "title": meta.get("title", p.stem)})
 
 
@@ -2259,39 +2284,41 @@ def api_edit_chapter(name, idx):
     p = safe_novel_path(name)
     if not p:
         return jsonify({"error": "小说不存在"}), 404
-    meta, chapters, words = parse_novel(p, repair=False)
-    if _deny_private(meta, token):
-        return jsonify({"error": "隐私书架已锁定，请先输入隐私密码", "locked": True}), 403
-    if idx < 0 or idx >= len(chapters):
-        return jsonify({"error": "章节不存在"}), 404
-    if book_busy(p.stem):
-        return jsonify({"error": "小说正在生成中，暂时无法编辑章节"}), 409
 
-    data = request.get_json(force=True) or {}
-    new_title = data.get("title")
-    new_content = data.get("content")
-    if new_content is None:
-        return jsonify({"error": "章节正文内容不能为空"}), 400
+    with lock_novel(p.stem):
+        meta, chapters, words = parse_novel(p, repair=False)
+        if _deny_private(meta, token):
+            return jsonify({"error": "隐私书架已锁定，请先输入隐私密码", "locked": True}), 403
+        if idx < 0 or idx >= len(chapters):
+            return jsonify({"error": "章节不存在"}), 404
+        if book_busy(p.stem):
+            return jsonify({"error": "小说正在生成中，暂时无法编辑章节"}), 409
 
-    old_ch = chapters[idx]
-    # 编辑前自动备份旧版本快照（可在「设置 -> 章节备份」恢复）
-    _backup_chapter(p.stem, idx, old_ch)
+        data = request.get_json(force=True) or {}
+        new_title = data.get("title")
+        new_content = data.get("content")
+        if new_content is None:
+            return jsonify({"error": "章节正文内容不能为空"}), 400
 
-    if new_title is not None and str(new_title).strip():
-        chapters[idx]["title"] = str(new_title).strip()
-    chapters[idx]["content"] = str(new_content)
+        old_ch = chapters[idx]
+        # 编辑前自动备份旧版本快照（可在「设置 -> 章节备份」恢复）
+        _backup_chapter(p.stem, idx, old_ch)
 
-    c_words = len(re.sub(r"\s+", "", chapters[idx]["content"]))
-    meta["words"] = sum(len(re.sub(r"\s+", "", c.get("content", ""))) for c in chapters)
-    write_novel(p, meta, chapters)
-    return jsonify({
-        "ok": True,
-        "index": idx,
-        "title": chapters[idx]["title"],
-        "content": chapters[idx]["content"],
-        "words": c_words,
-        "total_words": meta["words"]
-    })
+        if new_title is not None and str(new_title).strip():
+            chapters[idx]["title"] = str(new_title).strip()
+        chapters[idx]["content"] = str(new_content)
+
+        c_words = len(re.sub(r"\s+", "", chapters[idx]["content"]))
+        meta["words"] = sum(len(re.sub(r"\s+", "", c.get("content", ""))) for c in chapters)
+        write_novel(p, meta, chapters)
+        return jsonify({
+            "ok": True,
+            "index": idx,
+            "title": chapters[idx]["title"],
+            "content": chapters[idx]["content"],
+            "words": c_words,
+            "total_words": meta["words"]
+        })
 
 
 @app.delete("/api/novels/<name>")
@@ -2324,35 +2351,37 @@ def api_rename_novel(name):
     p = safe_novel_path(name)
     if not p:
         return jsonify({"error": "小说不存在"}), 404
-    meta, chapters, words = parse_novel(p, repair=False)
-    if _deny_private(meta, token):
-        return jsonify({"error": "隐私书架已锁定，请先输入隐私密码", "locked": True}), 403
-    if book_busy(p.stem):
-        return jsonify({"error": "小说正在生成中，暂时无法更改标题"}), 409
 
-    data = request.get_json(force=True) or {}
-    new_title = (data.get("title") or "").strip()
-    if not new_title:
-        return jsonify({"error": "小说标题不能为空"}), 400
+    with lock_novel(p.stem):
+        meta, chapters, words = parse_novel(p, repair=False)
+        if _deny_private(meta, token):
+            return jsonify({"error": "隐私书架已锁定，请先输入隐私密码", "locked": True}), 403
+        if book_busy(p.stem):
+            return jsonify({"error": "小说正在生成中，暂时无法更改标题"}), 409
 
-    new_stem = sanitize_filename(new_title)
-    if not new_stem:
-        return jsonify({"error": "小说标题不合法"}), 400
+        data = request.get_json(force=True) or {}
+        new_title = (data.get("title") or "").strip()
+        if not new_title:
+            return jsonify({"error": "小说标题不能为空"}), 400
 
-    # 同名无需重命名文件
-    if new_stem == p.stem:
+        new_stem = sanitize_filename(new_title)
+        if not new_stem:
+            return jsonify({"error": "小说标题不合法"}), 400
+
+        # 同名无需重命名文件
+        if new_stem == p.stem:
+            meta["title"] = new_title
+            write_novel(p, meta, chapters)
+            return jsonify({"ok": True, "old_name": name, "new_name": p.stem, "title": new_title})
+
+        target = NOVELS_DIR / f"{new_stem}.md"
+        if target.exists():
+            return jsonify({"error": f"已存在名为《{new_title}》的小说，请更换名称"}), 409
+
         meta["title"] = new_title
         write_novel(p, meta, chapters)
-        return jsonify({"ok": True, "old_name": name, "new_name": p.stem, "title": new_title})
-
-    target = NOVELS_DIR / f"{new_stem}.md"
-    if target.exists():
-        return jsonify({"error": f"已存在名为《{new_title}》的小说，请更换名称"}), 409
-
-    meta["title"] = new_title
-    write_novel(p, meta, chapters)
-    p.rename(target)
-    return jsonify({"ok": True, "old_name": name, "new_name": target.stem, "title": new_title})
+        p.rename(target)
+        return jsonify({"ok": True, "old_name": name, "new_name": target.stem, "title": new_title})
 
 
 @app.route("/api/novels/<name>/bible", methods=["GET", "POST"])
@@ -2373,10 +2402,11 @@ def api_novel_bible(name):
 
     data = request.get_json(force=True) or {}
     bible = data.get("bible") or {}
-    meta["bible"] = bible
-    if "job_payload" in meta and isinstance(meta["job_payload"], dict):
-        meta["job_payload"]["bible"] = bible
-    write_novel(p, meta, chapters)
+    with lock_novel(p.stem):
+        meta["bible"] = bible
+        if "job_payload" in meta and isinstance(meta["job_payload"], dict):
+            meta["job_payload"]["bible"] = bible
+        write_novel(p, meta, chapters)
     return jsonify({"ok": True, "bible": bible})
 
 @app.post("/api/novels/<name>/preferences")
@@ -2390,10 +2420,11 @@ def api_set_novel_preferences(name):
         return jsonify({"error": "未解锁隐私小说", "locked": True}), 403
 
     data = request.get_json(force=True) or {}
-    for k in ["preferred_style", "preferred_style_template", "preferred_model", "preferred_perspective", "preferred_words"]:
-        if k in data:
-            meta[k] = data[k]
-    write_novel(p, meta, chapters)
+    with lock_novel(p.stem):
+        for k in ["preferred_style", "preferred_style_template", "preferred_model", "preferred_perspective", "preferred_words"]:
+            if k in data:
+                meta[k] = data[k]
+        write_novel(p, meta, chapters)
     return jsonify({"ok": True, "meta": meta})
 
 
@@ -2403,39 +2434,41 @@ def api_reorder_chapters(name):
     p = safe_novel_path(name)
     if not p:
         return jsonify({"error": "小说不存在"}), 404
-    meta, chapters, words = parse_novel(p, repair=False)
-    if _deny_private(meta, token):
-        return jsonify({"error": "未解锁隐私小说", "locked": True}), 403
-    if book_busy(p.stem):
-        return jsonify({"error": "小说正在生成中，暂时无法调整章节"}), 409
 
-    data = request.get_json(force=True) or {}
-    order = data.get("order")
-    if not isinstance(order, list):
-        return jsonify({"error": "参数 order 必须为列表"}), 400
+    with lock_novel(p.stem):
+        meta, chapters, words = parse_novel(p, repair=False)
+        if _deny_private(meta, token):
+            return jsonify({"error": "未解锁隐私小说", "locked": True}), 403
+        if book_busy(p.stem):
+            return jsonify({"error": "小说正在生成中，暂时无法调整章节"}), 409
 
-    if all(isinstance(x, int) for x in order):
-        if set(order) != set(range(len(chapters))):
-            return jsonify({"error": "章节索引不完整或越界"}), 400
-        chapters = [chapters[i] for i in order]
-    elif all(isinstance(x, dict) for x in order):
-        reordered = []
-        for item in order:
-            idx = item.get("index")
-            if idx is None or not isinstance(idx, int) or idx < 0 or idx >= len(chapters):
-                return jsonify({"error": f"章节索引无效: {idx}"}), 400
-            ch = dict(chapters[idx])
-            if "volume" in item and item["volume"] is not None:
-                ch["volume"] = str(item["volume"]).strip() or "正文"
-            if "title" in item and item["title"]:
-                ch["title"] = str(item["title"]).strip()
-            reordered.append(ch)
-        chapters = reordered
-    else:
-        return jsonify({"error": "order 格式不支持"}), 400
+        data = request.get_json(force=True) or {}
+        order = data.get("order")
+        if not isinstance(order, list):
+            return jsonify({"error": "参数 order 必须为列表"}), 400
 
-    write_novel(p, meta, chapters)
-    return jsonify({"ok": True, "count": len(chapters), "chapters": [{"title": c["title"], "volume": c.get("volume", "正文")} for c in chapters]})
+        if all(isinstance(x, int) for x in order):
+            if set(order) != set(range(len(chapters))):
+                return jsonify({"error": "章节索引不完整或越界"}), 400
+            chapters = [chapters[i] for i in order]
+        elif all(isinstance(x, dict) for x in order):
+            reordered = []
+            for item in order:
+                idx = item.get("index")
+                if idx is None or not isinstance(idx, int) or idx < 0 or idx >= len(chapters):
+                    return jsonify({"error": f"章节索引无效: {idx}"}), 400
+                ch = dict(chapters[idx])
+                if "volume" in item and item["volume"] is not None:
+                    ch["volume"] = str(item["volume"]).strip() or "正文"
+                if "title" in item and item["title"]:
+                    ch["title"] = str(item["title"]).strip()
+                reordered.append(ch)
+            chapters = reordered
+        else:
+            return jsonify({"error": "order 格式不支持"}), 400
+
+        write_novel(p, meta, chapters)
+        return jsonify({"ok": True, "count": len(chapters), "chapters": [{"title": c["title"], "volume": c.get("volume", "正文")} for c in chapters]})
 
 
 @app.get("/api/novels/<name>/chapters/<int:idx>/history")
@@ -2483,42 +2516,44 @@ def api_restore_chapter_snapshot(name, idx):
     p = safe_novel_path(name)
     if not p:
         return jsonify({"error": "小说不存在"}), 404
-    meta, chapters, words = parse_novel(p, repair=False)
-    if _deny_private(meta, token):
-        return jsonify({"error": "未解锁隐私小说", "locked": True}), 403
-    if idx < 0 or idx >= len(chapters):
-        return jsonify({"error": "章节不存在"}), 404
-    if book_busy(p.stem):
-        return jsonify({"error": "小说正在生成中，暂时无法恢复快照"}), 409
 
-    data = request.get_json(force=True) or {}
-    snapshot_id = data.get("snapshot_id")
-    if not snapshot_id:
-        return jsonify({"error": "缺少 snapshot_id 参数"}), 400
+    with lock_novel(p.stem):
+        meta, chapters, words = parse_novel(p, repair=False)
+        if _deny_private(meta, token):
+            return jsonify({"error": "未解锁隐私小说", "locked": True}), 403
+        if idx < 0 or idx >= len(chapters):
+            return jsonify({"error": "章节不存在"}), 404
+        if book_busy(p.stem):
+            return jsonify({"error": "小说正在生成中，暂时无法恢复快照"}), 409
 
-    target_file = CHAPTER_BACKUP_DIR / sanitize_filename(snapshot_id)
-    if not target_file.exists():
-        return jsonify({"error": "快照不存在"}), 404
+        data = request.get_json(force=True) or {}
+        snapshot_id = data.get("snapshot_id")
+        if not snapshot_id:
+            return jsonify({"error": "缺少 snapshot_id 参数"}), 400
 
-    try:
-        snap_data = json.loads(target_file.read_text(encoding="utf-8"))
-    except Exception as e:
-        return jsonify({"error": f"读取快照失败: {e}"}), 500
+        target_file = CHAPTER_BACKUP_DIR / sanitize_filename(snapshot_id)
+        if not target_file.exists():
+            return jsonify({"error": "快照不存在"}), 404
 
-    _backup_chapter(p.stem, idx, chapters[idx])
-    if snap_data.get("title"):
-        chapters[idx]["title"] = snap_data["title"]
-    chapters[idx]["content"] = snap_data.get("content", "")
-    meta["words"] = sum(len(re.sub(r"\s+", "", c.get("content", ""))) for c in chapters)
-    write_novel(p, meta, chapters)
+        try:
+            snap_data = json.loads(target_file.read_text(encoding="utf-8"))
+        except Exception as e:
+            return jsonify({"error": f"读取快照失败: {e}"}), 500
 
-    return jsonify({
-        "ok": True,
-        "index": idx,
-        "title": chapters[idx]["title"],
-        "content": chapters[idx]["content"],
-        "words": len(re.sub(r"\s+", "", chapters[idx]["content"]))
-    })
+        _backup_chapter(p.stem, idx, chapters[idx])
+        if snap_data.get("title"):
+            chapters[idx]["title"] = snap_data["title"]
+        chapters[idx]["content"] = snap_data.get("content", "")
+        meta["words"] = sum(len(re.sub(r"\s+", "", c.get("content", ""))) for c in chapters)
+        write_novel(p, meta, chapters)
+
+        return jsonify({
+            "ok": True,
+            "index": idx,
+            "title": chapters[idx]["title"],
+            "content": chapters[idx]["content"],
+            "words": len(re.sub(r"\s+", "", chapters[idx]["content"]))
+        })
 
 
 @app.post("/api/novels/import-txt")
@@ -2646,67 +2681,69 @@ def api_search_replace(name):
     p = safe_novel_path(name)
     if not p:
         return jsonify({"error": "小说不存在"}), 404
-    meta, chapters, words = parse_novel(p, repair=False)
-    if _deny_private(meta, token):
-        return jsonify({"error": "未解锁隐私小说", "locked": True}), 403
-    if book_busy(p.stem):
-        return jsonify({"error": "小说正在生成中，暂时无法进行全书替换"}), 409
 
-    data = request.get_json(force=True) or {}
-    find_text = str(data.get("find", "")).strip()
-    replace_text = str(data.get("replace", ""))
-    case_sensitive = bool(data.get("case_sensitive", False))
-    use_regex = bool(data.get("regex", False))
-    preview_only = bool(data.get("preview_only", True))
+    with lock_novel(p.stem):
+        meta, chapters, words = parse_novel(p, repair=False)
+        if _deny_private(meta, token):
+            return jsonify({"error": "未解锁隐私小说", "locked": True}), 403
+        if book_busy(p.stem):
+            return jsonify({"error": "小说正在生成中，暂时无法进行全书替换"}), 409
 
-    if not find_text:
-        return jsonify({"error": "查找内容不能为空"}), 400
+        data = request.get_json(force=True) or {}
+        find_text = str(data.get("find", "")).strip()
+        replace_text = str(data.get("replace", ""))
+        case_sensitive = bool(data.get("case_sensitive", False))
+        use_regex = bool(data.get("regex", False))
+        preview_only = bool(data.get("preview_only", True))
 
-    try:
-        flags = 0 if case_sensitive else re.IGNORECASE
-        pattern = re.compile(find_text if use_regex else re.escape(find_text), flags)
-    except Exception as e:
-        return jsonify({"error": f"正则表达式错误: {e}"}), 400
+        if not find_text:
+            return jsonify({"error": "查找内容不能为空"}), 400
 
-    results = []
-    total_matches = 0
-    modified_chapters = 0
+        try:
+            flags = 0 if case_sensitive else re.IGNORECASE
+            pattern = re.compile(find_text if use_regex else re.escape(find_text), flags)
+        except Exception as e:
+            return jsonify({"error": f"正则表达式错误: {e}"}), 400
 
-    for idx, ch in enumerate(chapters):
-        content = ch.get("content", "")
-        matches = list(pattern.finditer(content))
-        if matches:
-            total_matches += len(matches)
-            modified_chapters += 1
-            snippets = []
-            for m in matches[:4]:
-                s = max(0, m.start() - 25)
-                e = min(len(content), m.end() + 25)
-                snippets.append(content[s:e].replace("\n", " "))
-            results.append({
-                "chapter_index": idx,
-                "chapter_title": ch.get("title", f"第{idx+1}章"),
-                "volume": ch.get("volume", "正文"),
-                "matches_count": len(matches),
-                "snippets": snippets
-            })
-            if not preview_only:
-                _backup_chapter(p.stem, idx, ch)
-                ch["content"] = pattern.sub(replace_text, content)
+        results = []
+        total_matches = 0
+        modified_chapters = 0
 
-    if not preview_only and modified_chapters > 0:
-        meta["words"] = sum(len(re.sub(r"\s+", "", c.get("content", ""))) for c in chapters)
-        write_novel(p, meta, chapters)
+        for idx, ch in enumerate(chapters):
+            content = ch.get("content", "")
+            matches = list(pattern.finditer(content))
+            if matches:
+                total_matches += len(matches)
+                modified_chapters += 1
+                snippets = []
+                for m in matches[:4]:
+                    s = max(0, m.start() - 25)
+                    e = min(len(content), m.end() + 25)
+                    snippets.append(content[s:e].replace("\n", " "))
+                results.append({
+                    "chapter_index": idx,
+                    "chapter_title": ch.get("title", f"第{idx+1}章"),
+                    "volume": ch.get("volume", "正文"),
+                    "matches_count": len(matches),
+                    "snippets": snippets
+                })
+                if not preview_only:
+                    _backup_chapter(p.stem, idx, ch)
+                    ch["content"] = pattern.sub(replace_text, content)
 
-    return jsonify({
-        "ok": True,
-        "preview_only": preview_only,
-        "find": find_text,
-        "replace": replace_text,
-        "total_matches": total_matches,
-        "modified_chapters": modified_chapters,
-        "results": results
-    })
+        if not preview_only and modified_chapters > 0:
+            meta["words"] = sum(len(re.sub(r"\s+", "", c.get("content", ""))) for c in chapters)
+            write_novel(p, meta, chapters)
+
+        return jsonify({
+            "ok": True,
+            "preview_only": preview_only,
+            "find": find_text,
+            "replace": replace_text,
+            "total_matches": total_matches,
+            "modified_chapters": modified_chapters,
+            "results": results
+        })
 
 
 @app.get("/api/settings/prompts")
@@ -2815,30 +2852,32 @@ def api_restore_chapter_backup(fname):
     p = safe_novel_path(snap.get("novel", ""))
     if not p:
         return jsonify({"error": "原书已不存在，无法恢复章节"}), 404
-    meta, chapters, _ = parse_novel(p)
-    if _deny_private(meta, _request_token(request.get_json(silent=True) or {})):
-        return jsonify({"error": "隐私书架已锁定，请先输入隐私密码", "locked": True}), 403
-    original_count = int(meta.get("original_count") or 0)
-    idx = int(snap.get("index", 0))
-    if idx < original_count:
-        return jsonify({"error": "原作章节位置不可覆盖"}), 400
-    idx = min(idx, len(chapters))
-    new_ch = {"title": snap.get("title", ""), "content": snap.get("content", "")}
-    if idx < len(chapters):
-        chapters[idx] = new_ch
-    else:
-        chapters.insert(idx, new_ch)
-    meta["words"] = sum(len(re.sub(r"\s", "", c["content"])) for c in chapters)
-    meta["story_summary"] = ""
-    meta["summary_upto"] = 0
-    meta["status"] = "done"
-    meta.pop("error", None)
-    write_novel(p, meta, chapters)
-    try:
-        (CHAPTER_BACKUP_DIR / fname).unlink()
-    except Exception:
-        pass
-    return jsonify({"ok": True, "title": new_ch["title"]})
+
+    with lock_novel(p.stem):
+        meta, chapters, _ = parse_novel(p)
+        if _deny_private(meta, _request_token(request.get_json(silent=True) or {})):
+            return jsonify({"error": "隐私书架已锁定，请先输入隐私密码", "locked": True}), 403
+        original_count = int(meta.get("original_count") or 0)
+        idx = int(snap.get("index", 0))
+        if idx < original_count:
+            return jsonify({"error": "原作章节位置不可覆盖"}), 400
+        idx = min(idx, len(chapters))
+        new_ch = {"title": snap.get("title", ""), "content": snap.get("content", "")}
+        if idx < len(chapters):
+            chapters[idx] = new_ch
+        else:
+            chapters.insert(idx, new_ch)
+        meta["words"] = sum(len(re.sub(r"\s", "", c["content"])) for c in chapters)
+        meta["story_summary"] = ""
+        meta["summary_upto"] = 0
+        meta["status"] = "done"
+        meta.pop("error", None)
+        write_novel(p, meta, chapters)
+        try:
+            (CHAPTER_BACKUP_DIR / fname).unlink()
+        except Exception:
+            pass
+        return jsonify({"ok": True, "title": new_ch["title"]})
 
 
 @app.delete("/api/trash/chapters/<fname>")
@@ -3234,29 +3273,31 @@ def api_delete_chapter(name):
     p = safe_novel_path(name)
     if not p:
         return jsonify({"error": "小说不存在"}), 404
-    data = request.get_json(force=True) or {}
-    idx = int(data.get("index", -1))
-    meta, chapters, _ = parse_novel(p)
-    if _deny_private(meta, _request_token(data)):
-        return jsonify({"error": "隐私书架已锁定，请先输入隐私密码", "locked": True}), 403
-    if book_busy(p.stem):
-        return jsonify({"error": "小说正在生成中，暂时无法删除章节"}), 409
-    original_count = int(meta.get("original_count") or 0)
-    if idx < original_count:
-        return jsonify({"error": "原作章节不可删除"}), 400
-    if idx >= len(chapters):
-        return jsonify({"error": "章节下标越界"}), 400
-    # 先备份被删章节（可到「设置 -> 章节备份」恢复）
-    _backup_chapter(p.stem, idx, chapters[idx])
-    removed = chapters.pop(idx)
-    meta["words"] = sum(len(re.sub(r"\s", "", c["content"])) for c in chapters)
-    # 剧情变了，滚动摘要作废，下次续写时重建
-    meta["story_summary"] = ""
-    meta["summary_upto"] = 0
-    meta["status"] = "done"
-    meta.pop("error", None)
-    write_novel(p, meta, chapters)
-    return jsonify({"ok": True, "removed": removed["title"]})
+
+    with lock_novel(p.stem):
+        data = request.get_json(force=True) or {}
+        idx = int(data.get("index", -1))
+        meta, chapters, _ = parse_novel(p)
+        if _deny_private(meta, _request_token(data)):
+            return jsonify({"error": "隐私书架已锁定，请先输入隐私密码", "locked": True}), 403
+        if book_busy(p.stem):
+            return jsonify({"error": "小说正在生成中，暂时无法删除章节"}), 409
+        original_count = int(meta.get("original_count") or 0)
+        if idx < original_count:
+            return jsonify({"error": "原作章节不可删除"}), 400
+        if idx >= len(chapters):
+            return jsonify({"error": "章节下标越界"}), 400
+        # 先备份被删章节（可到「设置 -> 章节备份」恢复）
+        _backup_chapter(p.stem, idx, chapters[idx])
+        removed = chapters.pop(idx)
+        meta["words"] = sum(len(re.sub(r"\s", "", c["content"])) for c in chapters)
+        # 剧情变了，滚动摘要作废，下次续写时重建
+        meta["story_summary"] = ""
+        meta["summary_upto"] = 0
+        meta["status"] = "done"
+        meta.pop("error", None)
+        write_novel(p, meta, chapters)
+        return jsonify({"ok": True, "removed": removed["title"]})
 
 
 @app.post("/api/novels/<name>/chapters/rewrite")

@@ -578,3 +578,118 @@ def test_concurrent_multithreaded_same_chapter_save(live_server, test_env_setup)
         f"磁盘当前内容: {disk_text}\n"
         f"快照库内容: {snapshot_contents}"
     )
+
+
+def test_reentrant_lock_save_restore_replace_no_deadlock(live_server, test_env_setup):
+    """
+    防重入死锁测试：
+    在同一线程内连续链式触发 保存 -> 恢复快照 -> 搜索替换，
+    断言整个流程秒级完成（带严格超时限制），RLock 不产生任何死锁或卡顿。
+    """
+    import requests
+    title = "防死锁重入链式测试书"
+
+    # 1. 初始导入小说
+    init_res = requests.post(f"{live_server}/api/novels/import-txt", json={
+        "title": title,
+        "text": "第1章 初始测试\n原始正文，测试重入与死锁防护。"
+    }, timeout=5)
+    assert init_res.status_code == 200
+
+    # 2. 连续操作 A：保存修改（触发 lock_novel 并生成快照）
+    save_res = requests.post(f"{live_server}/api/novels/{title}/chapter/0", json={
+        "content": "【第一次修改正文：准备测试恢复】"
+    }, timeout=5)
+    assert save_res.status_code == 200
+
+    # 获取刚产生的快照 ID
+    app_module = test_env_setup["app_module"]
+    backup_dir = app_module.CHAPTER_BACKUP_DIR
+    backup_files = sorted(backup_dir.glob(f"{app_module.sanitize_filename(title)}_0_*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
+    assert len(backup_files) >= 1
+    snap_fname = backup_files[0].name
+
+    # 3. 连续操作 B：恢复快照（再次触发 lock_novel）
+    restore_res = requests.post(f"{live_server}/api/novels/{title}/chapters/0/restore-snapshot", json={
+        "snapshot_id": snap_fname
+    }, timeout=5)
+    assert restore_res.status_code == 200
+
+    # 4. 连续操作 C：全书搜索替换（第三次触发 lock_novel）
+    replace_res = requests.post(f"{live_server}/api/novels/{title}/search-replace", json={
+        "find": "原始正文",
+        "replace": "已替换正文",
+        "preview_only": False
+    }, timeout=5)
+    assert replace_res.status_code == 200
+    assert replace_res.json().get("modified_chapters") >= 1
+
+    # 验证最终磁盘内容正确且无锁死
+    novel_path = app_module.safe_novel_path(title)
+    meta, chapters, _ = app_module.parse_novel(novel_path, repair=False)
+    assert "已替换正文" in chapters[0]["content"]
+
+
+def test_concurrent_save_during_generation_job_integrity(live_server, test_env_setup):
+    """
+    生成任务运行期间（后台生成中），并发保存其他章节：
+    1. 观察并记录自动保存/编辑在生成期间的实际行为（409 还是排队）；
+    2. 等待生成任务结束后，断言最终没有丢章，文件格式完整可解析。
+    """
+    import requests
+    app_module = test_env_setup["app_module"]
+    title = "生成期间并发测试书"
+
+    # 1. 先初始化一本包含第1章的已有小说
+    novel_path = app_module.NOVELS_DIR / f"{app_module.sanitize_filename(title)}.md"
+    app_module.write_novel(
+        novel_path,
+        {"title": title, "status": "idle", "mode": "continuation"},
+        [{"title": "第1章 既有前文", "content": "已有章节初始正文。"}]
+    )
+
+    # 2. 启动一个后台续写任务（对该已有小说生成3章）
+    payload = {
+        "mode": "continuation",
+        "novel_name": title,
+        "chapters": 3,
+        "prompt": "继续推演剧情"
+    }
+    gen_res = requests.post(f"{live_server}/api/generate", json=payload, timeout=10)
+    assert gen_res.status_code == 200
+    job_id = gen_res.json()["job_id"]
+
+    # 3. 在任务生成期间，尝试对同一本书的第1章发起单章保存
+    # 记录实际观察到的行为：由于存在 book_busy 检查，保存被拦截并返回 409
+    observed_statuses = []
+    for _ in range(8):
+        resp = requests.post(
+            f"{live_server}/api/novels/{title}/chapter/0",
+            json={"content": "【生成期间尝试并发保存第1章】"},
+            timeout=5
+        )
+        observed_statuses.append(resp.status_code)
+        if 409 in observed_statuses:
+            break
+        time.sleep(0.02)
+
+    print(f"\n[Generation Concurrency Probe] 生成期间并发编辑接口实际响应状态码: {observed_statuses}")
+    # 断言：在生成任务占用（book_busy）期间，应用返回 409 保护数据一致性，不盲目覆盖
+    assert 409 in observed_statuses
+
+    # 3. 等待生成任务结束（最多等待 15s）
+    for _ in range(30):
+        time.sleep(0.5)
+        j = app_module.JOBS.get(job_id)
+        if j and j.get("status") in ("done", "error", "cancelled"):
+            break
+
+    job = app_module.JOBS.get(job_id)
+    assert job and job.get("status") == "done", f"生成任务异常结束: {job}"
+
+    # 4. 断言最终文件没有丢章、格式解析正常、书籍锁已释放
+    novel_path = app_module.safe_novel_path(title)
+    assert novel_path and novel_path.exists(), "小说文件丢失"
+    meta, chapters, _ = app_module.parse_novel(novel_path, repair=False)
+    assert len(chapters) == 4, f"最终章节数量异常，预期4章，实际: {len(chapters)}"
+    assert not app_module.book_busy(title), "生成完成后书籍锁未释放"
