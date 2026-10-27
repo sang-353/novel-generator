@@ -86,13 +86,6 @@ on('lib_trash_close_btn', () => {
   if (card) card.style.display = 'none';
 });
 
-window.addEventListener('keydown', e => {
-  if (e.key === 'Escape') {
-    const rm = $('rename_modal'); if (rm && rm.classList.contains('show')) rm.classList.remove('show');
-    const bm = $('bible_modal'); if (bm && bm.classList.contains('show')) bm.classList.remove('show');
-  }
-});
-
 // ==================== P2: 全站轻量访问口令拦截与登录 ====================
 async function checkGlobalWebAuth() {
   try {

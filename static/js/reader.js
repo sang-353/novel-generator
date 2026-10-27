@@ -1111,7 +1111,7 @@ async function openReaderBibleModal() {
   if (!readerData) return;
   $('bm_title').textContent = '《' + (readerData.meta.title || readerData.name) + '》设定档案 (Bible)';
   $('bm_status').textContent = '加载中…';
-  $('bible_modal').classList.add('show');
+  openModal('bible_modal', { mask: false, esc: true });
   try {
     const res = await api('/api/novels/' + encodeURIComponent(readerData.name) + '/bible');
     const b = (res && res.bible) || {};
@@ -1134,14 +1134,14 @@ on('bm_save', async () => {
     if (readerData.meta) readerData.meta.bible = b;
     $('bm_status').textContent = '已保存！';
     toast('设定档案已保存，后续续写将以此为准');
-    setTimeout(() => { $('bible_modal').classList.remove('show'); $('bm_status').textContent = ''; }, 600);
+    setTimeout(() => { closeModal('bible_modal'); $('bm_status').textContent = ''; }, 600);
   } catch (e) {
     $('bm_status').textContent = '保存失败：' + e.message;
   }
 });
 
-on('bm_close', () => $('bible_modal').classList.remove('show'));
-on('bm_cancel', () => $('bible_modal').classList.remove('show'));
+on('bm_close', () => closeModal('bible_modal'));
+on('bm_cancel', () => closeModal('bible_modal'));
 on('rd_bible_btn', openReaderBibleModal);
 on('rd_bible_btn_m', openReaderBibleModal);
 
@@ -1665,19 +1665,18 @@ function initStudioPanels() {
   const shortcutsBtn = $('rd_shortcuts_btn');
   if (shortcutsBtn) {
     shortcutsBtn.onclick = () => {
-      const modal = $('shortcuts_modal');
-      if (modal) modal.style.display = 'flex';
+      openModal('shortcuts_modal', { mask: true, esc: true });
     };
   }
   const smClose = $('sm_close');
   const smDone = $('sm_done_btn');
-  if (smClose) smClose.onclick = () => { $('shortcuts_modal').style.display = 'none'; };
-  if (smDone) smDone.onclick = () => { $('shortcuts_modal').style.display = 'none'; };
+  if (smClose) smClose.onclick = () => closeModal('shortcuts_modal');
+  if (smDone) smDone.onclick = () => closeModal('shortcuts_modal');
 
   const hmClose = $('hm_close');
   const hmCancel = $('hm_cancel_btn');
-  if (hmClose) hmClose.onclick = () => { if ($('history_modal')) $('history_modal').style.display = 'none'; };
-  if (hmCancel) hmCancel.onclick = () => { if ($('history_modal')) $('history_modal').style.display = 'none'; };
+  if (hmClose) hmClose.onclick = () => closeModal('history_modal');
+  if (hmCancel) hmCancel.onclick = () => closeModal('history_modal');
 }
 
 function renderOutlineMemo() {
@@ -1815,11 +1814,11 @@ async function openChapterHistoryModal() {
 
   const cancelBtn = $('hm_cancel_btn');
   const closeBtn = $('hm_close');
-  if (cancelBtn) cancelBtn.onclick = () => { modal.style.display = 'none'; };
-  if (closeBtn) closeBtn.onclick = () => { modal.style.display = 'none'; };
+  if (cancelBtn) cancelBtn.onclick = () => closeModal('history_modal');
+  if (closeBtn) closeBtn.onclick = () => closeModal('history_modal');
 
   listEl.innerHTML = '<p class="mini">正在拉取本章历史快照记录…</p>';
-  modal.style.display = 'flex';
+  openModal('history_modal', { mask: true, esc: true });
 
   try {
     const res = await api('/api/novels/' + encodeURIComponent(readerData.name) + '/chapters/' + readerIdx + '/history', 'GET');

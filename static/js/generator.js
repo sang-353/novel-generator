@@ -1730,7 +1730,15 @@ async function openContinueCard(novelName, mode, opts = {}) {
   $('rm_start').textContent = '开始续写';
   $('rm_start').disabled = true;
   showRoundForm();
-  $('round_modal').classList.add('show');
+  openModal('round_modal', {
+    mask: true,
+    esc: true,
+    canClose: () => {
+      const p = $('rm_progress');
+      return !(p && p.style.display !== 'none');
+    },
+    onClose: cleanupRoundModalState
+  });
   try {
     const d = await novelForCard(novelName);
     const meta = d.meta;
@@ -1771,7 +1779,15 @@ async function openRewriteCard(novelName, chapterIdx) {
   $('rm_start').textContent = '开始重写';
   $('rm_start').disabled = true;
   showRoundForm();
-  $('round_modal').classList.add('show');
+  openModal('round_modal', {
+    mask: true,
+    esc: true,
+    canClose: () => {
+      const p = $('rm_progress');
+      return !(p && p.style.display !== 'none');
+    },
+    onClose: cleanupRoundModalState
+  });
   try {
     const d = await novelForCard(novelName);
     const meta = d.meta;
@@ -1803,12 +1819,16 @@ function showRoundProgress() {
 
 let roundJobId = null, roundTimer = null, roundEs = null;
 
-function closeRoundModal() {
-  $('round_modal').classList.remove('show');
+function cleanupRoundModalState() {
   if (roundTimer) { clearInterval(roundTimer); roundTimer = null; }
   if (roundEs) { roundEs.close(); roundEs = null; }
   roundJobId = null;
   roundNovelName = null; roundMode = null; roundChapterIdx = null;
+}
+
+function closeRoundModal() {
+  closeModal('round_modal');
+  cleanupRoundModalState();
 }
 
 on('rm_cancel', closeRoundModal);

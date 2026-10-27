@@ -548,14 +548,16 @@ function openRenameModal(novelName, currentTitle, onDone = null) {
   renameCallback = onDone;
   $('rename_modal_title').textContent = '修改小说标题 · ' + (currentTitle || novelName);
   $('rename_input').value = currentTitle || novelName;
-  $('rename_modal').classList.add('show');
+  openModal('rename_modal', {
+    mask: false,
+    esc: true,
+    onClose: () => { renameTargetName = null; renameCallback = null; }
+  });
   setTimeout(() => $('rename_input').focus(), 150);
 }
 
 function closeRenameModal() {
-  $('rename_modal').classList.remove('show');
-  renameTargetName = null;
-  renameCallback = null;
+  closeModal('rename_modal');
 }
 
 on('btn_cancel_rename', closeRenameModal);
@@ -594,7 +596,7 @@ function initImportTxtModal() {
   if (!modal) return;
 
   function openImportModal() {
-    modal.style.display = 'flex';
+    openModal('import_modal', { mask: false, esc: true });
     if (fileInp) fileInp.value = '';
     if (textInp) textInp.value = '';
     if (titleInp) titleInp.value = '';
@@ -605,7 +607,7 @@ function initImportTxtModal() {
   }
 
   function closeImportModal() {
-    modal.style.display = 'none';
+    closeModal('import_modal');
   }
 
   if (importBtn) importBtn.onclick = openImportModal;

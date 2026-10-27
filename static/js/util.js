@@ -121,3 +121,85 @@ function renderStyleProfile(profile, targetEl = null) {
   if (profile.备注) html += `<div class="profile-sec"><b>备注</b><p>${escapeHtml(String(profile.备注))}</p></div>`;
   box.innerHTML = html || '<p class="mini">（档案内容为空）</p>';
 }
+
+// ==================== 全局通用模态弹窗栈与显隐统一管理 ====================
+const MODAL_STACK = [];
+
+/**
+ * 统一打开模态弹窗，兼容 .show 与 style.display，推入弹窗栈并绑定遮罩点击
+ * @param {string} modalId - 如 'shortcuts_modal' 或 '#shortcuts_modal'
+ * @param {Object} [options]
+ * @param {boolean} [options.mask=true] - 点击遮罩层是否关闭（编辑类传 false）
+ * @param {boolean} [options.esc=true] - 按 Esc 是否关闭
+ * @param {Function} [options.canClose] - 关闭拦截前置判断（返回 false 则阻止关闭）
+ * @param {Function} [options.onClose] - 关闭后的自定义清理回调
+ */
+function openModal(modalId, options = {}) {
+  const id = modalId.replace('#', '');
+  const el = $(id);
+  if (!el) return;
+
+  // 1. 显隐处理：同时兼容 class="show" 与 style.display
+  el.classList.add('show');
+  if (el.style.display === 'none') {
+    el.style.display = 'flex';
+  }
+
+  // 2. 推入活动弹窗栈（若已在栈中先移除再压入栈顶）
+  const existingIdx = MODAL_STACK.findIndex(item => item.id === id);
+  if (existingIdx !== -1) MODAL_STACK.splice(existingIdx, 1);
+  const entry = { id, el, options };
+  MODAL_STACK.push(entry);
+
+  // 3. 点击遮罩背景事件绑定（仅初始化一次）
+  if (!el._modalMaskBound) {
+    el._modalMaskBound = true;
+    el.addEventListener('mousedown', (e) => {
+      // 只有直接点击最外层 mask 容器本身时才触发
+      if (e.target === el) {
+        const cur = MODAL_STACK.find(it => it.id === id);
+        const allowMask = cur && cur.options ? cur.options.mask !== false : true;
+        const canClose = cur && cur.options && cur.options.canClose ? cur.options.canClose() : true;
+        if (allowMask && canClose) {
+          closeModal(id);
+        }
+      }
+    });
+  }
+}
+
+/**
+ * 统一关闭模态弹窗，自动从弹窗栈中移除
+ * @param {string} modalId - 如 'shortcuts_modal' 或 '#shortcuts_modal'
+ */
+function closeModal(modalId) {
+  const id = modalId.replace('#', '');
+  const el = $(id);
+  if (!el) return;
+
+  el.classList.remove('show');
+  if (el.style.display && el.style.display !== 'none') {
+    el.style.display = 'none';
+  }
+
+  const idx = MODAL_STACK.findIndex(item => item.id === id);
+  if (idx !== -1) {
+    const entry = MODAL_STACK.splice(idx, 1)[0];
+    if (entry && entry.options && typeof entry.options.onClose === 'function') {
+      try { entry.options.onClose(); } catch (err) { console.error(err); }
+    }
+  }
+}
+
+// 统一全局 Esc 键调度器：严格只关闭活动弹窗栈顶的那个弹窗
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && MODAL_STACK.length > 0) {
+    const top = MODAL_STACK[MODAL_STACK.length - 1];
+    const allowEsc = top.options ? top.options.esc !== false : true;
+    const canClose = top.options && top.options.canClose ? top.options.canClose() : true;
+    if (allowEsc && canClose) {
+      e.preventDefault();
+      closeModal(top.id);
+    }
+  }
+});

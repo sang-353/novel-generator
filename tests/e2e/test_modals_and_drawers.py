@@ -228,11 +228,20 @@ def test_modal_and_drawer_lifecycle_and_cleanup(page, live_server, modal_id, dat
 
     page.wait_for_timeout(350)
 
-    # 3. 断言组件已关闭
+    # 3. 校验关闭结果与反向设计断言
     if modal_id in ("#rd_settings", "#rd_more"):
         is_still_open = "open" in (target_loc.get_attribute("class") or "")
     else:
         is_still_open = target_loc.is_visible()
+
+    # 编辑类弹窗（重命名、设定集、导入）点遮罩不关闭，防误触丢输入数据（反向断言）
+    if close_path == "mask_click" and modal_id in ("#rename_modal", "#bible_modal", "#import_modal"):
+        assert is_still_open, f"安全反向断言失败：编辑类弹窗 {modal_id} 点击遮罩不应被误关闭，应保持打开！"
+        # 验证完毕后平滑清理弹窗，避免污染后续测试
+        page.evaluate(f"closeModal({json.dumps(modal_id.replace('#', ''))})")
+        page.wait_for_timeout(200)
+        return
+
     if is_still_open:
         # 强制清理以防污染后续独立用例
         page.evaluate(f"""() => {{
@@ -283,3 +292,90 @@ def test_web_auth_modal_cannot_be_bypassed_by_escape_or_mask(page, live_server):
 
     # 恢复隐藏
     page.evaluate("document.getElementById('web_auth_modal').style.display = 'none'")
+
+
+def test_stacked_modals_esc_closes_only_topmost(page, live_server):
+    """
+    多弹窗层叠关闭验证：
+    先开弹窗 A（shortcuts_modal），再开弹窗 B（rename_modal）。
+    断言按一次 Esc 只有顶层 B 关闭、底层 A 仍保持打开；
+    再按一次 Esc，底层 A 才关闭；
+    最后页面中心无残留遮罩层。
+    """
+    page.goto(f"{live_server}/#library")
+    page.wait_for_load_state("networkidle")
+
+    # 1. 打开弹窗 A
+    page.evaluate("openModal('shortcuts_modal', { mask: true, esc: true })")
+    modal_a = page.locator("#shortcuts_modal")
+    page.wait_for_selector("#shortcuts_modal", state="visible")
+    assert modal_a.is_visible(), "弹窗 A (shortcuts_modal) 未成功打开"
+
+    # 2. 打开弹窗 B
+    page.evaluate("openRenameModal('测试书名', '原标题')")
+    modal_b = page.locator("#rename_modal")
+    page.wait_for_selector("#rename_modal", state="visible")
+    assert modal_b.is_visible(), "弹窗 B (rename_modal) 未成功打开"
+    assert modal_a.is_visible(), "弹窗 B 打开后，底层弹窗 A 应仍在 DOM 中打开"
+
+    # 3. 按第一次 Esc：顶层 B 关闭，底层 A 仍打开
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(300)
+    assert not modal_b.is_visible(), "按一次 Esc 后，顶层弹窗 B 应关闭"
+    assert modal_a.is_visible(), "按一次 Esc 后，底层弹窗 A 应保持打开"
+
+    # 4. 按第二次 Esc：底层 A 关闭
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(300)
+    assert not modal_a.is_visible(), "按第二次 Esc 后，底层弹窗 A 应关闭"
+
+    # 5. 校验视口中心无残留遮罩
+    top_element = page.evaluate("""() => {
+        const el = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
+        return el ? { id: el.id, className: el.className, tag: el.tagName } : null;
+    }""")
+    assert top_element is not None
+    cls_str = str(top_element.get("className", "")).lower()
+    assert "mask" not in cls_str and "modal" not in cls_str, f"仍有残留遮罩层: {top_element}"
+
+
+def test_round_modal_progress_mode_cannot_be_closed_by_mask_or_esc(page, live_server):
+    """
+    round_modal 生成进度模式专项验证：
+    在配置模式下支持遮罩和 Esc；
+    但一旦进入生成进度模式（rm_progress 展现），按 Esc 和点击遮罩均不关闭弹窗（防误触中断或丢失进度）。
+    只能通过界面上的关闭/取消任务按钮关闭。
+    """
+    title = "进度模式测试小说"
+    page.goto(f"{live_server}/#continuation")
+    page.wait_for_load_state("networkidle")
+    page.evaluate(f"""() => {{
+        return fetch('/api/novels/import-txt', {{
+            method: 'POST',
+            headers: {{'Content-Type': 'application/json'}},
+            body: JSON.stringify({{ title: {json.dumps(title)}, text: '第1章 序\\n前情测试' }})
+        }}).then(() => openContinueCard({json.dumps(title)}, 'continuation'));
+    }}""")
+    modal = page.locator("#round_modal")
+    page.wait_for_selector("#round_modal", state="visible")
+    assert modal.is_visible()
+
+    # 切换为生成进度展示状态
+    page.evaluate("showRoundProgress()")
+    page.wait_for_timeout(100)
+
+    # 1. 尝试按 Esc，断言弹窗绝不关闭
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(300)
+    assert modal.is_visible(), "进度模式缺陷：按 Esc 意外关闭了正在生成中的 round_modal！"
+
+    # 2. 尝试点击背景遮罩，断言弹窗绝不关闭
+    modal.click(position={"x": 10, "y": 10}, force=True)
+    page.wait_for_timeout(300)
+    assert modal.is_visible(), "进度模式缺陷：点击遮罩意外关闭了正在生成中的 round_modal！"
+
+    # 3. 点击进度区专属的关闭按钮，正常关闭
+    page.locator("#rm_close").click()
+    page.wait_for_timeout(300)
+    assert not modal.is_visible(), "点击 rm_close 按钮未能正常关闭 round_modal"
+
