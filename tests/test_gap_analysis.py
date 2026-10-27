@@ -524,3 +524,26 @@ def test_llm_timeout_and_empty_handling(client):
         r = client.post("/api/generate-bible", json={"genre": "玄幻"})
         assert r.status_code == 500
         assert "error" in r.get_json()
+
+
+def test_api_generate_conflict_when_book_busy(client):
+    """测试同一本书正在生成/处于 busy 状态时，再次调用 /api/generate 应返回 409 且不得创建新任务。"""
+    import app
+    book_title = "独占生成测试书"
+    # 模拟该书已处于 busy 状态
+    app.acquire_book(book_title)
+    try:
+        initial_jobs_count = len(app.JOBS)
+        r = client.post("/api/generate", json={
+            "mode": "original",
+            "title": book_title,
+            "outline": "大纲内容",
+            "chapters": 1
+        })
+        assert r.status_code == 409
+        data = r.get_json()
+        assert "正在生成" in data.get("error", "") or data.get("busy") is True
+        assert len(app.JOBS) == initial_jobs_count, "漏洞：书籍处于 busy 状态时仍然创建了新的任务！"
+    finally:
+        app.release_book(book_title)
+

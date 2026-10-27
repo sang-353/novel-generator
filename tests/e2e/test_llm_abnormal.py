@@ -28,9 +28,9 @@ def test_llm_abnormal_field_drift_and_missing(page, live_server):
 
     # 点击换一批 / 重新生成灵感脑洞
     refresh_tropes_btn = page.locator("#btn_refresh_tropes")
-    if refresh_tropes_btn.is_visible():
-        refresh_tropes_btn.click()
-        page.wait_for_timeout(800)
+    assert refresh_tropes_btn.is_visible(), "未找到换一批按钮 #btn_refresh_tropes"
+    refresh_tropes_btn.click()
+    page.wait_for_timeout(800)
 
     # 2. 断言页面文本绝对不包含恶性字符串
     body_text = page.locator("body").inner_text()
@@ -38,8 +38,7 @@ def test_llm_abnormal_field_drift_and_missing(page, live_server):
     assert "[object Object]" not in body_text, "缺陷：前端将 Object 直接拼接入 HTML，出现了 '[object Object]'！"
 
     # 3. 验证按钮仍然可用可点击（未被锁死）
-    if refresh_tropes_btn.is_visible():
-        assert refresh_tropes_btn.is_enabled(), "灵感生成异常后，换一批按钮被永久禁用锁死！"
+    assert refresh_tropes_btn.is_enabled(), "灵感生成异常后，换一批按钮被永久禁用锁死！"
 
     monitor.assert_no_errors("大模型字段漂移容错")
     FakeLLMState.reset()
@@ -63,9 +62,9 @@ def test_llm_abnormal_malformed_json_resilience(page, live_server):
 
     # 触发大纲推演（此时假 LLM 返回畸形非 JSON）
     outline_btn = page.locator("#btn_outline")
-    if outline_btn.is_visible():
-        outline_btn.click()
-        page.wait_for_timeout(1000)
+    assert outline_btn.is_visible(), "未找到生成大纲按钮 #btn_outline"
+    outline_btn.click()
+    page.wait_for_timeout(1000)
 
     body_text = page.locator("body").inner_text()
     assert "undefined" not in body_text

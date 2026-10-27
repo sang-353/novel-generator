@@ -1669,6 +1669,11 @@ function initStudioPanels() {
   const smDone = $('sm_done_btn');
   if (smClose) smClose.onclick = () => { $('shortcuts_modal').style.display = 'none'; };
   if (smDone) smDone.onclick = () => { $('shortcuts_modal').style.display = 'none'; };
+
+  const hmClose = $('hm_close');
+  const hmCancel = $('hm_cancel_btn');
+  if (hmClose) hmClose.onclick = () => { if ($('history_modal')) $('history_modal').style.display = 'none'; };
+  if (hmCancel) hmCancel.onclick = () => { if ($('history_modal')) $('history_modal').style.display = 'none'; };
 }
 
 function renderOutlineMemo() {
@@ -1804,6 +1809,11 @@ async function openChapterHistoryModal() {
   const listEl = $('hm_snapshots_list');
   if (!modal || !listEl) return;
 
+  const cancelBtn = $('hm_cancel_btn');
+  const closeBtn = $('hm_close');
+  if (cancelBtn) cancelBtn.onclick = () => { modal.style.display = 'none'; };
+  if (closeBtn) closeBtn.onclick = () => { modal.style.display = 'none'; };
+
   listEl.innerHTML = '<p class="mini">正在拉取本章历史快照记录…</p>';
   modal.style.display = 'flex';
 
@@ -1851,11 +1861,6 @@ async function openChapterHistoryModal() {
   } catch (e) {
     listEl.innerHTML = `<p class="mini" style="color:var(--accent);">读取历史快照失败：${escapeHtml(e.message)}</p>`;
   }
-
-  const cancelBtn = $('hm_cancel_btn');
-  const closeBtn = $('hm_close');
-  if (cancelBtn) cancelBtn.onclick = () => { modal.style.display = 'none'; };
-  if (closeBtn) closeBtn.onclick = () => { modal.style.display = 'none'; };
 }
 
 async function triggerQuickContinue() {

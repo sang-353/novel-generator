@@ -696,22 +696,13 @@ function initOriginalStepper() {
   const bWriteAll = $('btn_write_all');
   if (bWriteAll) {
     bWriteAll.onclick = async () => {
-      if (currentOutline) {
-        $('btn_write').click();
+      if (bWriteAll.disabled) return;
+      if (!currentOutline) {
+        toast('请先生成大纲');
+        goToOriginalStep(2);
         return;
       }
-      const payload = originalPayload();
-      bWriteAll.disabled = true;
-      setStatus('og_status', '正在启动全书生成任务…');
-      try {
-        const d = await api('/api/generate', 'POST', payload);
-        startPolling('og', d.job_id, 'og_progress_card', payload.title || '原创小说');
-      } catch (e) {
-        toast('生成失败：' + e.message);
-      } finally {
-        bWriteAll.disabled = false;
-        setStatus('og_status', '');
-      }
+      $('btn_write').click();
     };
   }
 
@@ -1068,16 +1059,40 @@ on('btn_regenerate', () => {
 });
 
 on('btn_write', async () => {
+  const btn = $('btn_write');
+  const btnAll = $('btn_write_all');
+  if ((btn && btn.disabled) || (btnAll && btnAll.disabled)) return;
+
+  if (btn) btn.disabled = true;
+  if (btnAll) btnAll.disabled = true;
+
   const payload = originalPayload();
+  if (!currentOutline) {
+    toast('请先生成大纲');
+    goToOriginalStep(2);
+    if (btn) btn.disabled = false;
+    if (btnAll) btnAll.disabled = false;
+    return;
+  }
   try {
     payload.title = $('og_title').value.trim() || '未命名小说';
     payload.outline = JSON.stringify(collectOutline(), null, 2);
     payload.bible = collectBible();
-  } catch (e) { toast('大纲或设定数据不完整：' + e.message); return; }
+  } catch (e) {
+    toast('大纲或设定数据不完整：' + e.message);
+    if (btn) btn.disabled = false;
+    if (btnAll) btnAll.disabled = false;
+    return;
+  }
+
   try {
     const d = await api('/api/generate', 'POST', payload);
     startPolling('og', d.job_id, 'og_progress_card', payload.title || '未命名小说');
-  } catch (e) { toast(e.message); }
+  } catch (e) {
+    toast(e.message);
+    if (btn) btn.disabled = false;
+    if (btnAll) btnAll.disabled = false;
+  }
 });
 
 
@@ -1477,22 +1492,45 @@ on('ct_open_variants_btn', async () => {
 });
 
 on('btn_continue', async () => {
+  const btn = $('btn_continue');
+  if (btn && btn.disabled) return;
+  if (btn) btn.disabled = true;
+
   const payload = continuationPayload();
   payload.style_profile = styleProfile;
   payload.bible = collectCtBible();
   const useVariants = $('ct_use_variants') && $('ct_use_variants').checked;
   if (useVariants) {
-    await runVariantsFlow(payload);
+    try {
+      await runVariantsFlow(payload);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
     return;
   }
   try {
     const d = await api('/api/generate', 'POST', payload);
     startPolling('ct', d.job_id, 'ct_progress_card', payload.source_title || '未命名续写', 'round');
-  } catch (e) { toast(e.message); }
+  } catch (e) {
+    toast(e.message);
+    if (btn) btn.disabled = false;
+  }
 });
 
 
 // ==================== 任务轮询 ====================
+const activePollingStreams = {};
+const activePollingTimers = {};
+
+function setGenerateButtonsDisabled(prefix, disabled) {
+  if (prefix === 'og') {
+    const b = $('btn_write'); if (b) b.disabled = disabled;
+    const ba = $('btn_write_all'); if (ba) ba.disabled = disabled;
+  } else if (prefix === 'ct') {
+    const bc = $('btn_continue'); if (bc) bc.disabled = disabled;
+  }
+}
+
 // 进度条用 transform: scaleX 驱动（合成器友好，避免 width 触发布局）
 function setBar(id, pct) {
   const el = $(id);
@@ -1502,6 +1540,18 @@ function setBar(id, pct) {
 }
 
 function startPolling(prefix, jobId, cardId, defaultTitle, doneAction = null) {
+  setGenerateButtonsDisabled(prefix, true);
+
+  // 开启新连接前先关闭旧的 EventSource 与轮询计时器
+  if (activePollingStreams[prefix]) {
+    try { activePollingStreams[prefix].close(); } catch (err) {}
+    activePollingStreams[prefix] = null;
+  }
+  if (activePollingTimers[prefix]) {
+    clearInterval(activePollingTimers[prefix]);
+    activePollingTimers[prefix] = null;
+  }
+
   const card = $(cardId); card.style.display = 'block';
   setBar(prefix + '_progress_bar', 0);
   $(prefix + '_progress_text').textContent = '准备中…';
@@ -1522,9 +1572,9 @@ function startPolling(prefix, jobId, cardId, defaultTitle, doneAction = null) {
     if (streamCh) streamCh.textContent = '正文创作实时预览';
   }
 
-  let es = null;
   try {
-    es = new EventSource('/api/jobs/' + jobId + '/stream');
+    const es = new EventSource('/api/jobs/' + jobId + '/stream');
+    activePollingStreams[prefix] = es;
     es.onmessage = e => {
       try {
         const d = JSON.parse(e.data);
@@ -1536,12 +1586,20 @@ function startPolling(prefix, jobId, cardId, defaultTitle, doneAction = null) {
           }
           if (d.step && streamCh) streamCh.textContent = d.step;
         } else if (d.type === 'done') {
-          if (es) { es.close(); es = null; }
+          if (activePollingStreams[prefix]) {
+            try { activePollingStreams[prefix].close(); } catch (err) {}
+            activePollingStreams[prefix] = null;
+          }
           if (liveBadge) liveBadge.style.display = 'none';
         }
       } catch (err) {}
     };
-    es.onerror = () => { if (es) { es.close(); es = null; } };
+    es.onerror = () => {
+      if (activePollingStreams[prefix]) {
+        try { activePollingStreams[prefix].close(); } catch (err) {}
+        activePollingStreams[prefix] = null;
+      }
+    };
   } catch (err) {}
 
   let failCount = 0;
@@ -1573,7 +1631,12 @@ function startPolling(prefix, jobId, cardId, defaultTitle, doneAction = null) {
 
       if (j.status === 'done') {
         clearInterval(timer);
-        if (es) { es.close(); es = null; }
+        activePollingTimers[prefix] = null;
+        if (activePollingStreams[prefix]) {
+          try { activePollingStreams[prefix].close(); } catch (err) {}
+          activePollingStreams[prefix] = null;
+        }
+        setGenerateButtonsDisabled(prefix, false);
         if (liveBadge) liveBadge.style.display = 'none';
         if (cancelBtn) cancelBtn.style.display = 'none';
         $(prefix + '_progress_text').textContent = '生成完成';
@@ -1589,14 +1652,24 @@ function startPolling(prefix, jobId, cardId, defaultTitle, doneAction = null) {
         }
       } else if (j.status === 'error') {
         clearInterval(timer);
-        if (es) { es.close(); es = null; }
+        activePollingTimers[prefix] = null;
+        if (activePollingStreams[prefix]) {
+          try { activePollingStreams[prefix].close(); } catch (err) {}
+          activePollingStreams[prefix] = null;
+        }
+        setGenerateButtonsDisabled(prefix, false);
         if (liveBadge) liveBadge.style.display = 'none';
         if (cancelBtn) cancelBtn.style.display = 'none';
         $(prefix + '_progress_text').textContent = '生成失败：' + j.message;
         toast('生成失败：' + j.message);
       } else if (j.status === 'cancelled') {
         clearInterval(timer);
-        if (es) { es.close(); es = null; }
+        activePollingTimers[prefix] = null;
+        if (activePollingStreams[prefix]) {
+          try { activePollingStreams[prefix].close(); } catch (err) {}
+          activePollingStreams[prefix] = null;
+        }
+        setGenerateButtonsDisabled(prefix, false);
         if (liveBadge) liveBadge.style.display = 'none';
         if (cancelBtn) cancelBtn.style.display = 'none';
         $(prefix + '_progress_text').textContent = '任务已取消（已生成章节保留，可到阅读器「从断点继续」）';
@@ -1606,7 +1679,12 @@ function startPolling(prefix, jobId, cardId, defaultTitle, doneAction = null) {
       failCount++;
       if (failCount >= 6) {
         clearInterval(timer);
-        if (es) { es.close(); es = null; }
+        activePollingTimers[prefix] = null;
+        if (activePollingStreams[prefix]) {
+          try { activePollingStreams[prefix].close(); } catch (err) {}
+          activePollingStreams[prefix] = null;
+        }
+        setGenerateButtonsDisabled(prefix, false);
         if (liveBadge) liveBadge.style.display = 'none';
         if (cancelBtn) cancelBtn.style.display = 'none';
         $(prefix + '_progress_text').textContent = '生成服务连接中断（服务可能已重启）。可刷新页面后到书架「从断点继续」。';
@@ -1614,6 +1692,7 @@ function startPolling(prefix, jobId, cardId, defaultTitle, doneAction = null) {
       }
     }
   }, 1500);
+  activePollingTimers[prefix] = timer;
 }
 
 

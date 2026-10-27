@@ -828,21 +828,23 @@ class JobCancelledError(RuntimeError):
 
 
 # 正在被任务占用的书名（并发保护 + 判定「生成中」是否为僵尸状态）
-ACTIVE_BOOKS = set()
+ACTIVE_BOOKS = {}  # name -> holder (True or job_id)
 ACTIVE_BOOKS_LOCK = threading.Lock()
 
 
-def acquire_book(name):
+def acquire_book(name, holder=True):
     with ACTIVE_BOOKS_LOCK:
         if name in ACTIVE_BOOKS:
+            if holder is not True and ACTIVE_BOOKS.get(name) == holder:
+                return True
             return False
-        ACTIVE_BOOKS.add(name)
+        ACTIVE_BOOKS[name] = holder
         return True
 
 
 def release_book(name):
     with ACTIVE_BOOKS_LOCK:
-        ACTIVE_BOOKS.discard(name)
+        ACTIVE_BOOKS.pop(name, None)
 
 
 def book_busy(name):
@@ -1491,7 +1493,7 @@ def run_original_job(job, data):
     meta["model_used"] = get_provider_meta(provider)
     meta["provider_id"] = provider.get("id")
 
-    if not acquire_book(path.stem):
+    if not acquire_book(path.stem, holder=job["id"]):
         raise BookBusyError(f"《{path.stem}》已有生成任务在进行中，请等待完成或取消后再试。")
     try:
         update_job(job, novel_name=path.stem, step="开始写作")
@@ -1667,7 +1669,7 @@ def run_continuation_job(job, data):
     # 历史续写指示（最近 5 条）
     hist = "\n".join(f"{j+1}. {ins}" for j, ins in enumerate(instructions[-5:]))
 
-    if not acquire_book(path.stem):
+    if not acquire_book(path.stem, holder=job["id"]):
         raise BookBusyError(f"《{path.stem}》已有生成任务在进行中，请等待完成或取消后再试。")
     try:
         update_job(job, novel_name=path.stem, step="开始续写")
@@ -1863,7 +1865,7 @@ def run_rewrite_job(job, data):
             msgs.append({"role": "user", "content": "继续写这一章，接着上面的内容往下写，不要重复。"})
         return msgs
 
-    if not acquire_book(p.stem):
+    if not acquire_book(p.stem, holder=job["id"]):
         raise BookBusyError(f"《{p.stem}》已有生成任务在进行中，请等待完成或取消后再试。")
     try:
         # 重写前自动备份旧章节，可到「设置 -> 章节备份」恢复
@@ -1894,7 +1896,7 @@ def run_rewrite_job(job, data):
         release_book(p.stem)
 
 
-def run_job_safe(job, data):
+def run_job_safe(job, data, target_book=None):
     try:
         mode = data.get("mode")
         if mode == "original":
@@ -1920,6 +1922,9 @@ def run_job_safe(job, data):
         except Exception:
             pass
         update_job(job, status="error", step="失败", message=str(e), error=str(e))
+    finally:
+        if target_book:
+            release_book(target_book)
 
 
 # ---------------------------------------------------------------------------
@@ -3645,6 +3650,21 @@ def api_generate():
         if not data.get("provider_id"):
             data["provider_id"] = get_provider().get("id")
 
+    # 计算目标书名用于排它性校验（复用 book_busy）
+    target_book = None
+    if data.get("novel_name"):
+        _p = safe_novel_path(data["novel_name"])
+        target_book = _p.stem if _p else sanitize_filename(data["novel_name"])
+    elif data.get("source_title"):
+        _p = safe_novel_path(data["source_title"])
+        target_book = _p.stem if _p else sanitize_filename(data["source_title"])
+    elif data.get("title"):
+        _p = safe_novel_path(data["title"])
+        target_book = _p.stem if _p else sanitize_filename(data["title"])
+
+    if target_book and book_busy(target_book):
+        return jsonify({"error": f"小说《{target_book}》正在生成中，请勿重复提交", "busy": True}), 409
+
     mode = data.get("mode")
     if mode == "original":
         if not data.get("outline"):
@@ -3657,7 +3677,11 @@ def api_generate():
     else:
         return jsonify({"error": "未知生成模式"}), 400
 
-    t = threading.Thread(target=run_job_safe, args=(job, data), daemon=True)
+    if target_book:
+        if not acquire_book(target_book, holder=job["id"]):
+            return jsonify({"error": f"小说《{target_book}》正在生成中，请勿重复提交", "busy": True}), 409
+
+    t = threading.Thread(target=run_job_safe, args=(job, data, target_book), daemon=True)
     t.start()
     return jsonify({"job_id": job["id"]})
 

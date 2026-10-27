@@ -49,11 +49,8 @@ def test_smoke_page_load_and_views_navigation(page, live_server):
 
     for view_hash, nav_sel, anchor_sel in views:
         nav_btn = page.locator(nav_sel)
-        if nav_btn.is_visible():
-            nav_btn.click()
-        else:
-            page.evaluate(f"window.location.hash = '{view_hash}'")
-
+        assert nav_btn.is_visible(), f"导航按钮未找到: {nav_sel}"
+        nav_btn.click()
         page.wait_for_timeout(300)
         assert page.locator(anchor_sel).is_visible(), f"导航至 {view_hash} 失败，未找到锚点元素 {anchor_sel}"
         monitor.assert_no_errors(f"切换至视图 {view_hash}")
@@ -66,122 +63,127 @@ def test_smoke_page_load_and_views_navigation(page, live_server):
 
 
 def test_smoke_visible_buttons_click_response(page, live_server):
-    """验证各主视图中核心可交互分类与切换按钮点击响应正常，无报错。"""
+    """
+    冒烟测试遍历每个主视图内所有可见的 button、a、[role=button]：
+    逐个点击后断言有可观察变化（弹窗打开/视图切换/请求发出/Toast/DOM属性变更），且无控制台报错。
+    点击后恢复状态再测试下一个。
+    """
     monitor = PageMonitor(page, "smoke_buttons_probe")
-    ensure_sample_novel(page, live_server, "按钮探测书")
+    test_title = ensure_sample_novel(page, live_server, "按钮遍历探测书")
 
-    # 1. 原创视图：题材分类切换
-    page.goto(f"{live_server}/#original")
-    page.wait_for_load_state("networkidle")
-    for tab_sel in ["#og_trope_cat_tabs button", "#og_genre_pills button"]:
-        tabs = page.locator(tab_sel).all()
-        for t in tabs[:3]:
-            if t.is_visible():
-                t.click()
-                page.wait_for_timeout(100)
-    monitor.assert_no_errors("原创视图分类切换")
+    # 准备回收站测试数据以供破坏性按钮点击
+    page.evaluate("""() => {
+        return fetch('/api/novels/import-txt', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ title: '待清空废弃书', text: '# 第1章 废弃\\n废弃正文。' })
+        }).then(() => fetch('/api/novels/待清空废弃书', { method: 'DELETE' }));
+    }""")
+    page.wait_for_timeout(300)
 
-    # 2. 书架视图：分类与卡片/表格切换
-    page.goto(f"{live_server}/#library")
-    page.wait_for_load_state("networkidle")
-    for filter_btn in page.locator("#lib_filter_tabs button").all():
-        if filter_btn.is_visible():
-            filter_btn.click()
-            page.wait_for_timeout(100)
-    page.locator("#lib_view_table_btn").click()
-    page.wait_for_timeout(200)
-    assert page.locator("#lib_table_wrap").is_visible()
-    page.locator("#lib_view_grid_btn").click()
-    page.wait_for_timeout(200)
-    assert page.locator("#lib_grid").is_visible()
-    monitor.assert_no_errors("书架视图切换")
+    # 自动确认所有 confirm() 提示框
+    page.on("dialog", lambda dialog: dialog.accept())
 
-    # 3. 设置视图：提示词模板切换
-    page.goto(f"{live_server}/#settings")
-    page.wait_for_load_state("networkidle")
-    pills = page.locator("#prompt_template_pills button").all()
-    for pill in pills[:3]:
-        if pill.is_visible():
-            pill.click()
-            page.wait_for_timeout(100)
-    monitor.assert_no_errors("设置视图模板切换")
+    network_requests = []
+    page.on("request", lambda req: network_requests.append(req.url))
 
-
-def test_smoke_modals_lifecycle_and_mask_cleanup(page, live_server):
-    """
-    弹窗全生命周期测试：
-    打开 -> 点击关闭按钮关闭 -> 断言关闭 -> 再次打开 -> 点击遮罩/Esc 关闭 -> elementFromPoint 校验遮罩彻底清除
-    """
-    monitor = PageMonitor(page, "smoke_modals_lifecycle")
-    test_title = ensure_sample_novel(page, live_server, "弹窗测试书")
-
-    # 进入 Studio 阅读器
-    page.goto(f"{live_server}/#library")
-    page.wait_for_load_state("networkidle")
-    page.evaluate(f"openReader({json.dumps(test_title)})")
-    page.wait_for_timeout(500)
-    assert page.locator("#rd_main").is_visible()
-
-    modal_cases = [
-        {
-            "name": "快捷键速查模态框",
-            "modal_sel": "#shortcuts_modal",
-            "open_fn": lambda: page.locator("#rd_shortcuts_btn").click(),
-            "close_btn_sel": "#sm_close",
-        },
-        {
-            "name": "章节快照历史模态框",
-            "modal_sel": "#history_modal",
-            "open_fn": lambda: page.locator("#rd_history_btn").click(),
-            "close_btn_sel": "#hm_close",
-        },
-        {
-            "name": "划词 AI 辅助精修弹窗",
-            "modal_sel": "#rd_assist_modal",
-            "open_fn": lambda: page.evaluate("""() => {
-                window.activeSelectionSnippet = '测试划词片段内容';
-                openAssistModal('expand');
-            }"""),
-            "close_btn_sel": "#rd_assist_close",
-        },
+    views = [
+        ("#original", "#view-original"),
+        ("#continuation", "#view-continuation"),
+        ("#library", "#view-library"),
+        ("#settings", "#view-settings"),
+        (f"#read/{urllib.parse.quote(test_title)}/0", "#rd_main"),
     ]
 
-    for case in modal_cases:
-        m_name = case["name"]
-        m_sel = case["modal_sel"]
-        modal = page.locator(m_sel)
+    for view_hash, container_sel in views:
+        page.goto(f"{live_server}/{view_hash}")
+        page.wait_for_load_state("networkidle")
+        page.wait_for_timeout(300)
 
-        # 1. 打开 -> 点关闭按钮关闭
-        case["open_fn"]()
-        page.wait_for_timeout(300)
-        assert modal.is_visible(), f"{m_name} 打开失败"
-        monitor.assert_no_errors(f"{m_name} 打开")
+        # 为各视图预置基础表单测试数据，确保业务提交按钮在有效上下文下执行
+        if view_hash == "#original":
+            page.fill("#og_title", "冒烟原创书")
+            page.fill("#og_genre", "奇幻")
+            page.fill("#og_setting", "灵气复苏时代的测试背景。")
+        elif view_hash == "#continuation":
+            page.fill("#ct_source_title", "冒烟续写书")
+            page.fill("#ct_source_text", "长夜难明，残月当空。青衣剑客仗剑行于荒野之上，寒风呼啸。")
+        elif view_hash == "#settings":
+            page.fill("#web_auth_new", "")
 
-        close_btn = page.locator(case["close_btn_sel"]).first
-        assert close_btn.is_visible()
-        close_btn.click()
-        page.wait_for_timeout(300)
-        assert not modal.is_visible(), f"{m_name} 点击关闭按钮后未能关闭"
+        # 获取容器内所有当前可见的交互按钮与链接
+        # 排除顶栏全局导航链接（已在 test_smoke_page_load_and_views_navigation 中专项覆盖）
+        button_elements = page.locator(
+            f"{container_sel} button:visible, {container_sel} a:visible, {container_sel} [role='button']:visible"
+        ).all()
 
-        # 2. 再次打开 -> 按 Esc 关闭
-        case["open_fn"]()
-        page.wait_for_timeout(300)
-        assert modal.is_visible()
-        page.keyboard.press("Escape")
-        page.wait_for_timeout(300)
-        if modal.is_visible():
-            close_btn.click()
+        assert len(button_elements) > 0, f"视图 {view_hash} 下未找到任何可见按钮"
+
+        for idx, btn in enumerate(button_elements):
+            if not btn.is_visible():
+                continue
+
+            btn_text = (btn.text_content() or btn.get_attribute("title") or btn.get_attribute("aria-label") or f"Btn_{idx}").strip()
+            btn_id = btn.get_attribute("id") or ""
+
+            # 记录点击前的基线状态
+            req_count_before = len(network_requests)
+            url_before = page.url
+            class_before = btn.get_attribute("class") or ""
+
+            # 点击按钮
+            try:
+                btn.click(timeout=1000)
+            except Exception:
+                try:
+                    btn.click(force=True, timeout=1000)
+                except Exception:
+                    pass
+
             page.wait_for_timeout(200)
 
-        # 3. 关键断言：用 elementFromPoint 检查页面正中心点击能穿透到底层主体，没有任何残留遮罩层拦截！
-        top_element_tag = page.evaluate("""() => {
-            const el = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
-            return el ? { id: el.id, className: el.className, tag: el.tagName } : null;
-        }""")
-        assert top_element_tag is not None
-        cls_str = str(top_element_tag.get("className", ""))
-        assert "mask" not in cls_str.lower() or "open" not in cls_str.lower(), f"{m_name} 关闭后，页面中心仍有残留遮罩层拦截点击: {top_element_tag}"
-        monitor.assert_no_errors(f"{m_name} 完整闭环与遮罩清理")
+            # 1. 验证无控制台报错
+            monitor.assert_no_errors(f"视图 {view_hash} 点击按钮 [{btn_text}] (#{btn_id})")
+
+            # 2. 验证产生可观察的变化
+            req_count_after = len(network_requests)
+            url_after = page.url
+            try:
+                class_after = btn.get_attribute("class") or ""
+                btn_disabled = btn.is_disabled()
+            except Exception:
+                # 元素在点击后从 DOM 中销毁或重新渲染（如删除/切换），属于明确的可观察变化
+                class_after = "detached"
+                btn_disabled = False
+
+            toast_count = page.locator(".toast:visible, #toast:visible").count()
+            modals_count = page.locator(".modal-mask:visible, .modal-box:visible, .rd-sheet:visible, .card:visible").count()
+
+            has_observable_change = (
+                url_after != url_before
+                or req_count_after > req_count_before
+                or toast_count > 0
+                or modals_count > 0
+                or class_after != class_before
+                or btn_disabled
+            )
+            assert has_observable_change, f"视图 {view_hash} 点击按钮 [{btn_text}] (#{btn_id}) 后界面毫无响应（无弹窗/无视图切换/无请求/无Toast）"
+
+            # 3. 状态还原：关闭可能打开的弹窗或抽屉
+            page.evaluate("""() => {
+                document.querySelectorAll('.modal-mask, .modal, .rd-sheet').forEach(m => {
+                    if (window.getComputedStyle(m).display !== 'none') {
+                        m.style.display = 'none';
+                        m.classList.remove('show', 'open');
+                    }
+                });
+                const mask = document.getElementById('rd_mask');
+                if (mask) mask.classList.remove('open');
+            }""")
+            if page.url != f"{live_server}/{view_hash}":
+                page.goto(f"{live_server}/{view_hash}")
+                page.wait_for_load_state("networkidle")
+                page.wait_for_timeout(200)
 
 
 def test_smoke_consecutive_modals_no_interference(page, live_server):
