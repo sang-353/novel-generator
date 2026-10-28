@@ -5,10 +5,25 @@ function syncGenrePillsFromInput() {
   const wrap = $('og_genre_pills');
   if (!inp || !wrap) return;
   const v = inp.value.trim();
+  let inMoreActive = false;
+  let selectedInMore = '';
   wrap.querySelectorAll('.tag-pill').forEach(p => {
     const g = p.dataset.genre || p.textContent.trim();
-    p.classList.toggle('active', g === v);
+    const isActive = (g === v);
+    p.classList.toggle('active', isActive);
+    if (isActive && p.closest('#og2_genre_more')) {
+      inMoreActive = true;
+      selectedInMore = g;
+    }
   });
+  const moreTxt = $('txt_more_genres');
+  if (moreTxt) {
+    moreTxt.textContent = selectedInMore ? `更多题材 · 已选：${selectedInMore}` : '更多题材';
+  }
+  if (inMoreActive) {
+    const moreWrap = $('og2_genre_more_wrap');
+    if (moreWrap) moreWrap.open = true;
+  }
 }
 
 function initGenrePills() {
@@ -523,12 +538,14 @@ function renderTropeList() {
 
   container.innerHTML = filtered.map(t => {
     const origIdx = currentTropesList.indexOf(t);
-    const labelText = escapeHtml(strVal(t.label || t.title) || '灵感脑洞');
-    const iconText = escapeHtml(strVal(t.icon) || '💡');
+    const tagText = escapeHtml(strVal(t.label || t.genre || ''));
+    const titleText = escapeHtml(strVal(t.title || t.name || ''));
+    const descText = escapeHtml(strVal(t.setting || t.storyline || t.desc || ''));
     return `
-      <button type="button" class="trope-pill" data-idx="${origIdx}">
-        <span class="trope-icon">${iconText}</span>
-        <span>${labelText}</span>
+      <button type="button" class="trope-pill og2-card" data-idx="${origIdx}">
+        ${tagText ? `<span class="og2-tag">${tagText}</span>` : ''}
+        <span class="og2-ttl">${titleText}</span>
+        <span class="og2-dsc">${descText}</span>
       </button>
     `;
   }).join('');
@@ -540,14 +557,46 @@ function renderTropeList() {
       applyTropeTemplate(currentTropesList[idx]);
     };
   });
+
+  // 默认只显示前 6 张，其余卡片保留在 DOM 里但折叠
+  const expandWrap = $('og2_trope_expand_wrap');
+  const expandBtn = $('btn_toggle_more_tropes');
+  const expandTxt = $('txt_toggle_more_tropes');
+  if (expandWrap && expandBtn && expandTxt) {
+    container.classList.add('is-collapsed');
+    const total = filtered.length;
+    if (total > 6) {
+      expandWrap.style.display = 'flex';
+      const remaining = total - 6;
+      expandTxt.textContent = `展开更多灵感（还有 ${remaining} 条）`;
+      expandBtn.setAttribute('aria-expanded', 'false');
+      expandBtn.onclick = () => {
+        const isCollapsed = container.classList.contains('is-collapsed');
+        if (isCollapsed) {
+          container.classList.remove('is-collapsed');
+          expandTxt.textContent = '收起';
+          expandBtn.setAttribute('aria-expanded', 'true');
+        } else {
+          container.classList.add('is-collapsed');
+          expandTxt.textContent = `展开更多灵感（还有 ${remaining} 条）`;
+          expandBtn.setAttribute('aria-expanded', 'false');
+        }
+      };
+    } else {
+      expandWrap.style.display = 'none';
+      container.classList.remove('is-collapsed');
+    }
+  }
 }
 
 async function refreshTropes() {
   const btn = $('btn_refresh_tropes');
   if (!btn) return;
-  const origText = btn.innerHTML;
+  const svg = btn.querySelector('svg');
+  const txt = btn.querySelector('span');
   btn.disabled = true;
-  btn.innerHTML = '<span class="rd-spin" style="width:11px;height:11px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:4px;"></span>构思中…';
+  if (svg) svg.classList.add('og2-spin');
+  if (txt) txt.textContent = '构思中…';
 
   try {
     const providerId = $('og_provider') ? $('og_provider').value : null;
@@ -632,7 +681,8 @@ async function refreshTropes() {
     toast(`生成新脑洞失败：${e.message}`);
   } finally {
     btn.disabled = false;
-    btn.innerHTML = origText;
+    if (svg) svg.classList.remove('og2-spin');
+    if (txt) txt.textContent = '换一批';
   }
 }
 
@@ -751,11 +801,13 @@ initOriginalStepper();
 
 on('btn_suggest_titles', async () => {
   const btn = $('btn_suggest_titles');
+  if (!btn) return;
+  const txt = btn.querySelector('span');
   btn.disabled = true;
-  btn.textContent = '✨ 拟名中…';
+  if (txt) txt.textContent = '拟名中…';
   try {
     const d = await api('/api/suggest-titles', 'POST', originalPayload());
-    btn.textContent = '✨ AI 拟名';
+    if (txt) txt.textContent = 'AI 拟名';
     btn.disabled = false;
     const list = $('og_title_list');
     const candWrap = $('og_title_candidates');
@@ -775,7 +827,7 @@ on('btn_suggest_titles', async () => {
       }
     }
   } catch (e) {
-    btn.textContent = '✨ AI 拟名';
+    if (txt) txt.textContent = 'AI 拟名';
     btn.disabled = false;
     toast('拟名失败：' + e.message);
   }

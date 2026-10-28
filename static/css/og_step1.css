@@ -159,23 +159,29 @@
 }
 
 #og_step_1 .og2-section {
-  margin-bottom: 28px;
+  margin-top: 36px;
+  margin-bottom: 0;
+}
+
+#og_step_1 .og2-section:first-child {
+  margin-top: 8px;
 }
 
 #og_step_1 .og2-section-head {
   display: flex;
   align-items: baseline;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 
 #og_step_1 .og2-lbl {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--og2-ink);
+  line-height: 1.4;
 }
 
 #og_step_1 .og2-sub-lbl {
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--og2-sub);
 }
@@ -235,10 +241,9 @@
   font-weight: 600;
 }
 
-/* 更多题材下拉折叠区 */
+/* 更多题材下拉折叠区：展开前后按钮位置保持不变，面板全宽换行呈现 */
 #og_step_1 .og2-more-genres-wrap {
-  display: inline-block;
-  position: relative;
+  display: contents;
 }
 
 #og_step_1 .og2-more-genres-btn {
@@ -281,14 +286,17 @@
 }
 
 #og_step_1 .og2-genre-more {
+  flex-basis: 100%;
+  width: 100%;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 8px;
   padding: 12px;
   background: #F8FAFC;
   border: 1px solid var(--og2-border);
   border-radius: 12px;
+  box-sizing: border-box;
 }
 
 #og_step_1 .og2-genre-field input {
@@ -363,12 +371,47 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
-/* 灵感卡片网格：4x2 等高排布 */
+/* 灵感卡片网格：4x2 等高排布，折叠状态默认隐藏第 7 张及以后的卡片 */
 #og_step_1 .og2-trope-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   align-items: stretch;
   gap: 12px;
+}
+
+#og_step_1 .og2-trope-grid.is-collapsed .trope-pill.og2-card:nth-child(n+7) {
+  display: none;
+}
+
+#og_step_1 .og2-trope-expand-wrap {
+  display: flex;
+  justify-content: center;
+  margin-top: 14px;
+}
+
+#og_step_1 .og2-trope-expand-btn {
+  height: 34px;
+  padding: 0 18px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--og2-muted);
+  border: 1px solid var(--og2-border);
+  background: var(--og2-card-bg);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.14s ease;
+}
+
+#og_step_1 .og2-trope-expand-btn:hover {
+  border-color: var(--og2-ink);
+  color: var(--og2-ink);
+}
+
+#og_step_1 .og2-trope-expand-btn[aria-expanded="true"] svg {
+  transform: rotate(180deg);
 }
 
 #og_step_1 .trope-pill.og2-card {
@@ -379,7 +422,7 @@
   border: 1px solid var(--og2-border);
   background: var(--og2-card-bg);
   transition: all .2s ease;
-  min-height: 110px;
+  min-height: 108px;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -401,7 +444,7 @@
   box-shadow: 0 0 0 1px var(--og2-primary);
 }
 
-/* 灵感卡片内部元素：左对齐与文本截断 */
+/* 灵感卡片内部元素：左对齐，从上往下排，文本截断 */
 #og_step_1 .trope-pill.og2-card .og2-tag {
   display: inline-block;
   max-width: 100%;
@@ -438,7 +481,7 @@
   color: var(--og2-muted);
   line-height: 1.5;
   text-align: left;
-  margin-top: auto;
+  margin-top: 0;
 }
 
 /* ============================================================
@@ -638,4 +681,8 @@
   #og_step_1 .og2-trope-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.og2-spin {
+  animation: rd-spin .8s linear infinite;
 }
