@@ -3357,6 +3357,181 @@ def api_suggest_titles():
         return jsonify({"error": "AI 拟名失败：" + str(e)}), 500
 
 
+def clean_refine_text(text: str) -> str:
+    """清洗 AI 辅助写作输出：去掉 Markdown 代码块、首尾引号、废话前缀与标题列表符号。"""
+    if not text or not str(text).strip():
+        return ""
+    t = str(text).strip()
+    # 1. 移除 Markdown 代码块围栏
+    t = re.sub(r"^```(?:markdown|text)?\s*", "", t)
+    t = re.sub(r"\s*```$", "", t)
+    t = t.strip()
+
+    # 循环清洗外层包裹与前缀（最多3轮）
+    for _ in range(3):
+        prev = t
+        # 移除外层引号（成对的中英文引号）
+        if len(t) >= 2:
+            if (t.startswith("“") and t.endswith("”")) or \
+               (t.startswith('"') and t.endswith('"')) or \
+               (t.startswith("‘") and t.endswith("’")) or \
+               (t.startswith("'") and t.endswith("'")):
+                t = t[1:-1].strip()
+        # 移除开头的招呼废话或引言
+        t = re.sub(r"^(?:好的[，,！!\s]*|当然可以[，,！!\s]*|好的呢[，,！!\s]*|没问题[，,！!\s]*)", "", t).strip()
+        t = re.sub(r"^(?:以下是[^\n：:]*[：:]|为您[^\n：:]*[：:]|这里是[^\n：:]*[：:]|润色如下[：:]|改写如下[：:])\s*", "", t).strip()
+        # 移除开头的标题标记与列表符
+        t = re.sub(r"^(?:【[^\n】]+】\s*|#+\s+|[0-9]+[\.、]\s*|[-*]\s+)", "", t).strip()
+        if t == prev:
+            break
+    return t
+
+
+def build_refine_field_prompt(field: str, mode: str, genre: str = "", title: str = "", setting: str = "", storyline: str = "") -> tuple[str, str]:
+    """构建用于故事背景（setting）或故事主线（storyline）的 AI 辅助写作提示词。
+
+    返回 (sys_prompt, user_prompt)
+    """
+    target_text = setting if field == "setting" else storyline
+
+    sys_prompt = (
+        "你是一位顶级网络小说资深策划与金牌主编，精通各类网络小说设定推演与主线剧情架构。\n"
+        "【严格输出规范】\n"
+        "1. 只输出最终的正文内容，严禁输出任何问候开场白（如'好的'、'为您整理'）、解释说明、标签标题（如'【故事背景】'）或总结；\n"
+        "2. 严禁使用 Markdown 代码块（```）包裹，严禁在首尾加引号；\n"
+        "3. 输出为单一纯文本段落，语言精炼、富有画面感与戏剧张力。"
+    )
+
+    context_parts = []
+    if genre:
+        context_parts.append(f"小说题材：{genre}")
+    if title:
+        context_parts.append(f"小说书名：《{title}》")
+    if field == "storyline" and setting.strip():
+        context_parts.append(f"世界观背景设定：\n{setting.strip()}")
+
+    context_str = "\n".join(context_parts)
+    if context_str:
+        context_str = "【已知上下文】：\n" + context_str + "\n\n"
+
+    if mode == "regen":
+        avoid_ref = ""
+        if target_text.strip():
+            avoid_ref = f"【原有内容（仅供参考，避免思路撞车或重复，无需保留原内容）】：\n{target_text.strip()}\n\n"
+
+        if field == "setting":
+            task_instruction = (
+                "【任务要求】：\n"
+                "请为这部小说重新设计一段全新、独特且富有戏剧张力的「故事背景与核心设定」。\n"
+                "交代世界运行规则、核心反差或独特机制，篇幅严格控制在 80–300 字之间。"
+            )
+        else:  # storyline
+            task_instruction = (
+                "【任务要求】：\n"
+                "请结合世界观设定与题材，为这部小说重新构思一段全新且极具吸引力的「故事主线与核心冲突」。\n"
+                "点明主角核心目标、面临的巨大危机与核心推进脉络，篇幅严格控制在 80–300 字之间。"
+            )
+        user_prompt = f"{context_str}{avoid_ref}{task_instruction}\n\n请直接输出全新构思的正文段落："
+
+    elif mode == "polish":
+        task_instruction = (
+            "【任务要求】：\n"
+            f"请对以下【待润色原文】进行语言与行文润色，提升文采、表达质感与叙事节奏。\n"
+            "严格规则：只润色语言表达，绝对不改变原文的既有事实、人物身份、核心设定或情节走向！\n"
+            "篇幅控制在 80–300 字之间。\n\n"
+            f"【待润色原文】：\n{target_text.strip()}\n"
+        )
+        user_prompt = f"{context_str}{task_instruction}\n请直接输出润色后的正文段落："
+
+    else:  # expand
+        task_instruction = (
+            "【任务要求】：\n"
+            f"请在以下【待扩充原文】的基础上进行细节扩充与丰富。\n"
+            "严格规则：深入挖掘细部（五感体验、环境氛围、规则机制或冲突层次），必须完全契合原有既定设定，不得推翻或违背原意！\n"
+            "篇幅控制在 150–400 字之间。\n\n"
+            f"【待扩充原文】：\n{target_text.strip()}\n"
+        )
+        user_prompt = f"{context_str}{task_instruction}\n请直接输出扩充后的正文段落："
+
+    return sys_prompt, user_prompt
+
+
+@app.post("/api/refine-field")
+def api_refine_field():
+    """故事背景 / 故事主线 AI 辅助写作：换个 (regen)、润色 (polish)、扩充 (expand)。"""
+    data = request.get_json(force=True) or {}
+    field = data.get("field")
+    mode = data.get("mode")
+
+    if field not in ("setting", "storyline"):
+        return jsonify({"error": "参数 field 必须为 setting 或 storyline"}), 400
+    if mode not in ("regen", "polish", "expand"):
+        return jsonify({"error": "参数 mode 必须为 regen、polish 或 expand"}), 400
+
+    # 字段类型校验：所有字段必须是字符串
+    for k in ("genre", "title", "setting", "storyline"):
+        v = data.get(k, "")
+        if not isinstance(v, str):
+            return jsonify({"error": f"字段 {k} 必须为字符串类型"}), 400
+
+    provider_id = data.get("provider_id")
+    if provider_id is not None and not isinstance(provider_id, str):
+        return jsonify({"error": "字段 provider_id 必须为字符串类型"}), 400
+
+    genre = data.get("genre", "").strip()
+    title = data.get("title", "").strip()
+    setting = data.get("setting", "").strip()
+    storyline = data.get("storyline", "").strip()
+
+    # 单字段最长 4000 字限制（超出返回 400，不静默截断）
+    for k, val in [("genre", data.get("genre", "")), ("title", data.get("title", "")),
+                   ("setting", data.get("setting", "")), ("storyline", data.get("storyline", ""))]:
+        if len(val) > 4000:
+            return jsonify({"error": f"字段 {k} 长度超出限制（最多 4000 字）"}), 400
+
+    target_text = setting if field == "setting" else storyline
+    if mode in ("polish", "expand"):
+        if not target_text:
+            return jsonify({"error": "请先写一点内容"}), 400
+    elif mode == "regen":
+        if not genre and not title:
+            return jsonify({"error": "请先选择题材或填写书名"}), 400
+
+    # 检查大模型配置
+    provider = get_provider(provider_id)
+    if not provider or not provider.get("api_key"):
+        return jsonify({"error": "未配置 API Key，请先在「设置」页填写。"}), 400
+
+    sys_prompt, user_prompt = build_refine_field_prompt(
+        field=field,
+        mode=mode,
+        genre=genre,
+        title=title,
+        setting=setting,
+        storyline=storyline,
+    )
+
+    try:
+        content, _ = chat(
+            [
+                {"role": "system", "content": sys_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            max_tokens=800,
+            temperature=0.75,
+            provider_id=provider_id,
+        )
+        cleaned = clean_refine_text(content)
+        if not cleaned:
+            return jsonify({"error": "AI 生成内容为空，请重试"}), 502
+        return jsonify({"text": cleaned})
+    except Exception as e:
+        err_msg = str(e)
+        if "未配置 API Key" in err_msg:
+            return jsonify({"error": err_msg}), 400
+        return jsonify({"error": f"AI 辅助写作失败：{err_msg}"}), 502
+
+
 @app.route("/api/suggest-tropes", methods=["GET", "POST"], strict_slashes=False)
 def api_suggest_tropes():
     """实时生成一批富有创意且结构化的小说灵感脑洞模板。"""

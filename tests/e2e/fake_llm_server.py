@@ -71,7 +71,7 @@ class FakeLLMHandler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(length)
         data = json.loads(body.decode("utf-8")) if body else {}
-        FakeLLMState.set_mode(data.get("mode", "normal"), data.get("custom_response"))
+        FakeLLMState.set_mode(data.get("mode", "normal"), data.get("custom_response"), data.get("target_feature"))
         self.send_response(200)
         self._send_cors()
         self.send_header("Content-Type", "application/json")
@@ -91,6 +91,30 @@ class FakeLLMHandler(BaseHTTPRequestHandler):
 
         messages = payload.get("messages", [])
         is_stream = bool(payload.get("stream", False))
+
+        full_prompt = " ".join([m.get("content", "") for m in messages])
+        feature_matches = True
+        if target_feature:
+            if target_feature == "suggest-tropes":
+                feature_matches = any(k in full_prompt for k in ["灵感开局", "策划", "suggest-tropes"])
+            elif target_feature == "generate-bible":
+                feature_matches = any(k in full_prompt for k in ["世界观与角色设定集", "World & Character Bible", "generate-bible"])
+            elif target_feature == "outline":
+                feature_matches = any(k in full_prompt for k in ["章节大纲", "outline"]) and not any(k in full_prompt for k in ["世界观与角色设定集", "World & Character Bible"])
+            elif target_feature == "generate-variants":
+                feature_matches = any(k in full_prompt for k in ["剧情小样", "variants"])
+            elif target_feature == "refine-field":
+                feature_matches = any(k in full_prompt for k in ["故事背景与核心设定", "故事主线与核心冲突", "refine-field"])
+
+        if feature_matches and mode == "error":
+            self.send_response(500)
+            self._send_cors()
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            self.wfile.write(b'{"error": {"message": "Simulated upstream LLM error"}}')
+            self.close_connection = True
+            return
 
         content = self._generate_response_content(messages, mode, custom_response, target_feature)
 
@@ -155,6 +179,8 @@ class FakeLLMHandler(BaseHTTPRequestHandler):
                 feature_matches = any(k in full_prompt for k in ["章节大纲", "outline"]) and not any(k in full_prompt for k in ["世界观与角色设定集", "World & Character Bible"])
             elif target_feature == "generate-variants":
                 feature_matches = any(k in full_prompt for k in ["剧情小样", "variants"])
+            elif target_feature == "refine-field":
+                feature_matches = any(k in full_prompt for k in ["故事背景与核心设定", "故事主线与核心冲突", "refine-field"])
 
         # 检查是否为异常模拟模式
         if feature_matches and mode != "normal":
@@ -162,6 +188,8 @@ class FakeLLMHandler(BaseHTTPRequestHandler):
                 return "This is a malformed non-JSON response from LLM ```bad format"
             elif mode == "empty":
                 return ""
+            elif mode == "fenced":
+                return "```markdown\n好的，为你生成的正文如下：\n“在九大星环崩解的废土纪元，人类退守最后的三座悬空浮岛。遗落的史前核心成为了争夺的唯一生机。”\n```"
             elif mode == "top_level_array":
                 return '[{"title": "顶层数组书", "label": "测试标签", "genre": "都市", "icon": "💡"}]'
             elif mode == "field_drift":
@@ -330,6 +358,9 @@ class FakeLLMHandler(BaseHTTPRequestHandler):
 
         elif "改写" in full_prompt or "精修" in full_prompt or "selection-assist" in full_prompt:
             return "【AI 润色优化正文】林越凝神细听，阴冷潮湿的风顺着金属甬道深处灌入，空气中弥漫着刺鼻的臭氧与机油焦味。他握紧手中的扳手，指节因用力而微微泛白。"
+
+        elif "故事背景与核心设定" in full_prompt or "故事主线与核心冲突" in full_prompt or "refine-field" in full_prompt:
+            return "在九大星环崩解的废土纪元，人类退守最后的三座悬空浮岛。地表已彻底被高能辐射与旧日机械狂潮吞噬，遗落的史前核心成为了各大流民军团与浮岛贵族争夺的唯一生机。"
 
         # 默认正文生成输出
         return (

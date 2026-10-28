@@ -1,0 +1,641 @@
+/* ============================================================
+   NovelStudio · 原创小说生成第1步视觉样式 (og_step1.css)
+   基于设计稿视觉规范：高雅纸感背景、石板墨黑字色、皇家钴蓝主色
+   所有规则均严格限定在 #view-original / #og_step_1 作用域内
+   全文件零优先级覆盖
+   ============================================================ */
+
+#view-original {
+  --og2-bg: #F8F9FA;
+  --og2-ink: #0F172A;
+  --og2-sub: #334155;
+  --og2-muted: #64748B;
+  --og2-border: #E2E8F0;
+  --og2-border-hover: #CBD5E1;
+  --og2-line-field: #CBD5E1;
+  --og2-card-bg: #FFFFFF;
+  --og2-primary: #2563EB;
+  --og2-primary-hover: #1D4ED8;
+  --og2-primary-light: #EFF6FF;
+  --og2-tag-bg: #DBEAFE;
+  --og2-seg-bg: #F1F5F9;
+  box-sizing: border-box;
+}
+
+#view-original .og2-card-wrap {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 24px 32px;
+  max-width: 1140px;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+#view-original .og2-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+#view-original .og2-clear-btn {
+  font-size: 13px;
+  color: var(--og2-muted);
+  border-radius: 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--og2-border);
+  background: var(--og2-card-bg);
+  cursor: pointer;
+  transition: all .14s ease;
+}
+
+#view-original .og2-clear-btn:hover {
+  border-color: var(--og2-ink);
+  color: var(--og2-ink);
+}
+
+/* ============================================================
+   步骤向导指示条：圆点 + 标题 + 连接线 (flex 均匀排布)
+   去掉外层边框、深色渐变与毛玻璃
+   ============================================================ */
+#view-original #og_stepper_bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  padding: 12px 16px 20px 16px;
+  margin-bottom: 20px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+#view-original #og_stepper_bar .stepper-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+#view-original #og_stepper_bar .stepper-line {
+  flex: 1;
+  height: 2px;
+  background: var(--og2-border);
+  margin: 0 16px;
+  min-width: 20px;
+  transition: background 0.2s ease;
+}
+
+#view-original #og_stepper_bar .step-num {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  border: 2px solid var(--og2-border);
+  background: var(--og2-card-bg);
+  color: var(--og2-muted);
+  transition: all 0.2s ease;
+}
+
+#view-original #og_stepper_bar .step-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--og2-muted);
+  white-space: nowrap;
+}
+
+/* 当前步骤：主色实心圆 */
+#view-original #og_stepper_bar .stepper-step.active .step-num {
+  background: var(--og2-primary);
+  border-color: var(--og2-primary);
+  color: #FFFFFF;
+}
+
+#view-original #og_stepper_bar .stepper-step.active .step-title {
+  color: var(--og2-ink);
+  font-weight: 600;
+}
+
+/* 已完成步骤：打勾圆圈 */
+#view-original #og_stepper_bar .stepper-step.done .step-num {
+  background: var(--og2-primary);
+  border-color: var(--og2-primary);
+  color: transparent;
+  position: relative;
+}
+
+#view-original #og_stepper_bar .stepper-step.done .step-num::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 5px;
+  width: 5px;
+  height: 9px;
+  border: solid #FFFFFF;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+#view-original #og_stepper_bar .stepper-step.done .step-title {
+  color: var(--og2-ink);
+}
+
+/* ============================================================
+   第 1 步面板全局样式
+   ============================================================ */
+#og_step_1 {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+#og_step_1 .og2-section {
+  margin-bottom: 28px;
+}
+
+#og_step_1 .og2-section-head {
+  display: flex;
+  align-items: baseline;
+  margin-bottom: 12px;
+}
+
+#og_step_1 .og2-lbl {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--og2-ink);
+}
+
+#og_step_1 .og2-sub-lbl {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--og2-sub);
+}
+
+#og_step_1 .og2-hint {
+  font-size: 12.5px;
+  color: var(--og2-muted);
+  font-weight: 400;
+  margin-left: 8px;
+}
+
+/* ============================================================
+   1 · 题材选择胶囊与展开区
+   ============================================================ */
+#og_step_1 .og2-genre-rack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+  margin-bottom: 12px;
+}
+
+#og_step_1 .og2-genre-primary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+#og_step_1 .tag-pill.og2-chip {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--og2-border);
+  background: var(--og2-card-bg);
+  color: var(--og2-sub);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all .14s ease;
+  box-shadow: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+#og_step_1 .tag-pill.og2-chip:hover {
+  border-color: var(--og2-ink);
+  color: var(--og2-ink);
+}
+
+#og_step_1 .tag-pill.og2-chip.active {
+  background: var(--og2-ink);
+  border-color: var(--og2-ink);
+  color: #FFFFFF;
+  font-weight: 600;
+}
+
+/* 更多题材下拉折叠区 */
+#og_step_1 .og2-more-genres-wrap {
+  display: inline-block;
+  position: relative;
+}
+
+#og_step_1 .og2-more-genres-btn {
+  list-style: none;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px dashed var(--og2-border-hover);
+  background: var(--og2-card-bg);
+  color: var(--og2-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  user-select: none;
+  transition: all .14s ease;
+}
+
+#og_step_1 .og2-more-genres-btn::-webkit-details-marker {
+  display: none;
+}
+
+#og_step_1 .og2-more-genres-btn:hover {
+  border-color: var(--og2-ink);
+  color: var(--og2-ink);
+}
+
+#og_step_1 .og2-more-genres-wrap[open] .og2-more-genres-btn {
+  border-style: solid;
+  border-color: var(--og2-ink);
+  color: var(--og2-ink);
+  background: #F1F5F9;
+}
+
+#og_step_1 .og2-more-genres-wrap[open] .og2-more-genres-btn svg {
+  transform: rotate(180deg);
+}
+
+#og_step_1 .og2-genre-more {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 12px;
+  background: #F8FAFC;
+  border: 1px solid var(--og2-border);
+  border-radius: 12px;
+}
+
+#og_step_1 .og2-genre-field input {
+  height: 42px;
+  font-size: 14px;
+}
+
+/* ============================================================
+   2 · 挑一个灵感：去灰色底盒、卡片网格等高、左对齐与CSS省略
+   ============================================================ */
+#view-original .trope-templates-wrap#og_trope_wrap {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+}
+
+#og_step_1 .og2-trope-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+#og_step_1 .og2-trope-title-wrap {
+  display: flex;
+  align-items: baseline;
+}
+
+#og_step_1 .og2-trope-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* 灵感分类紧凑分段控件 */
+#view-original #og_trope_cat_tabs {
+  display: inline-flex;
+  align-items: center;
+  background: var(--og2-seg-bg);
+  padding: 3px;
+  border-radius: 8px;
+  gap: 2px;
+  margin: 6px 0 14px 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+#view-original #og_trope_cat_tabs .trope-cat-tab {
+  border: none;
+  background: transparent;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--og2-muted);
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+#view-original #og_trope_cat_tabs .trope-cat-tab:hover {
+  color: var(--og2-ink);
+}
+
+#view-original #og_trope_cat_tabs .trope-cat-tab.active {
+  background: var(--og2-card-bg);
+  color: var(--og2-ink);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* 灵感卡片网格：4x2 等高排布 */
+#og_step_1 .og2-trope-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  align-items: stretch;
+  gap: 12px;
+}
+
+#og_step_1 .trope-pill.og2-card {
+  position: relative;
+  text-align: left;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--og2-border);
+  background: var(--og2-card-bg);
+  transition: all .2s ease;
+  min-height: 110px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  box-sizing: border-box;
+  cursor: pointer;
+  width: 100%;
+}
+
+#og_step_1 .trope-pill.og2-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px -6px rgba(15, 23, 42, 0.12);
+  border-color: var(--og2-border-hover);
+}
+
+#og_step_1 .trope-pill.og2-card.active {
+  border-color: var(--og2-primary);
+  background: var(--og2-primary-light);
+  box-shadow: 0 0 0 1px var(--og2-primary);
+}
+
+/* 灵感卡片内部元素：左对齐与文本截断 */
+#og_step_1 .trope-pill.og2-card .og2-tag {
+  display: inline-block;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--og2-primary);
+  background: var(--og2-tag-bg);
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  text-align: left;
+}
+
+#og_step_1 .trope-pill.og2-card .og2-ttl {
+  display: block;
+  width: 100%;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--og2-ink);
+  margin-bottom: 6px;
+  line-height: 1.4;
+  text-align: left;
+}
+
+#og_step_1 .trope-pill.og2-card .og2-dsc {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 12.5px;
+  color: var(--og2-muted);
+  line-height: 1.5;
+  text-align: left;
+  margin-top: auto;
+}
+
+/* ============================================================
+   按钮层级与形态规范
+   - 视图内仅保留"下一步"一个蓝色实心主按钮
+   - 其余全部使用描边次按钮
+   ============================================================ */
+#og_step_1 .og2-btn {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid var(--og2-border);
+  background: var(--og2-card-bg);
+  color: var(--og2-ink);
+  transition: all .14s ease;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+#og_step_1 .og2-btn svg {
+  flex: none;
+}
+
+#og_step_1 .og2-btn:hover {
+  border-color: var(--og2-ink);
+  background: #F8FAFC;
+}
+
+#og_step_1 .og2-btn:active {
+  transform: scale(.98);
+}
+
+#og_step_1 .og2-btn-sec {
+  border: 1px solid var(--og2-border);
+  background: var(--og2-card-bg);
+  color: var(--og2-ink);
+}
+
+#og_step_1 .og2-btn-sm {
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12.5px;
+}
+
+#og_step_1 .og2-btn-pri {
+  background: var(--og2-primary);
+  border-color: var(--og2-primary);
+  color: #FFFFFF;
+  font-weight: 600;
+}
+
+#og_step_1 .og2-btn-pri:hover {
+  background: var(--og2-primary-hover);
+  border-color: var(--og2-primary-hover);
+  color: #FFFFFF;
+}
+
+/* ============================================================
+   3 · 完善设定表单区
+   ============================================================ */
+#og_step_1 .og2-inputs-group {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+#og_step_1 .og2-field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+#og_step_1 .og2-field {
+  border: 1px solid var(--og2-line-field);
+  border-radius: 10px;
+  background: var(--og2-card-bg);
+  transition: all .14s ease;
+  box-sizing: border-box;
+}
+
+#og_step_1 .og2-field:focus-within {
+  border-color: var(--og2-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+#og_step_1 .og2-field input,
+#og_step_1 .og2-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 14.5px;
+  line-height: 1.7;
+  color: var(--og2-ink);
+  padding: 12px 14px;
+  resize: none;
+}
+
+#og_step_1 .og2-field input {
+  height: 44px;
+  padding-top: 0;
+  padding-bottom: 0;
+  font-size: 14.5px;
+  font-weight: 500;
+}
+
+/* ============================================================
+   底部下一步动作条
+   ============================================================ */
+#og_step_1 .og2-nav-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 0 32px;
+  border-top: 1px solid var(--og2-border);
+  margin-top: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+#og_step_1 .og2-nav-hint {
+  font-size: 13px;
+  color: var(--og2-muted);
+}
+
+#og_step_1 .og2-btn-next {
+  height: 44px;
+  padding: 0 24px;
+  font-size: 14.5px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ============================================================
+   移动端与响应式自适应 (768px / 520px / 375px)
+   ============================================================ */
+@media (max-width: 900px) {
+  #og_step_1 .og2-trope-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  #view-original .og2-card-wrap {
+    padding: 16px 14px;
+  }
+
+  #view-original #og_stepper_bar {
+    padding: 8px 4px 16px 4px;
+  }
+
+  #view-original #og_stepper_bar .stepper-line {
+    margin: 0 8px;
+    min-width: 12px;
+  }
+
+  #view-original #og_stepper_bar .stepper-step {
+    gap: 6px;
+  }
+
+  #view-original #og_stepper_bar .step-title {
+    font-size: 12.5px;
+  }
+
+  #og_step_1 .og2-trope-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  #og_step_1 .og2-trope-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  #og_step_1 .og2-nav-row {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  #og_step_1 .og2-btn-next {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 520px) {
+  #og_step_1 .og2-trope-grid {
+    grid-template-columns: 1fr;
+  }
+}
