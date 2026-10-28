@@ -59,6 +59,34 @@ def test_core_flow_original_novel_generation(page, live_server):
     assert any("深空守望者" in t for t in book_titles), f"书架未找到新生成的书籍: 深空守望者，现有: {book_titles}"
 
 
+def test_trope_refresh_replaces_entire_batch_without_retaining_old(page, live_server):
+    """灵感脑洞换一批验证：点击换一批后整批替换，旧脑洞完全不保留，由 AI 当场生成。"""
+    page.goto(f"{live_server}/#original")
+    page.wait_for_load_state("networkidle")
+    page.wait_for_selector("#og_trope_pills .trope-pill", state="visible")
+
+    # 1. 记录换一批之前的初始脑洞卡片集合
+    initial_pills = [p.strip() for p in page.locator("#og_trope_pills .trope-pill").all_text_contents() if p.strip()]
+    assert len(initial_pills) > 0, "初始灵感药丸列表不应为空"
+
+    # 2. 点击换一批按钮
+    refresh_btn = page.locator("#btn_refresh_tropes")
+    assert refresh_btn.is_visible()
+    with page.expect_response(lambda r: "/api/suggest-tropes" in r.url and r.status == 200, timeout=10000):
+        refresh_btn.click()
+
+    page.wait_for_timeout(500)
+
+    # 3. 换一批之后，获取新展示的脑洞卡片
+    new_pills = [p.strip() for p in page.locator("#og_trope_pills .trope-pill").all_text_contents() if p.strip()]
+    assert len(new_pills) >= 8, f"换一批生成的脑洞数量不足8个，当前为: {len(new_pills)}"
+
+    # 4. 关键断言：旧脑洞卡片项完全不保留在当前列表中
+    retained = [p for p in initial_pills if p in new_pills]
+    assert len(retained) == 0, f"换一批未彻底清除旧脑洞，仍残留了旧卡片: {retained}"
+
+
+
 def test_core_flow_library_operations(page, live_server):
     """书架管理流程：搜索、表格视图切换、重命名、移入回收站、还原。"""
     monitor = PageMonitor(page, "flow_library_ops")

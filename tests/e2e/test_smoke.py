@@ -36,9 +36,15 @@ def ensure_sample_novel(page, live_server, title="冒烟测试小品"):
 
 
 def test_smoke_page_load_and_views_navigation(page, live_server):
-    """验证首页加载无报错，且 5 个主视图可正常切换呈现。"""
+    """验证首页加载无报错，应用英文品牌名 NovelStudio 呈现正确，且 5 个主视图可正常切换呈现。"""
     monitor = PageMonitor(page, "smoke_views_nav")
     test_title = ensure_sample_novel(page, live_server, "冒烟导航书")
+
+    # 验证 Web 应用品牌名与标题已为英文 NovelStudio
+    page.goto(f"{live_server}/#original")
+    page.wait_for_load_state("networkidle")
+    assert page.locator("header .brand h1").inner_text().strip() == "NovelStudio", "顶栏品牌名称未更新为 NovelStudio"
+    assert page.title() == "NovelStudio", f"页面初始标题未更新为 NovelStudio，当前为: {page.title()}"
 
     views = [
         ("#original", "header .nav[data-view='original']", "#view-original"),
@@ -59,6 +65,7 @@ def test_smoke_page_load_and_views_navigation(page, live_server):
     page.evaluate(f"openReader({json.dumps(test_title)})")
     page.wait_for_timeout(500)
     assert page.locator("#rd_main").is_visible(), "进入阅读器失败，#rd_main 未展示"
+    assert "NovelStudio" in page.title(), f"阅读器标题后缀未包含 NovelStudio: {page.title()}"
     monitor.assert_no_errors("进入 Studio 阅读器视图")
 
 

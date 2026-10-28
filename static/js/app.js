@@ -4,7 +4,7 @@ function switchView(name) {
   // 离开阅读器时收掉沉浸态与面板，并恢复页面标题
   if (name !== 'read') {
     document.body.classList.remove('reading', 'rd-immersive');
-    document.title = '小说生成器';
+    document.title = 'NovelStudio';
     try { closeReaderPanels(); } catch (e) { /* 忽略 */ }
     try { if (typeof resetEditButtons === 'function') resetEditButtons(); } catch (e) { /* 忽略 */ }
   }

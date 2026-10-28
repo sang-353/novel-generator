@@ -277,7 +277,7 @@ function renderReader() {
   const d = readerData, meta = d.meta;
   const stale = !!(meta.status === 'generating' && d.stale);
   $('rd_title').textContent = meta.title || d.name;
-  document.title = (meta.title || d.name) + ' · 小说生成器';
+  document.title = (meta.title || d.name) + ' · NovelStudio';
   const typeName = { original: '原创', continuation: '续写', fanfic: '同人' };
   $('rd_type').textContent = typeName[meta.type] || meta.type;
   const st = $('rd_status');

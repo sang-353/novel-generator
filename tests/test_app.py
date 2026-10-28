@@ -692,6 +692,62 @@ def test_suggest_tropes_api(tmpdir, monkeypatch):
     assert data["tropes"][0]["genre"] == "都市言情"
 
 
+def test_suggest_tropes_random_multiverse_prompt(tmpdir, monkeypatch):
+    """验证灵感脑洞在全部分类（category=all）下，向模型请求完全随机发散的多元题材设定。"""
+    import json
+    import app
+    client = _privacy_env(monkeypatch, tmpdir)
+
+    captured_prompts = []
+    def fake_chat(messages, **kwargs):
+        captured_prompts.extend([m["content"] for m in messages])
+        return (json.dumps({
+            "tropes": [
+                {"icon": "⚡", "label": "赛博修仙·反派夺舍", "title": "神经漫游金丹期", "genre": "赛博朋克"}
+            ]
+        }, ensure_ascii=False), "stop")
+
+    monkeypatch.setattr(app, "chat", fake_chat)
+    res = client.post("/api/suggest-tropes", json={"category": "all", "count": 4})
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data["ok"] is True
+    assert len(data["tropes"]) == 1
+
+    combined_prompt = " ".join(captured_prompts)
+    assert any(k in combined_prompt for k in ["策划", "灵感"]), "Prompt 必须保留触发词"
+    assert any(k in combined_prompt for k in ["随机", "多元", "自由"]), "未限定分类时应提示随机多元发散"
+
+
+def test_suggest_tropes_supports_count_8_and_diversity(tmpdir, monkeypatch):
+    """验证灵感脑洞接口支持一次性请求8个及以上脑洞，并在 Prompt 中明确请求 8 个。"""
+    import json
+    import app
+    client = _privacy_env(monkeypatch, tmpdir)
+
+    captured_prompts = []
+    def fake_chat(messages, **kwargs):
+        captured_prompts.extend([m["content"] for m in messages])
+        return (json.dumps({
+            "tropes": [
+                {"icon": "⚡", "label": f"标签_{i}", "title": f"书名_{i}", "genre": f"题材_{i}"}
+                for i in range(8)
+            ]
+        }, ensure_ascii=False), "stop")
+
+    monkeypatch.setattr(app, "chat", fake_chat)
+    res = client.post("/api/suggest-tropes", json={"count": 8})
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data["ok"] is True
+    # 断言后端接受 count=8，未被旧上限 6 截断，且返回了 8 个灵感
+    assert len(data["tropes"]) >= 8, f"返回的脑洞数量不足8个: {len(data['tropes'])}"
+    combined_prompt = " ".join(captured_prompts)
+    assert " 8 " in combined_prompt or "8 个" in combined_prompt, "Prompt 中应请求策划 8 个脑洞"
+
+
+
+
 
 def test_build_continuation_setup_with_bible():
     from app import build_continuation_setup

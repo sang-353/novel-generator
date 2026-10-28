@@ -468,7 +468,44 @@ function generateLocalTropes(category, genre, count) {
   } else {
     pool.sort(() => Math.random() - 0.5);
   }
-  return pool.slice(0, count || 5);
+  const targetCount = count || 8;
+  const result = [...pool.slice(0, targetCount)];
+  if (result.length < targetCount) {
+    const genres = ['科幻未来', '悬疑推理', '无限流', '古风武侠', '都市异能', '奇幻诡秘', '末日废土', '都市治愈'];
+    const icons = ['⚡', '🔍', '🎲', '🗡️', '🔮', '🌙', '🚀', '🍵'];
+    const hooks = [
+      ['深空拾荒者', '意外挖出史前智脑，卷入跨星系通缉'],
+      ['雨夜捉刀人', '凭一柄残刀揭破朝堂重案'],
+      ['回魂夜凶宅', '被拉入民俗副本，凭借绝对冷静反杀'],
+      ['时间回溯者', '只要触碰旧物就能看到死亡现场'],
+      ['隐世异能者', '在繁华都市边缘开便利店解决异象'],
+      ['废土拓荒工', '开着报废机甲在风暴区建起了绿洲'],
+      ['退役老魔王', '辞职归隐山村当起了灵宠繁育师'],
+      ['深夜居酒屋', '在青石板尽头为迷途者煮一碗清茶']
+    ];
+    let genIdx = 0;
+    while (result.length < targetCount) {
+      const g = genres[genIdx % genres.length];
+      const ic = icons[genIdx % icons.length];
+      const h = hooks[genIdx % hooks.length];
+      result.push({
+        cat: category && category !== 'all' ? category : 'fantasy',
+        icon: ic,
+        label: `${g}·${h[0]}`,
+        title: `${h[0]}录`,
+        genre: g,
+        setting: `在独特的${g}世界观下展开冒险。`,
+        characters: `核心主角：行事果决的${h[0]}。`,
+        storyline: `${h[1]}。`,
+        style: '节奏明快，悬念紧凑',
+        perspective: '第三人称',
+        chapters: 10,
+        per_words: 2200
+      });
+      genIdx++;
+    }
+  }
+  return result.slice(0, targetCount);
 }
 
 let currentTropeCat = 'all';
@@ -525,7 +562,8 @@ async function refreshTropes() {
         category: currentTropeCat,
         genre: currentGenre,
         provider_id: providerId,
-        count: 5
+        count: 8,
+        nonce: Date.now() + '_' + Math.random().toString(36).slice(2, 7)
       });
 
       const raw = (res && Array.isArray(res.tropes)) ? res.tropes : [];
@@ -551,7 +589,7 @@ async function refreshTropes() {
       }).filter(Boolean);
 
       if (parsed.length) {
-        newTropes = parsed.slice(0, 6);
+        newTropes = parsed.slice(0, 12);
       }
     } catch (apiErr) {
       console.warn('API /api/suggest-tropes 请求未成功，切换为备选智能构思库：', apiErr);
@@ -561,11 +599,11 @@ async function refreshTropes() {
       } else {
         fallbackMsg = '大模型调用波动，已动态切换为备选脑洞库为您生成新灵感！';
       }
-      newTropes = generateLocalTropes(currentTropeCat, currentGenre, 5);
+      newTropes = generateLocalTropes(currentTropeCat, currentGenre, 8);
     }
 
     if (!newTropes.length) {
-      newTropes = generateLocalTropes(currentTropeCat, currentGenre, 5);
+      newTropes = generateLocalTropes(currentTropeCat, currentGenre, 8);
       isFallback = true;
     }
 
@@ -573,23 +611,22 @@ async function refreshTropes() {
       if (!t.cat) t.cat = currentTropeCat === 'all' ? (t.cat || 'female') : currentTropeCat;
     });
 
-    // 动态灵感直接置于前列，去重展示，最多保留前 30 个脑洞
-    const combined = [...newTropes, ...currentTropesList];
+    // 换一批：整体刷新一批新脑洞，旧脑洞完全不保留
     const seenTitles = new Set();
-    currentTropesList = combined.filter(t => {
+    currentTropesList = newTropes.filter(t => {
       if (!t || typeof t !== 'object') return false;
       const key = strVal(t.title || t.label);
       if (!key || seenTitles.has(key)) return false;
       seenTitles.add(key);
       return true;
-    }).slice(0, 30);
+    });
 
     renderTropeList();
 
     if (isFallback) {
-      toast(fallbackMsg || '已动态生成一批新灵感脑洞！');
+      toast(fallbackMsg || '未连接大模型或服务离线，已为您生成备选灵感脑洞！');
     } else {
-      toast(`已由 AI 实时生成 ${newTropes.length} 个新灵感脑洞！`);
+      toast(`已由 AI 当场生成 ${currentTropesList.length} 个全新灵感脑洞！`);
     }
   } catch (e) {
     toast(`生成新脑洞失败：${e.message}`);

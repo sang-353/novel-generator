@@ -223,6 +223,84 @@ class FakeLLMHandler(BaseHTTPRequestHandler):
                         "perspective": "第三人称",
                         "chapters": 10,
                         "per_words": 2500
+                    },
+                    {
+                        "icon": "🗡️",
+                        "label": "古风武侠·长安捉刀",
+                        "title": "长安细雨刀",
+                        "genre": "古风武侠",
+                        "setting": "盛唐夜雨，九街暗流涌动。",
+                        "characters": "李不言：独眼佩刀退伍老卒；薛青衣：大理寺正。",
+                        "storyline": "一桩离奇命案揭开边疆军饷贪腐案，老卒以残刀破阴谋。",
+                        "style": "沉稳硬朗，市井侠气",
+                        "perspective": "第三人称",
+                        "chapters": 10,
+                        "per_words": 2400
+                    },
+                    {
+                        "icon": "🔮",
+                        "label": "诡秘复苏·时间回溯",
+                        "title": "旧日遗物调查员",
+                        "genre": "奇幻诡秘",
+                        "setting": "雾气弥漫的近代工业都会与旧神遗迹。",
+                        "characters": "夏洛克：古董店学徒，触碰遗物能回溯死亡片段。",
+                        "storyline": "因一件神秘青铜罗盘卷入邪神复苏仪式，在多方势力绞杀中逆风破局。",
+                        "style": "悬疑惊悚，克苏鲁风",
+                        "perspective": "第三人称",
+                        "chapters": 12,
+                        "per_words": 2600
+                    },
+                    {
+                        "icon": "🚀",
+                        "label": "星际拓荒·机甲种田",
+                        "title": "我在边缘星系挖矿",
+                        "genre": "星际科幻",
+                        "setting": "边缘荒芜小行星带与星际联邦边陲。",
+                        "characters": "陈默：破产工程师，继承老旧采矿机甲。",
+                        "storyline": "在废弃矿井意外激活远古遗民智脑，从零打造自动化生态基地。",
+                        "style": "轻松爽快，科技养成",
+                        "perspective": "第三人称",
+                        "chapters": 10,
+                        "per_words": 2200
+                    },
+                    {
+                        "icon": "🎒",
+                        "label": "青春校园·暗恋救赎",
+                        "title": "盛夏未言时",
+                        "genre": "青春校园",
+                        "setting": "沿海小城的高三盛夏。",
+                        "characters": "林小满：默默努力的转学生；江逾白：桀骜不驯的天才少年。",
+                        "storyline": "一场数学竞赛集训营让两人相遇，在互相鼓励中治愈彼此原生家庭创伤。",
+                        "style": "清新治愈，酸甜拉扯",
+                        "perspective": "第一人称",
+                        "chapters": 8,
+                        "per_words": 2000
+                    },
+                    {
+                        "icon": "🎲",
+                        "label": "无限流·民俗规则怪谈",
+                        "title": "回魂夜不要回头",
+                        "genre": "无限悬疑",
+                        "setting": "诡异民俗副本列车空间。",
+                        "characters": "方休：思维绝对理智的病弱青年。",
+                        "storyline": "被拉入诡异的中式民俗凶宅副本，凭借极度冷静的规则推演反杀邪祟。",
+                        "style": "智斗高能，微恐解谜",
+                        "perspective": "第三人称",
+                        "chapters": 12,
+                        "per_words": 2800
+                    },
+                    {
+                        "icon": "🍵",
+                        "label": "都市日常·辞职开茶肆",
+                        "title": "雨后小巷有清茗",
+                        "genre": "都市治愈",
+                        "setting": "江南古镇青石板尽头的老茶馆。",
+                        "characters": "阮青：大厂裸辞程序员；来往茶客：形形色色的旅人。",
+                        "storyline": "改造外公留下的老茶铺，以茶会友，倾听每位过客的悲欢离合。",
+                        "style": "慢节奏，生活温情，烟火气",
+                        "perspective": "第三人称",
+                        "chapters": 10,
+                        "per_words": 2200
                     }
                 ]
             }, ensure_ascii=False)

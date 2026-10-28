@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""个人小说生成器 —— 本地 Flask 后端
+"""NovelStudio —— 本地 Flask 后端
 
 功能：
 - 原创生成：填写设定 -> 生成大纲 -> 逐章写作
@@ -3365,40 +3365,52 @@ def api_suggest_tropes():
         genre = (request.args.get("genre") or "").strip()
         provider_id = request.args.get("provider_id")
         try:
-            count = min(max(int(request.args.get("count", 4)), 2), 6)
+            count = min(max(int(request.args.get("count", 8)), 2), 12)
         except Exception:
-            count = 4
+            count = 8
     else:
         data = request.get_json(silent=True) or {}
         category = data.get("category") or "all"
         genre = (data.get("genre") or "").strip()
         provider_id = data.get("provider_id")
         try:
-            count = min(max(int(data.get("count", 4)), 2), 6)
+            count = min(max(int(data.get("count", 8)), 2), 12)
         except Exception:
-            count = 4
+            count = 8
 
     category_desc = ""
     if category == "female":
-        category_desc = "侧重晋江/番茄女性向、现实情感与治愈生活：都市言情（先婚后爱/破镜重圆）、青春校园（暗恋救赎）、双女主（女性互助/携手搞事业/百合纯爱）、都市日常（慢生活/美食食愈）、古代言情（经商种田/宅斗权谋）。"
+        category_desc = "侧重晋江/番茄女性向、现实情感与治愈生活：都市言情、青春校园、双女主/百合、都市日常、古代言情等多元细分题材。"
     elif category == "fantasy":
-        category_desc = "侧重起点/番茄脑洞、奇幻科幻与探案传奇：刑侦推理、悬疑惊悚、赛博朋克、末世求生、古风武侠、西幻领主、无限流、轻小说日常。"
+        category_desc = "侧重起点/番茄脑洞、奇幻科幻与探案传奇：刑侦推理、悬疑惊悚、赛博朋克、末世求生、古风武侠、西幻领主、无限流等多元脑洞题材。"
     else:
-        category_desc = "涵盖都市言情、青春校园、双女主互助、悬疑刑侦、现代日常、科幻脑洞、仙侠武侠等多元题材。"
+        category_desc = "题材与设定完全自由随机发散、高度多元！不拘泥于固定套路分类，涵盖但不限于：科幻未来、悬疑推理、无限流、蒸汽朋克、末日废土、奇幻诡秘、都市情感、现实日常、微恐惊悚、历史架空等多元脑洞组合。"
+
+    import random
+    sparks_pool = [
+        "赛博修仙·反派夺舍", "蒸汽朋克·飞空艇海盗", "旧日诡秘·民俗怪谈", "第四天灾·幕后流",
+        "末日废土·移动城堡", "星际拓荒·机甲种田", "无限流·民俗凶宅", "古风武侠·长安捉刀",
+        "都市异能·时间回溯", "先婚后爱·双面间谍", "深海探险·远古遗迹", "微恐解谜·规则怪谈",
+        "古代权谋·女帝心腹", "退役魔王·乡村慢生活", "硬核科幻·戴森球危机", "志怪传奇·山海百妖",
+        "悬疑刑侦·第七个目击者", "百合纯爱·星际领航员", "反套路快穿·手撕剧本", "都市美食·深夜治愈食堂"
+    ]
+    random_sparks = "、".join(random.sample(sparks_pool, min(5, len(sparks_pool))))
+    batch_seed = random.randint(1000, 9999)
 
     sys_prompt = (
-        "你是一位精通各大网络文学平台（晋江文学城、起点中文网、番茄小说）的资深金牌策划编辑。"
-        f"请策划 {count} 个极具戏剧张力、设定新颖、读者粘性高的小说灵感开局模板。\n"
+        "你是一位精通各大网络文学平台（晋江文学城、起点中文网、番茄小说）的资深金牌策划编辑（suggest-tropes）。"
+        f"请当场策划 {count} 个极具戏剧张力、设定新颖、高脑洞反差且完全随机多元的小说灵感开局模板。\n"
+        "【核心原则】各卡片题材大类必须各不相同、彻底互斥，杜绝题材扎堆！语言短平快，拒绝冗长套话，突出核心矛盾与人设反差。\n"
         "必须严格输出符合 JSON 格式的对象，包含键 'tropes'（数组，每个元素为一个对象）：\n"
-        "每个对象字段必须包含：\n"
-        "- 'icon': 单个 emoji 图标（如 💍, 🎒, 👭, 🌙, 🍵, 🔍, ⚡, 🗡️）\n"
-        "- 'label': 标签简称（8-14字，格式如'都市言情·合约婚姻'、'双女主·合租破局'）\n"
+        "字段规范：\n"
+        "- 'icon': 单个 emoji 图标\n"
+        "- 'label': 标签简称（6-12字，格式为'题材·核心梗'）\n"
         "- 'title': 极具吸引力的网文书名\n"
-        "- 'genre': 题材分类（如 都市言情、青春校园、双女主/互助、百合纯爱、都市日常、刑侦推理、古代言情、赛博朋克、古风武侠等）\n"
-        "- 'setting': 世界观背景（2-3句话交代时代、核心舞台与独特设定）\n"
-        "- 'characters': 主要角色（格式为'角色A：身份、性格与核心动机\\n角色B：...'）\n"
-        "- 'storyline': 主线故事发展与核心冲突（2-3句话）\n"
-        "- 'style': 文风语调要求（如'细腻克制，拉扯感强，都市轻熟风'）\n"
+        "- 'genre': 题材分类（必须多元互斥，不可重复）\n"
+        "- 'setting': 世界观背景（精炼1-2句话交代核心设定即可）\n"
+        "- 'characters': 主要角色（精炼1-2位核心人物身份与反差性格）\n"
+        "- 'storyline': 主线故事与核心冲突（精炼1-2句话点明剧情主线）\n"
+        "- 'style': 文风语调要求（简短描述）\n"
         "- 'perspective': '第三人称' 或 '第一人称'\n"
         "- 'chapters': 推荐初始章节数（8-12之间整数）\n"
         "- 'per_words': 推荐单章字数（2000-3000之间整数）"
@@ -3407,13 +3419,13 @@ def api_suggest_tropes():
     user_prompt = f"请策划 {count} 个全新的小说开局灵感脑洞。\n要求：{category_desc}\n"
     if genre:
         user_prompt += f"指定重点偏好题材：{genre}\n"
-    user_prompt += "避免千篇一律的陈旧套路，注重人物动机与核心冲突反差。以 JSON 输出："
+    user_prompt += f"【随机激发源#{batch_seed}】：参考但不限于 {random_sparks} 等多元跨界方向。每个脑洞题材互不相同，注重人物动机与冲突反差。以 JSON 输出："
 
     try:
         content, _ = chat([
             {"role": "system", "content": sys_prompt},
             {"role": "user", "content": user_prompt}
-        ], max_tokens=2200, temperature=1.0, json_mode=True, provider_id=provider_id)
+        ], max_tokens=1800, temperature=1.05, json_mode=True, provider_id=provider_id)
         obj = extract_json(content)
         raw_tropes = obj.get("tropes") if isinstance(obj, dict) else (obj if isinstance(obj, list) else [])
         if not raw_tropes and isinstance(obj, dict):
@@ -3791,7 +3803,7 @@ def _lan_urls(port):
 if __name__ == "__main__":
     host = (os.environ.get("NOVEL_HOST") or "127.0.0.1").strip()
     port = int(os.environ.get("NOVEL_PORT") or 8000)
-    print(f"个人小说生成器已启动： http://127.0.0.1:{port}")
+    print(f"NovelStudio 已启动： http://127.0.0.1:{port}")
     if host not in ("127.0.0.1", "localhost"):
         print("局域网访问已开启，同一 Wi-Fi 下手机浏览器可打开：")
         for u in _lan_urls(port):
