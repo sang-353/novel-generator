@@ -7,6 +7,7 @@
 <title>NovelStudio</title>
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.png">  <link rel="stylesheet" href="/static/css/app.css">
+  <link rel="stylesheet" href="/static/css/og_step1.css">
 </head>
 <body>
 <a class="skip-link" href="#main">跳到主内容</a>
@@ -27,10 +28,10 @@
 
 <!-- ================= 原创生成 ================= -->
 <section class="view active" id="view-original">
-  <div class="card">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+  <div class="card og2-card-wrap">
+    <div class="og2-header-row">
       <h2 style="margin:0"><span class="h2-folio">01</span>原创小说生成</h2>
-      <button class="ghost mini-btn" id="btn_clear_og" title="清空本页所有输入">清空表单</button>
+      <button class="ghost mini-btn og2-clear-btn" id="btn_clear_og" type="button" title="清空本页所有输入">清空表单</button>
     </div>
 
     <!-- P2: 分步向导导航条 (Wizard Stepper) -->
@@ -54,7 +55,9 @@
     <!-- 步骤 1：核心脑洞 -->
     <div class="stepper-panel active" id="og_step_1">
       <div class="onboarding-banner" id="og_no_provider_banner" style="display:none">
-        <span class="banner-icon">⚠️</span>
+        <span class="banner-icon">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" style="vertical-align:middle;"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path><line x1="12" y1="9" x2="12" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line><circle cx="12" cy="17" r="1" fill="currentColor"></circle></svg>
+        </span>
         <div class="banner-body">
           <b class="banner-title">尚未配置大模型 API Key</b>
           <span class="banner-desc">创作前请先配置模型（支持 DeepSeek / 通义千问 / Kimi / 本地 Ollama 等）。</span>
@@ -62,75 +65,137 @@
         <button type="button" class="mini-btn banner-btn" id="og_go_settings_btn">前往设置 →</button>
       </div>
 
-      <!-- 灵感脑洞库 -->
-      <div class="trope-templates-wrap" id="og_trope_wrap">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-            <span style="font-weight:600;font-size:13px;color:var(--ink);">💡 灵感脑洞</span>
-            <div class="trope-cat-tabs" id="og_trope_cat_tabs">
-              <button type="button" class="trope-cat-tab active" data-cat="all">全部</button>
-              <button type="button" class="trope-cat-tab" data-cat="female">情感 / 校园 / 生活</button>
-              <button type="button" class="trope-cat-tab" data-cat="fantasy">幻想 / 悬疑 / 脑洞</button>
-            </div>
-          </div>
-          <div style="display:flex;align-items:center;gap:6px;">
-            <button type="button" class="ghost mini-btn" id="btn_refresh_tropes" title="由 AI 实时生成一批新脑洞">✨ 换一批</button>
-            <button type="button" class="ghost mini-btn" id="btn_random_trope" title="随机选用一个灵感脑洞">🎲 随机</button>
+      <!-- 1 · 选个题材 -->
+      <div class="og2-section">
+        <div class="og2-section-head">
+          <span class="og2-lbl">1 · 选个题材</span>
+          <span class="og2-hint">题材会作为后续生成的依据</span>
+        </div>
+        <div class="genre-groups og2-genre-rack" id="og_genre_pills">
+          <div class="og2-genre-primary">
+            <button type="button" class="tag-pill og2-chip" data-genre="都市言情">都市言情</button>
+            <button type="button" class="tag-pill og2-chip" data-genre="古风武侠">古风武侠</button>
+            <button type="button" class="tag-pill og2-chip" data-genre="刑侦推理">刑侦推理</button>
+            <button type="button" class="tag-pill og2-chip" data-genre="玄幻修真">玄幻修真</button>
+            <button type="button" class="tag-pill og2-chip" data-genre="科幻未来">科幻未来</button>
+            <button type="button" class="tag-pill og2-chip" data-genre="赛博朋克">赛博朋克</button>
+            <button type="button" class="tag-pill og2-chip" data-genre="末世求生">末世求生</button>
+            <button type="button" class="tag-pill og2-chip" data-genre="无限流">无限流</button>
+            <details id="og2_genre_more_wrap" class="og2-more-genres-wrap">
+              <summary class="og2-more-genres-btn" id="btn_toggle_more_genres">
+                <span id="txt_more_genres">更多题材</span>
+                <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              </summary>
+              <div class="og2-genre-more" id="og2_genre_more">
+                <button type="button" class="tag-pill og2-chip" data-genre="青春校园">青春校园</button>
+                <button type="button" class="tag-pill og2-chip" data-genre="双女主/互助">双女主/互助</button>
+                <button type="button" class="tag-pill og2-chip" data-genre="百合纯爱">百合纯爱</button>
+                <button type="button" class="tag-pill og2-chip" data-genre="破镜重圆">破镜重圆</button>
+                <button type="button" class="tag-pill og2-chip" data-genre="职场婚恋">职场婚恋</button>
+                <button type="button" class="tag-pill og2-chip" data-genre="都市日常">都市日常</button>
+                <button type="button" class="tag-pill og2-chip" data-genre="古代言情">古代言情</button>
+                <button type="button" class="tag-pill og2-chip" data-genre="经商种田">经商种田</button>
+                <button type="button" class="tag-pill og2-chip" data-genre="宫斗宅斗">宫斗宅斗</button>
+                <button type="button" class="tag-pill og2-chip" data-genre="现实群像">现实群像</button>
+                <button type="button" class="tag-pill og2-chip" data-genre="都市异能">都市异能</button>
+                <button type="button" class="tag-pill og2-chip" data-genre="西幻领主">西幻领主</button>
+                <button type="button" class="tag-pill og2-chip" data-genre="轻小说/日常">轻小说/日常</button>
+              </div>
+            </details>
           </div>
         </div>
-        <div class="trope-pills" id="og_trope_pills"></div>
+        <div class="og2-field og2-genre-field">
+          <input type="text" id="og_genre" placeholder="输入自定义题材，或点击上方标签选择…" autocomplete="off" value="">
+        </div>
       </div>
 
-      <div class="row">
-        <div>
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-            <label for="og_title" style="margin:0">书名</label>
-            <button type="button" class="ghost mini-btn" id="btn_suggest_titles" title="根据当前题材与设定由 AI 推荐书名">✨ AI 拟名</button>
+      <!-- 2 · 挑一个灵感 -->
+      <div class="trope-templates-wrap og2-section" id="og_trope_wrap">
+        <div class="og2-trope-head">
+          <div class="og2-trope-title-wrap">
+            <span class="og2-lbl">2 · 挑一个灵感</span>
+            <span class="og2-hint">点选即填入下方，可随时修改</span>
           </div>
-          <input type="text" id="og_title" placeholder="留空则由 AI 自动拟定" autocomplete="off">
+          <div class="og2-trope-actions">
+            <button type="button" class="btn og2-btn og2-btn-sec" id="btn_random_trope" title="随机选用一个灵感脑洞">
+              <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="2"></rect><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor"></circle><circle cx="15.5" cy="15.5" r="1.5" fill="currentColor"></circle></svg>
+              <span>随机</span>
+            </button>
+            <button type="button" class="btn og2-btn og2-btn-sec" id="btn_refresh_tropes" title="由 AI 实时生成一批新脑洞">
+              <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg>
+              <span>换一批</span>
+            </button>
+          </div>
+        </div>
+        <!-- 灵感分类紧凑分段控件 -->
+        <div class="trope-cat-tabs og2-cat-tabs" id="og_trope_cat_tabs">
+          <button type="button" class="trope-cat-tab active" data-cat="all">全部</button>
+          <button type="button" class="trope-cat-tab" data-cat="female">情感 / 校园 / 生活</button>
+          <button type="button" class="trope-cat-tab" data-cat="fantasy">幻想 / 悬疑 / 脑洞</button>
+        </div>
+        <div class="trope-pills og2-trope-grid is-collapsed" id="og_trope_pills"></div>
+        <div class="og2-trope-expand-wrap" id="og2_trope_expand_wrap" style="display:none;">
+          <button type="button" class="btn og2-btn og2-trope-expand-btn" id="btn_toggle_more_tropes" aria-expanded="false">
+            <span id="txt_toggle_more_tropes">展开更多灵感</span>
+            <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- 3 · 完善设定 -->
+      <div class="og2-section og2-inputs-group">
+        <div class="og2-section-head">
+          <span class="og2-lbl">3 · 完善设定</span>
+          <span class="og2-hint">书名、背景法则与主线目标</span>
+        </div>
+
+        <div>
+          <div class="og2-field-head">
+            <label class="og2-sub-lbl" for="og_title">小说书名<span class="og2-hint">好的书名是成功的一半</span></label>
+            <button type="button" class="btn og2-btn og2-btn-sm og2-btn-sec" id="btn_suggest_titles" title="根据当前题材与设定由 AI 推荐书名">
+              <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path></svg>
+              <span>AI 拟名</span>
+            </button>
+          </div>
+          <div class="og2-field">
+            <input type="text" id="og_title" placeholder="留空则由 AI 自动拟定" autocomplete="off">
+          </div>
           <div id="og_title_candidates" style="display:none;margin-top:6px;">
-            
             <div id="og_title_list" class="tag-pills"></div>
           </div>
         </div>
+
         <div>
-          <label for="og_genre">题材</label>
-          <div class="genre-groups" id="og_genre_pills" style="display:flex; flex-direction:column; gap:6px; margin:4px 0 8px;">
-            <div class="tag-pills" style="margin:0; display:flex; flex-wrap:wrap; gap:5px;">
-              <button type="button" class="tag-pill" data-genre="都市言情">都市言情</button>
-              <button type="button" class="tag-pill" data-genre="青春校园">青春校园</button>
-              <button type="button" class="tag-pill" data-genre="双女主/互助">双女主/互助</button>
-              <button type="button" class="tag-pill" data-genre="百合纯爱">百合纯爱</button>
-              <button type="button" class="tag-pill" data-genre="破镜重圆">破镜重圆</button>
-              <button type="button" class="tag-pill" data-genre="职场婚恋">职场婚恋</button>
-              <button type="button" class="tag-pill" data-genre="都市日常">都市日常</button>
-              <button type="button" class="tag-pill" data-genre="古代言情">古代言情</button>
-              <button type="button" class="tag-pill" data-genre="经商种田">经商种田</button>
-              <button type="button" class="tag-pill" data-genre="宫斗宅斗">宫斗宅斗</button>
-              <button type="button" class="tag-pill" data-genre="古风武侠">古风武侠</button>
-              <button type="button" class="tag-pill" data-genre="刑侦推理">刑侦推理</button>
-              <button type="button" class="tag-pill" data-genre="现实群像">现实群像</button>
-              <button type="button" class="tag-pill" data-genre="都市异能">都市异能</button>
-              <button type="button" class="tag-pill" data-genre="玄幻修真">玄幻修真</button>
-              <button type="button" class="tag-pill" data-genre="科幻未来">科幻未来</button>
-              <button type="button" class="tag-pill" data-genre="赛博朋克">赛博朋克</button>
-              <button type="button" class="tag-pill" data-genre="末世求生">末世求生</button>
-              <button type="button" class="tag-pill" data-genre="西幻领主">西幻领主</button>
-              <button type="button" class="tag-pill" data-genre="无限流">无限流</button>
-              <button type="button" class="tag-pill" data-genre="轻小说/日常">轻小说/日常</button>
+          <div class="og2-field-head">
+            <label class="og2-sub-lbl" for="og_setting">故事背景 / 核心设定<span class="og2-hint">时代背景、世界法则、核心冲突</span></label>
+          </div>
+          <div class="og2-field">
+            <textarea id="og_setting" rows="3" placeholder="世界观、时代背景、核心冲突等"></textarea>
+            <div class="og2-field-footer" id="og_setting_footer">
+              <span class="og2-word-count" id="txt_setting_word_count">0 字</span>
             </div>
           </div>
-          <input type="text" id="og_genre" placeholder="输入自定义题材，或点击上方标签选择…" autocomplete="off">
+        </div>
+
+        <div>
+          <div class="og2-field-head">
+            <label class="og2-sub-lbl" for="og_storyline">故事主线 / 目标<span class="og2-hint">主角要做什么、面临什么危机、大致结局走向</span></label>
+          </div>
+          <div class="og2-field">
+            <textarea id="og_storyline" rows="3" placeholder="主角要做什么、结局大致走向"></textarea>
+            <div class="og2-field-footer" id="og_storyline_footer">
+              <span class="og2-word-count" id="txt_storyline_word_count">0 字</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      <label for="og_setting">故事背景 / 核心设定</label>
-      <textarea id="og_setting" rows="3" placeholder="世界观、时代背景、核心冲突等"></textarea>
-      <label for="og_storyline">故事主线 / 目标</label>
-      <textarea id="og_storyline" rows="2" placeholder="主角要做什么、结局大致走向"></textarea>
-
-      <div class="stepper-nav-row" style="margin-top:16px;display:flex;justify-content:flex-end;">
-        <button type="button" class="primary" id="btn_step1_next">下一步：人物与大纲 →</button>
+      <div class="stepper-nav-row og2-nav-row">
+        <span class="og2-nav-hint">设定就绪后，即可进入人物与大纲推演</span>
+        <button type="button" class="primary og2-btn og2-btn-pri og2-btn-next" id="btn_step1_next">
+          <span>下一步：人物与大纲</span>
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path><path d="m13 6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        </button>
       </div>
     </div>
 
@@ -1147,6 +1212,7 @@
   <script src="/static/js/util.js"></script>
   <script src="/static/js/state.js"></script>
   <script src="/static/js/generator.js"></script>
+  <script src="/static/js/og_refine.js"></script>
   <script src="/static/js/library.js"></script>
   <script src="/static/js/reader.js"></script>
   <script src="/static/js/app.js"></script>

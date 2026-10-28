@@ -686,3 +686,19 @@
 .og2-spin {
   animation: rd-spin .8s linear infinite;
 }
+
+/* 字段底部信息栏（字数统计） */
+#og_step_1 .og2-field-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 6px;
+  min-height: 20px;
+}
+
+#og_step_1 .og2-word-count {
+  font-size: 12px;
+  color: var(--og2-muted);
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+}

@@ -280,6 +280,7 @@ function applyTropeTemplate(t) {
 
   // 同步高亮题材胶囊
   syncGenrePillsFromInput();
+  if (window.ogStep1AfterFill) window.ogStep1AfterFill();
   toast(`已填入「${label || title}」灵感模板！`);
 }
 
@@ -955,6 +956,7 @@ function restoreOgDraft() {
     if (!d) return;
     Object.entries(d).forEach(([id, v]) => { const el = $(id); if (el && v !== undefined && v !== null) el.value = v; });
     syncGenrePillsFromInput();
+    if (window.ogStep1AfterFill) window.ogStep1AfterFill();
   } catch (e) { /* 忽略 */ }
 }
 let ogDraftTimer = null;
@@ -981,6 +983,7 @@ on('btn_clear_og', () => {
   const tWrap = $('og_trope_pills');
   if (tWrap) tWrap.querySelectorAll('.trope-pill').forEach(p => p.classList.remove('active'));
   try { localStorage.removeItem(OG_DRAFT_KEY); } catch (e) {}
+  if (window.ogStep1AfterFill) window.ogStep1AfterFill();
   toast('已清空本页表单');
 });
 
