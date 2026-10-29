@@ -687,13 +687,14 @@
   animation: rd-spin .8s linear infinite;
 }
 
-/* 字段底部信息栏（字数统计） */
+/* 字段底部信息栏（字数统计与 AI 辅助写作工具条） */
 #og_step_1 .og2-field-footer {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
+  gap: 8px;
   margin-top: 6px;
-  min-height: 20px;
+  min-height: 28px;
 }
 
 #og_step_1 .og2-word-count {
@@ -701,4 +702,205 @@
   color: var(--og2-muted);
   user-select: none;
   font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+/* AI 辅助写作常规工具栏 */
+#og_step_1 .og2-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
+#og_step_1 .og2-toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--og2-muted);
+  background: var(--og2-chip-bg, #f4f4f7);
+  border: 1px solid var(--og2-border, #e5e7eb);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  user-select: none;
+}
+
+#og_step_1 .og2-toolbar-btn:hover:not(:disabled) {
+  color: var(--og2-ink, #1f2937);
+  background: #fff;
+  border-color: #cbd5e1;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+#og_step_1 .og2-toolbar-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: auto; /* 保留 hover 提示 title 显示 */
+}
+
+#og_step_1 .og2-toolbar-btn:focus-visible {
+  outline: 2px solid var(--og2-primary, #6366f1);
+  outline-offset: 1px;
+}
+
+#og_step_1 .og2-toolbar-btn svg {
+  flex-shrink: 0;
+}
+
+#og_step_1 .og2-cancel-btn {
+  color: #ef4444;
+  border-color: #fecaca;
+  background: #fff5f5;
+}
+
+#og_step_1 .og2-cancel-btn:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+/* 审阅模式对比栏（高度与常规工具栏保持严格一致，杜绝抖动） */
+#og_step_1 .og2-review-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
+#og_step_1 .og2-seg-group {
+  display: inline-flex;
+  align-items: center;
+  background: var(--og2-chip-bg, #f4f4f7);
+  border: 1px solid var(--og2-border, #e5e7eb);
+  border-radius: 6px;
+  padding: 2px;
+  gap: 2px;
+}
+
+#og_step_1 .og2-seg-btn {
+  border: none;
+  background: transparent;
+  font-size: 11.5px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  color: var(--og2-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  user-select: none;
+}
+
+#og_step_1 .og2-seg-btn.active {
+  background: #fff;
+  color: var(--og2-ink, #1f2937);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+#og_step_1 .og2-btn-accept {
+  color: #059669;
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+
+#og_step_1 .og2-btn-accept:hover {
+  background: #d1fae5;
+  border-color: #6ee7b7;
+}
+
+#og_step_1 .og2-btn-revert {
+  color: var(--og2-muted);
+}
+
+#og_step_1 .og2-btn-revert:hover {
+  color: #b91c1c;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+/* 内联友好错误横幅 */
+#og_step_1 .og2-err-banner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  margin-top: 6px;
+  background: #fef2f2;
+  border: 1px solid #fee2e2;
+  border-radius: 6px;
+  color: #b91c1c;
+  font-size: 12px;
+}
+
+#og_step_1 .og2-err-text {
+  flex: 1;
+  line-height: 1.4;
+}
+
+#og_step_1 .og2-err-close {
+  border: none;
+  background: transparent;
+  color: #991b1b;
+  font-size: 15px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+/* 文本域微光脉冲加载（含低动态偏好降级） */
+#og_step_1 textarea.og2-shimmer {
+  background: linear-gradient(90deg, #fbfbfd 0%, rgba(99, 102, 241, 0.08) 50%, #fbfbfd 100%);
+  background-size: 200% 100%;
+  animation: og2-shimmer 1.8s ease-in-out infinite;
+  cursor: wait;
+}
+
+@keyframes og2-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #og_step_1 textarea.og2-shimmer {
+    animation: none;
+    background: rgba(99, 102, 241, 0.06);
+  }
+}
+
+/* 375px 移动端单行适配 */
+@media (max-width: 480px) {
+  #og_step_1 .og2-field-footer {
+    gap: 4px;
+  }
+  #og_step_1 .og2-toolbar {
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  #og_step_1 .og2-toolbar::-webkit-scrollbar {
+    display: none;
+  }
+  #og_step_1 .og2-toolbar-btn {
+    padding: 3px 6px;
+    font-size: 11px;
+  }
+  #og_step_1 .og2-review-bar {
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  #og_step_1 .og2-review-bar::-webkit-scrollbar {
+    display: none;
+  }
+  #og_step_1 .og2-seg-btn {
+    padding: 2px 5px;
+    font-size: 11px;
+  }
+  #og_step_1 .og2-word-count {
+    font-size: 11px;
+  }
 }

@@ -171,7 +171,44 @@
           </div>
           <div class="og2-field">
             <textarea id="og_setting" rows="3" placeholder="世界观、时代背景、核心冲突等"></textarea>
+            <div class="og2-err-banner" id="og_setting_err" style="display:none;" role="alert">
+              <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"></circle><line x1="12" y1="8" x2="12" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line><circle cx="12" cy="16" r="1" fill="currentColor"></circle></svg>
+              <span class="og2-err-text" id="og_setting_err_msg"></span>
+              <button type="button" class="og2-err-close" id="btn_setting_err_close" title="关闭提示">×</button>
+            </div>
             <div class="og2-field-footer" id="og_setting_footer">
+              <div class="og2-toolbar" id="og_setting_toolbar">
+                <button type="button" class="og2-toolbar-btn" id="btn_setting_regen" title="请先选择题材或填写书名" disabled>
+                  <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg>
+                  <span>换个设定</span>
+                </button>
+                <button type="button" class="og2-toolbar-btn" id="btn_setting_polish" title="请先写一点内容" disabled>
+                  <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path></svg>
+                  <span>润色</span>
+                </button>
+                <button type="button" class="og2-toolbar-btn" id="btn_setting_expand" title="请先写一点内容" disabled>
+                  <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                  <span>扩充</span>
+                </button>
+                <button type="button" class="og2-toolbar-btn og2-cancel-btn" id="btn_setting_cancel" style="display:none;" title="取消生成">
+                  <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line><line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line></svg>
+                  <span>取消</span>
+                </button>
+              </div>
+              <div class="og2-review-bar" id="og_setting_review_bar" style="display:none;">
+                <div class="og2-seg-group" role="group" aria-label="版本切换">
+                  <button type="button" class="og2-seg-btn" id="btn_setting_view_orig" aria-pressed="false">原版</button>
+                  <button type="button" class="og2-seg-btn active" id="btn_setting_view_new" aria-pressed="true">新版</button>
+                </div>
+                <button type="button" class="og2-toolbar-btn og2-btn-accept" id="btn_setting_accept" title="保留当前版本">
+                  <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><polyline points="20 6 9 17 4 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+                  <span>保留此版</span>
+                </button>
+                <button type="button" class="og2-toolbar-btn og2-btn-revert" id="btn_setting_revert" title="放弃新版并撤回到原版">
+                  <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path><path d="M3 3v5h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg>
+                  <span>撤回</span>
+                </button>
+              </div>
               <span class="og2-word-count" id="txt_setting_word_count">0 字</span>
             </div>
           </div>
@@ -183,7 +220,44 @@
           </div>
           <div class="og2-field">
             <textarea id="og_storyline" rows="3" placeholder="主角要做什么、结局大致走向"></textarea>
+            <div class="og2-err-banner" id="og_storyline_err" style="display:none;" role="alert">
+              <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"></circle><line x1="12" y1="8" x2="12" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line><circle cx="12" cy="16" r="1" fill="currentColor"></circle></svg>
+              <span class="og2-err-text" id="og_storyline_err_msg"></span>
+              <button type="button" class="og2-err-close" id="btn_storyline_err_close" title="关闭提示">×</button>
+            </div>
             <div class="og2-field-footer" id="og_storyline_footer">
+              <div class="og2-toolbar" id="og_storyline_toolbar">
+                <button type="button" class="og2-toolbar-btn" id="btn_storyline_regen" title="请先选择题材或填写书名" disabled>
+                  <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg>
+                  <span>换个主线</span>
+                </button>
+                <button type="button" class="og2-toolbar-btn" id="btn_storyline_polish" title="请先写一点内容" disabled>
+                  <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path></svg>
+                  <span>润色</span>
+                </button>
+                <button type="button" class="og2-toolbar-btn" id="btn_storyline_expand" title="请先写一点内容" disabled>
+                  <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                  <span>扩充</span>
+                </button>
+                <button type="button" class="og2-toolbar-btn og2-cancel-btn" id="btn_storyline_cancel" style="display:none;" title="取消生成">
+                  <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line><line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line></svg>
+                  <span>取消</span>
+                </button>
+              </div>
+              <div class="og2-review-bar" id="og_storyline_review_bar" style="display:none;">
+                <div class="og2-seg-group" role="group" aria-label="版本切换">
+                  <button type="button" class="og2-seg-btn" id="btn_storyline_view_orig" aria-pressed="false">原版</button>
+                  <button type="button" class="og2-seg-btn active" id="btn_storyline_view_new" aria-pressed="true">新版</button>
+                </div>
+                <button type="button" class="og2-toolbar-btn og2-btn-accept" id="btn_storyline_accept" title="保留当前版本">
+                  <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><polyline points="20 6 9 17 4 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+                  <span>保留此版</span>
+                </button>
+                <button type="button" class="og2-toolbar-btn og2-btn-revert" id="btn_storyline_revert" title="放弃新版并撤回到原版">
+                  <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path><path d="M3 3v5h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg>
+                  <span>撤回</span>
+                </button>
+              </div>
               <span class="og2-word-count" id="txt_storyline_word_count">0 字</span>
             </div>
           </div>
