@@ -54,6 +54,31 @@
 
     <!-- 步骤 1：核心脑洞 -->
     <div class="stepper-panel active" id="og_step_1">
+      <!-- 1c-1: 作品卡摘要条与完成度 -->
+      <div id="og2_summary_bar" class="og2-summary-bar" role="region" aria-label="作品卡摘要">
+        <div class="og2-summary-inner">
+          <div class="og2-summary-meta">
+            <span id="og2_summary_genre" class="og2-summary-genre is-empty">未选题材</span>
+            <span class="og2-summary-sep">·</span>
+            <span id="og2_summary_title" class="og2-summary-title is-empty">未命名</span>
+            <span class="og2-summary-sep">·</span>
+            <span id="og2_summary_setting_wc" class="og2-summary-wc">背景 0 字</span>
+            <span class="og2-summary-sep">·</span>
+            <span id="og2_summary_storyline_wc" class="og2-summary-wc">主线 0 字</span>
+          </div>
+          <div class="og2-summary-progress" aria-label="完成度">
+            <div class="og2-progress-dots" aria-hidden="true">
+              <span id="og2_dot_genre" class="og2-dot" title="题材"></span>
+              <span id="og2_dot_title" class="og2-dot" title="书名"></span>
+              <span id="og2_dot_setting" class="og2-dot" title="背景设定"></span>
+              <span id="og2_dot_storyline" class="og2-dot" title="故事主线"></span>
+            </div>
+            <span id="og2_summary_completion" class="og2-summary-count">已填写 0/4</span>
+            <div id="og2_summary_announce" class="sr-only" aria-live="polite"></div>
+          </div>
+        </div>
+      </div>
+
       <div class="onboarding-banner" id="og_no_provider_banner" style="display:none">
         <span class="banner-icon">
           <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" style="vertical-align:middle;"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path><line x1="12" y1="9" x2="12" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line><circle cx="12" cy="17" r="1" fill="currentColor"></circle></svg>
@@ -1286,7 +1311,8 @@
   <script src="/static/js/util.js"></script>
   <script src="/static/js/state.js"></script>
   <script src="/static/js/generator.js"></script>
-  <script src="/static/js/og_refine.js"></script>
+  <script defer src="/static/js/og_refine.js"></script>
+  <script defer src="/static/js/og_step1.js"></script>
   <script src="/static/js/library.js"></script>
   <script src="/static/js/reader.js"></script>
   <script src="/static/js/app.js"></script>

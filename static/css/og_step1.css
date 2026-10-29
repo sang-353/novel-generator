@@ -904,3 +904,153 @@
     font-size: 11px;
   }
 }
+
+/* ============================================================
+   1c-1: 作品卡摘要条与完成度
+   ============================================================ */
+#view-original #og2_summary_bar {
+  position: sticky;
+  top: var(--og2-header-height, 53px);
+  z-index: 20;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--og2-border);
+  margin: -12px -32px 20px -32px;
+  padding: 0 32px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  transition: top var(--dur-micro) ease;
+}
+
+#view-original .og2-summary-inner {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+}
+
+#view-original .og2-summary-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--og2-muted);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+#view-original .og2-summary-genre {
+  font-weight: 600;
+  color: var(--og2-primary);
+  background: var(--og2-primary-light);
+  padding: 2px 8px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#view-original .og2-summary-genre.is-empty {
+  color: var(--og2-muted);
+  background: #F1F5F9;
+  font-weight: 500;
+}
+
+#view-original .og2-summary-sep {
+  color: #CBD5E1;
+  flex-shrink: 0;
+}
+
+#view-original .og2-summary-title {
+  font-weight: 600;
+  color: var(--og2-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+#view-original .og2-summary-title.is-empty {
+  color: var(--og2-muted);
+  font-weight: 400;
+}
+
+#view-original .og2-summary-wc {
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+#view-original .og2-summary-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+#view-original .og2-progress-dots {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#view-original .og2-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1.5px solid #94A3B8;
+  background: transparent;
+  transition: all var(--dur-micro) ease;
+}
+
+#view-original .og2-dot.filled {
+  background: var(--og2-primary);
+  border-color: var(--og2-primary);
+}
+
+#view-original .og2-summary-count {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--og2-sub);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+#view-original .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* 移动端 375px 适配 */
+@media (max-width: 640px) {
+  #view-original #og2_summary_bar {
+    margin: -8px -14px 16px -14px;
+    padding: 0 14px;
+    height: 38px;
+    top: var(--og2-header-height, 49px);
+  }
+  #view-original .og2-summary-meta {
+    font-size: 12px;
+    gap: 6px;
+  }
+  #view-original .og2-summary-wc,
+  #view-original .og2-summary-meta > .og2-summary-sep:nth-of-type(2),
+  #view-original .og2-summary-meta > .og2-summary-sep:nth-of-type(3) {
+    display: none;
+  }
+  #view-original .og2-summary-title {
+    max-width: 110px;
+  }
+  #view-original .og2-summary-count {
+    font-size: 12px;
+  }
+}
