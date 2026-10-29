@@ -1,0 +1,210 @@
+[
+  {
+    "container": "og_step_2",
+    "id": "og_characters",
+    "tagName": "textarea",
+    "visibleText": "姓名：身份，性格，目标（每行一个角色）",
+    "isVisible": false,
+    "isEnabled": true
+  },
+  {
+    "container": "og_step_2",
+    "id": "og_style",
+    "tagName": "input",
+    "visibleText": "如：轻松幽默 / 严肃沉重 / 古风文雅",
+    "isVisible": false,
+    "isEnabled": true
+  },
+  {
+    "container": "og_step_2",
+    "id": "og_perspective",
+    "tagName": "select",
+    "visibleText": "第三人称\n            第一人称\n            上帝视角",
+    "isVisible": false,
+    "isEnabled": true
+  },
+  {
+    "container": "og_step_2",
+    "id": "btn_outline",
+    "tagName": "button",
+    "visibleText": "✨ 推演大纲与设定集",
+    "isVisible": false,
+    "isEnabled": true
+  },
+  {
+    "container": "og_step_2",
+    "id": "btn_step2_prev",
+    "tagName": "button",
+    "visibleText": "← 上一步",
+    "isVisible": false,
+    "isEnabled": true
+  },
+  {
+    "container": "og_step_2",
+    "id": "btn_step2_next",
+    "tagName": "button",
+    "visibleText": "下一步：批量写作配置 →",
+    "isVisible": false,
+    "isEnabled": true
+  },
+  {
+    "container": "og_step_3",
+    "id": "og_provider",
+    "tagName": "select",
+    "visibleText": "",
+    "isVisible": false,
+    "isEnabled": true
+  },
+  {
+    "container": "og_step_3",
+    "id": "btn_manage_og",
+    "tagName": "button",
+    "visibleText": "管理模型",
+    "isVisible": false,
+    "isEnabled": true
+  },
+  {
+    "container": "og_step_3",
+    "id": "og_chapters",
+    "tagName": "input",
+    "visibleText": "10",
+    "isVisible": false,
+    "isEnabled": true
+  },
+  {
+    "container": "og_step_3",
+    "id": "og_per_words",
+    "tagName": "input",
+    "visibleText": "1500",
+    "isVisible": false,
+    "isEnabled": true
+  },
+  {
+    "container": "og_step_3",
+    "id": "og_extra",
+    "tagName": "textarea",
+    "visibleText": "其他你想强调的内容，如结局方向、禁用元素等",
+    "isVisible": false,
+    "isEnabled": true
+  },
+  {
+    "container": "og_step_3",
+    "id": "btn_step3_prev",
+    "tagName": "button",
+    "visibleText": "← 返回修改设定",
+    "isVisible": false,
+    "isEnabled": true
+  },
+  {
+    "container": "og_step_3",
+    "id": "btn_write",
+    "tagName": "button",
+    "visibleText": "从已有大纲写作",
+    "isVisible": false,
+    "isEnabled": false
+  },
+  {
+    "container": "og_step_3",
+    "id": "btn_write_all",
+    "tagName": "button",
+    "visibleText": "⚡ 开始全书生成",
+    "isVisible": false,
+    "isEnabled": true
+  },
+  {
+    "container": "og_bible_card",
+    "id": "btn_toggle_bible_raw",
+    "tagName": "button",
+    "visibleText": "查看原始 JSON",
+    "isVisible": false,
+    "isEnabled": true
+  },
+  {
+    "container": "og_bible_card",
+    "id": "og_bible_setting",
+    "tagName": "textarea",
+    "visibleText": "时代背景、力量法则、地理势力格局…",
+    "isVisible": false,
+    "isEnabled": true
+  },
+  {
+    "container": "og_bible_card",
+    "id": "btn_add_bible_char",
+    "tagName": "button",
+    "visibleText": "+ 添加角色",
+    "isVisible": false,
+    "isEnabled": true
+  },
+  {
+    "container": "og_bible_card",
+    "id": "og_bible_conflict",
+    "tagName": "input",
+    "visibleText": "核心矛盾交锋与故事主线目标…",
+    "isVisible": false,
+    "isEnabled": true
+  },
+  {
+    "container": "og_bible_card",
+    "id": "og_bible_tone",
+    "tagName": "input",
+    "visibleText": "叙事基调与语言特色…",
+    "isVisible": false,
+    "isEnabled": true
+  },
+  {
+    "container": "og_bible_card",
+    "id": "og_bible_raw",
+    "tagName": "textarea",
+    "visibleText": "",
+    "isVisible": false,
+    "isEnabled": true
+  },
+  {
+    "container": "og_outline_card",
+    "id": "og_logline_input",
+    "tagName": "input",
+    "visibleText": "本作的一句话梗概",
+    "isVisible": false,
+    "isEnabled": true
+  },
+  {
+    "container": "og_outline_card",
+    "id": "btn_add_outline_ch",
+    "tagName": "button",
+    "visibleText": "+ 添加一章",
+    "isVisible": false,
+    "isEnabled": true
+  },
+  {
+    "container": "og_outline_card",
+    "id": "og_outline_text",
+    "tagName": "textarea",
+    "visibleText": "",
+    "isVisible": false,
+    "isEnabled": true
+  },
+  {
+    "container": "og_outline_card",
+    "id": "btn_regenerate",
+    "tagName": "button",
+    "visibleText": "重新生成大纲",
+    "isVisible": false,
+    "isEnabled": true
+  },
+  {
+    "container": "og_progress_card",
+    "id": "og_cancel_job",
+    "tagName": "button",
+    "visibleText": "取消任务",
+    "isVisible": false,
+    "isEnabled": true
+  },
+  {
+    "container": "og_progress_card",
+    "id": "og_open_reader",
+    "tagName": "button",
+    "visibleText": "打开阅读",
+    "isVisible": false,
+    "isEnabled": true
+  }
+]

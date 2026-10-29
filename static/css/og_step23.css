@@ -1,0 +1,385 @@
+/* ============================================================
+   og_step23.css - 原创小说生成第 2、3 步视觉规范样式
+   前缀：og3-
+   严格遵循 AGENTS.md：禁止使用 !important
+   ============================================================ */
+
+/* 1. 步骤面板通用布局与排版 */
+#view-original #og_step_2,
+#view-original #og_step_3 {
+  padding-top: 8px;
+}
+
+#view-original #og_step_2 label,
+#view-original #og_step_3 label,
+#view-original #og_bible_card label,
+#view-original #og_outline_card label {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+
+#view-original #og_step_2 textarea,
+#view-original #og_step_2 input[type="text"],
+#view-original #og_step_2 select,
+#view-original #og_step_3 textarea,
+#view-original #og_step_3 input[type="text"],
+#view-original #og_step_3 input[type="number"],
+#view-original #og_step_3 select,
+#view-original #og_bible_card textarea,
+#view-original #og_bible_card input[type="text"],
+#view-original #og_outline_card textarea,
+#view-original #og_outline_card input[type="text"] {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 13.5px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+#view-original #og_step_2 textarea:focus,
+#view-original #og_step_2 input[type="text"]:focus,
+#view-original #og_step_2 select:focus,
+#view-original #og_step_3 textarea:focus,
+#view-original #og_step_3 input[type="text"]:focus,
+#view-original #og_step_3 input[type="number"]:focus,
+#view-original #og_step_3 select:focus,
+#view-original #og_bible_card textarea:focus,
+#view-original #og_bible_card input[type="text"]:focus,
+#view-original #og_outline_card textarea:focus,
+#view-original #og_outline_card input[type="text"]:focus {
+  border-color: var(--accent, #2563EB);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-ring, rgba(37, 99, 235, 0.15));
+}
+
+/* 2. 操作按钮系统（每屏单主操作 + 次要描边操作） */
+.og3-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 8px 16px;
+  font-size: 13.5px;
+  font-weight: 500;
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+  box-sizing: border-box;
+  text-decoration: none;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.og3-btn-pri {
+  background: var(--accent, #2563EB);
+  border: 1px solid var(--accent, #2563EB);
+  color: #FFFFFF;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.2);
+}
+
+.og3-btn-pri:hover:not(:disabled) {
+  background: var(--accent-hover, #1D4ED8);
+  border-color: var(--accent-hover, #1D4ED8);
+  color: #FFFFFF;
+}
+
+.og3-btn-pri:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.og3-btn-sec {
+  background: var(--card, #FFFFFF);
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+
+.og3-btn-sec:hover:not(:disabled) {
+  background: var(--card-muted, rgba(0, 0, 0, 0.04));
+  border-color: var(--muted);
+  color: var(--ink);
+}
+
+.og3-btn-sec:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.og3-btn-ghost {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--muted);
+}
+
+.og3-btn-ghost:hover:not(:disabled) {
+  background: var(--card-muted, rgba(0, 0, 0, 0.04));
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.og3-btn-sm {
+  min-height: 32px;
+  padding: 4px 12px;
+  font-size: 12.5px;
+}
+
+/* 确保步骤 2、3 及相关卡片内所有按钮触控区满足桌面端 >= 32px */
+#view-original #og_step_2 button,
+#view-original #og_step_3 button,
+#view-original #og_bible_card button,
+#view-original #og_outline_card button,
+#view-original #og_progress_card button {
+  min-height: 32px;
+}
+
+/* 3. 小图标按钮系统（↑ ↓ ×）与触控区保障 */
+.og3-icon-btn,
+.btn-oc-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--card, #FFFFFF);
+  color: var(--ink);
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: all 0.15s ease;
+}
+
+.og3-icon-btn:hover:not(:disabled),
+.btn-oc-action:hover:not(:disabled) {
+  background: var(--card-muted, rgba(0, 0, 0, 0.05));
+  border-color: var(--muted);
+  color: var(--ink);
+}
+
+.og3-icon-btn:disabled,
+.btn-oc-action:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* 危险删除按钮 */
+.og3-icon-danger,
+.btn-oc-action.danger {
+  color: #DC2626;
+  border-color: rgba(220, 38, 38, 0.25);
+  background: rgba(220, 38, 38, 0.03);
+}
+
+.og3-icon-danger:hover:not(:disabled),
+.btn-oc-action.danger:hover:not(:disabled) {
+  background: rgba(220, 38, 38, 0.1);
+  border-color: #DC2626;
+  color: #B91C1C;
+}
+
+/* 4. 设定档案卡片与角色列表 */
+#view-original #og_bible_card,
+#view-original #og_outline_card {
+  margin-top: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--line);
+}
+
+.char-card {
+  border: 1px solid var(--line);
+  background: var(--card, #FFFFFF);
+  border-radius: var(--radius-sm, 6px);
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  transition: border-color 0.15s ease;
+}
+
+.char-card:hover {
+  border-color: var(--muted);
+}
+
+.char-card-hd {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.char-card-hd .char-name {
+  flex: 0 0 150px;
+  font-weight: 600;
+}
+
+.char-card-hd .char-role {
+  flex: 1;
+}
+
+.char-card-bd {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 5. 章节大纲容器与独立项 */
+.outline-ch {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm, 6px);
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  background: var(--card, #FFFFFF);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: border-color 0.15s ease;
+}
+
+.outline-ch:hover {
+  border-color: var(--muted);
+}
+
+.outline-ch-hd {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.outline-ch-badge {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--card-subtle, rgba(0, 0, 0, 0.04));
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+}
+
+.outline-ch-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.outline-ch-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 6. 生成进度与实时打字机窗口 */
+#view-original #og_progress_card {
+  margin-top: 20px;
+  border: 1px solid var(--line);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+#view-original .bar {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--line);
+  overflow: hidden;
+  margin: 14px 0 10px;
+}
+
+#view-original #og_progress_bar {
+  height: 100%;
+  background: var(--accent, #2563EB);
+  border-radius: 4px;
+  transition: transform 0.2s ease;
+  transform-origin: left;
+}
+
+.stream-preview-box {
+  margin-top: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--card-subtle, rgba(0, 0, 0, 0.02));
+  overflow: hidden;
+}
+
+.stream-preview-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.stream-preview-body {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 12px 14px;
+  margin: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--ink);
+}
+
+/* 7. 375px 移动端响应式与防横滚 */
+@media (max-width: 640px) {
+  #view-original #og_step_2,
+  #view-original #og_step_3,
+  #view-original #og_bible_card,
+  #view-original #og_outline_card,
+  #view-original #og_progress_card {
+    overflow-x: hidden;
+  }
+
+  .og3-btn {
+    min-height: 38px;
+    font-size: 14px;
+  }
+
+  .og3-icon-btn,
+  .btn-oc-action {
+    min-width: 36px;
+    min-height: 36px;
+  }
+
+  #view-original #og_step_2 button,
+  #view-original #og_step_3 button,
+  #view-original #og_bible_card button,
+  #view-original #og_outline_card button,
+  #view-original #og_progress_card button {
+    min-height: 36px;
+  }
+
+  .char-card-hd {
+    flex-wrap: wrap;
+  }
+
+  .char-card-hd .char-name {
+    flex: 1 1 calc(100% - 46px);
+  }
+
+  .char-card-hd .char-role {
+    flex: 1 1 100%;
+  }
+
+  .stepper-nav-row {
+    flex-direction: column-reverse;
+    gap: 10px;
+    align-items: stretch;
+  }
+
+  .stepper-nav-row > button,
+  .stepper-nav-row > div > button {
+    width: 100%;
+    min-height: 40px;
+  }
+
+  .model-select-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+}

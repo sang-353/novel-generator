@@ -8,6 +8,7 @@
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.png">  <link rel="stylesheet" href="/static/css/app.css">
   <link rel="stylesheet" href="/static/css/og_step1.css">
+  <link rel="stylesheet" href="/static/css/og_step23.css">
 </head>
 <body>
 <a class="skip-link" href="#main">跳到主内容</a>
@@ -311,6 +312,7 @@
     </div>
 
     <!-- 步骤 2：人物与大纲 -->
+    <!-- 步骤 2：人物与大纲 -->
     <div class="stepper-panel" id="og_step_2" style="display:none">
       <label for="og_characters">主要角色（每行一个）</label>
       <textarea id="og_characters" rows="3" placeholder="姓名：身份，性格，目标（每行一个角色）"></textarea>
@@ -328,14 +330,23 @@
       <div class="stepper-actions-box" style="margin-top:14px;padding:12px 14px;background:var(--card-subtle, rgba(0,0,0,0.02));border:1px solid var(--line);border-radius:var(--radius);">
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
           <span style="font-weight:600;font-size:13px;">推演大纲与设定集</span>
-          <button type="button" class="secondary mini-btn" id="btn_outline">✨ 推演大纲与设定集</button>
+          <button type="button" class="btn secondary mini-btn og3-btn og3-btn-sec" id="btn_outline">
+            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path></svg>
+            <span>推演大纲与设定集</span>
+          </button>
         </div>
         <span class="mini" id="og_status" role="status" aria-live="polite" style="margin-top:4px;display:block;"></span>
       </div>
 
       <div class="stepper-nav-row" style="margin-top:16px;display:flex;justify-content:space-between;">
-        <button type="button" class="ghost" id="btn_step2_prev">← 上一步</button>
-        <button type="button" class="primary" id="btn_step2_next">下一步：批量写作配置 →</button>
+        <button type="button" class="btn ghost og3-btn og3-btn-ghost" id="btn_step2_prev">
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="m15 18-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          <span>上一步</span>
+        </button>
+        <button type="button" class="btn primary og3-btn og3-btn-pri" id="btn_step2_next">
+          <span>下一步：批量写作配置</span>
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="m9 18 6-6-6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        </button>
       </div>
     </div>
 
@@ -346,7 +357,7 @@
           <label for="og_provider">创作模型</label>
           <select id="og_provider"><option value="">加载中…</option></select>
         </div>
-        <button class="ghost" id="btn_manage_og" style="margin-bottom:2px">管理模型</button>
+        <button type="button" class="btn ghost og3-btn og3-btn-ghost og3-btn-sm" id="btn_manage_og" style="margin-bottom:2px">管理模型</button>
       </div>
       <div class="row">
         <div><label for="og_chapters">章节数</label><input type="number" id="og_chapters" value="10" min="1" max="100"></div>
@@ -356,10 +367,16 @@
       <textarea id="og_extra" rows="2" placeholder="其他你想强调的内容，如结局方向、禁用元素等"></textarea>
 
       <div class="stepper-nav-row" style="margin-top:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
-        <button type="button" class="ghost" id="btn_step3_prev">← 返回修改设定</button>
+        <button type="button" class="btn ghost og3-btn og3-btn-ghost" id="btn_step3_prev">
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="m15 18-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          <span>返回修改设定</span>
+        </button>
         <div style="display:flex;gap:8px;">
-          <button class="secondary" id="btn_write" disabled>从已有大纲写作</button>
-          <button class="primary" id="btn_write_all">⚡ 开始全书生成</button>
+          <button type="button" class="btn secondary og3-btn og3-btn-sec" id="btn_write" disabled>从已有大纲写作</button>
+          <button type="button" class="btn primary og3-btn og3-btn-pri" id="btn_write_all">
+            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polygon></svg>
+            <span>开始全书生成</span>
+          </button>
         </div>
       </div>
     </div>
@@ -368,7 +385,7 @@
   <div class="card" id="og_bible_card" style="display:none">
     <div style="display:flex;align-items:center;justify-content:space-between;">
       <h2><span class="h2-folio">01</span>设定档案</h2>
-      <button type="button" class="ghost mini-btn" id="btn_toggle_bible_raw">查看原始 JSON</button>
+      <button type="button" class="btn ghost mini-btn og3-btn og3-btn-ghost og3-btn-sm" id="btn_toggle_bible_raw">查看原始 JSON</button>
     </div>
     <div style="margin-top:12px">
       <label for="og_bible_setting">世界观与时代背景</label>
@@ -377,7 +394,10 @@
     <div style="margin-top:14px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
         <label style="margin:0">主要角色档案</label>
-        <button type="button" class="secondary mini-btn" id="btn_add_bible_char">+ 添加角色</button>
+        <button type="button" class="btn secondary mini-btn og3-btn og3-btn-sec og3-btn-sm" id="btn_add_bible_char">
+          <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line></svg>
+          <span>添加角色</span>
+        </button>
       </div>
       <div id="og_bible_chars"></div>
     </div>
@@ -400,7 +420,10 @@
     <input type="text" id="og_logline_input" placeholder="本作的一句话梗概" autocomplete="off">
     <div id="og_outline_editor" style="margin-top:12px"></div>
     <div id="og_outline_add_wrap" style="margin:12px 0;display:flex;gap:10px;align-items:center;">
-      <button type="button" class="secondary mini-btn" id="btn_add_outline_ch">+ 添加一章</button>
+      <button type="button" class="btn secondary mini-btn og3-btn og3-btn-sec og3-btn-sm" id="btn_add_outline_ch">
+        <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line></svg>
+        <span>添加一章</span>
+      </button>
       <span class="mini" style="color:var(--muted)">共 <strong id="og_ch_count">0</strong> 章</span>
     </div>
     <details style="margin-top:12px">
@@ -408,7 +431,7 @@
       <textarea id="og_outline_text" rows="8" aria-label="原始章节大纲 JSON" style="font-size:12px;margin-top:6px"></textarea>
     </details>
     <div class="actions">
-      <button class="ghost" id="btn_regenerate">重新生成大纲</button>
+      <button type="button" class="btn ghost og3-btn og3-btn-sec" id="btn_regenerate">重新生成大纲</button>
     </div>
   </div>
 
@@ -430,8 +453,8 @@
     </div>
 
     <div class="actions">
-      <button class="secondary" id="og_cancel_job" style="display:none">取消任务</button>
-      <button class="secondary" id="og_open_reader" style="display:none">打开阅读</button>
+      <button type="button" class="btn secondary og3-btn og3-btn-sec" id="og_cancel_job" style="display:none">取消任务</button>
+      <button type="button" class="btn primary og3-btn og3-btn-pri" id="og_open_reader" style="display:none">打开阅读</button>
     </div>
   </div>
 </section>

@@ -860,7 +860,9 @@ function renderBibleCharCards(chars) {
       <div class="char-card-hd">
         <input type="text" class="char-name" value="${escapeHtml(c.name || '')}" placeholder="角色姓名">
         <input type="text" class="char-role" value="${escapeHtml(c.role || '')}" placeholder="身份/定位（如：主角 / 宿敌）">
-        <button type="button" class="btn-oc-action danger" data-act="del-char" title="删除角色" aria-label="删除角色">×</button>
+        <button type="button" class="btn-oc-action danger og3-icon-btn og3-icon-danger" data-act="del-char" title="删除角色" aria-label="删除角色">
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line><line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line></svg>
+        </button>
       </div>
       <div class="char-card-bd">
         <input type="text" class="char-desc" value="${escapeHtml(c.desc || '')}" placeholder="性格特征、外貌或核心能力…">
@@ -1016,9 +1018,15 @@ function renderOutlineEditor(outline) {
         <div class="outline-ch-hd">
           <span class="outline-ch-badge">第 ${i + 1} 章</span>
           <div class="outline-ch-actions">
-            <button type="button" class="btn-oc-action" data-act="up" title="上移" aria-label="上移本章"${i === 0 ? ' disabled' : ''}>↑</button>
-            <button type="button" class="btn-oc-action" data-act="down" title="下移" aria-label="下移本章"${i === chs.length - 1 ? ' disabled' : ''}>↓</button>
-            <button type="button" class="btn-oc-action danger" data-act="del" title="删除本章" aria-label="删除本章">×</button>
+            <button type="button" class="btn-oc-action og3-icon-btn" data-act="up" title="上移" aria-label="上移本章"${i === 0 ? ' disabled' : ''}>
+              <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><polyline points="18 15 12 9 6 15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+            </button>
+            <button type="button" class="btn-oc-action og3-icon-btn" data-act="down" title="下移" aria-label="下移本章"${i === chs.length - 1 ? ' disabled' : ''}>
+              <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><polyline points="6 9 12 15 18 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+            </button>
+            <button type="button" class="btn-oc-action danger og3-icon-btn og3-icon-danger" data-act="del" title="删除本章" aria-label="删除本章">
+              <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line><line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line></svg>
+            </button>
           </div>
         </div>
         <div class="outline-ch-body">
