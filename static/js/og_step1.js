@@ -203,6 +203,46 @@
   }
 
   // 5. 撤销 Toast 展示与关闭
+  function adjustUndoToastPosition() {
+    const toastEl = $('og2_undo_toast');
+    if (!toastEl || toastEl.style.display === 'none') return;
+
+    const isMobile = window.innerWidth <= 640;
+    const baseBottom = isMobile ? 16 : 24;
+
+    toastEl.style.bottom = `${baseBottom}px`;
+    const toastRect = toastEl.getBoundingClientRect();
+
+    const obstacles = [];
+    const nextBtn = $('btn_step1_next');
+    if (nextBtn) obstacles.push(nextBtn);
+    document.querySelectorAll('#view-original .og2-field-footer').forEach(el => obstacles.push(el));
+
+    let maxBottom = baseBottom;
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+
+    obstacles.forEach(el => {
+      const r = el.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0 || r.bottom <= 0 || r.top >= vh) return;
+
+      const xOverlap = !(toastRect.right <= r.left || toastRect.left >= r.right);
+      if (!xOverlap) return;
+
+      const toastTop = vh - maxBottom - toastRect.height;
+      const toastBottom = vh - maxBottom;
+      const yOverlap = !(toastBottom <= r.top || toastTop >= r.bottom);
+
+      if (yOverlap) {
+        const needed = (vh - r.top) + 8;
+        if (needed > maxBottom) {
+          maxBottom = needed;
+        }
+      }
+    });
+
+    toastEl.style.bottom = `${maxBottom}px`;
+  }
+
   function showUndoToast(tropeName) {
     const toastEl = $('og2_undo_toast');
     if (!toastEl) return;
@@ -221,6 +261,7 @@
     }
 
     toastEl.style.display = 'flex';
+    adjustUndoToastPosition();
 
     // 保留 10 秒后自动消失
     undoTimer = setTimeout(() => {
@@ -230,9 +271,11 @@
 
   function hideUndoToast() {
     clearTimeout(undoTimer);
+    lastSnapshot = null;
     const toastEl = $('og2_undo_toast');
     if (toastEl) {
       toastEl.style.display = 'none';
+      toastEl.style.bottom = '';
     }
   }
 
@@ -342,6 +385,10 @@
         try { prevHook(); } catch (e) { console.error(e); }
       }
       updateOgSummary();
+      const isAllEmpty = CONTENT_FIELDS.every(id => !($(id) ? $(id).value.trim() : ''));
+      if (isAllEmpty) {
+        hideUndoToast();
+      }
     };
   }
 
@@ -349,21 +396,44 @@
   function init() {
     syncHeaderHeight();
     window.addEventListener('resize', syncHeaderHeight);
+    window.addEventListener('scroll', adjustUndoToastPosition, { passive: true });
+    window.addEventListener('resize', adjustUndoToastPosition, { passive: true });
 
     setupHook();
 
-    // 监听输入事件实时更新摘要条
-    ['og_genre', 'og_title', 'og_setting', 'og_storyline'].forEach(id => {
+    // 监听输入事件实时更新摘要条；真实用户手动输入（isTrusted）立即隐藏撤销 Toast
+    SNAPSHOT_FIELDS.forEach(id => {
       const el = $(id);
       if (el) {
-        el.addEventListener('input', () => {
+        el.addEventListener('input', (e) => {
           updateOgSummary();
           if (id === 'og_genre') {
             handleGenreChange();
           }
+          if (e && e.isTrusted) {
+            hideUndoToast();
+          }
+        });
+        el.addEventListener('change', (e) => {
+          if (e && e.isTrusted) {
+            hideUndoToast();
+          }
         });
       }
     });
+
+    // 监听清空表单按钮
+    const clearBtn = $('btn_clear_og');
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        setTimeout(() => {
+          const isAllEmpty = CONTENT_FIELDS.every(id => !($(id) ? $(id).value.trim() : ''));
+          if (isAllEmpty) {
+            hideUndoToast();
+          }
+        }, 50);
+      });
+    }
 
     // 监听题材药丸点击
     const pillsGenreWrap = $('og_genre_pills');
@@ -411,6 +481,7 @@
           return;
         }
         hideStep1InlineTip();
+        hideUndoToast();
       }, true);
     }
 

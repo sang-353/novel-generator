@@ -469,6 +469,148 @@ def test_og_draft_consistency_after_accept_undo_and_reload(page, live_server):
     assert page.locator("#og_setting").input_value().strip() == "原始背景设定"
 
 
+def test_og_undo_toast_hidden_on_clear_form(page, live_server):
+    """验证点击「清空表单」立即隐藏撤销 Toast 并清除快照。"""
+    page.goto(f"{live_server}/#original")
+    page.wait_for_load_state("networkidle")
+
+    # 先输入旧内容，再应用灵感以触发撤销 Toast
+    page.fill("#og_title", "旧书名")
+    page.locator("#og_trope_pills .trope-pill").first.click()
+    page.wait_for_timeout(200)
+    assert page.locator("#og2_undo_toast").is_visible(), "应用灵感后应出现撤销 Toast"
+
+    # 点击清空表单并确认
+    page.on("dialog", lambda d: d.accept())
+    page.locator("#btn_clear_og").click()
+    page.wait_for_timeout(200)
+
+    # 断言 Toast 立即隐藏
+    assert not page.locator("#og2_undo_toast").is_visible(), "清空表单后撤销 Toast 必须立即隐藏"
+
+
+def test_og_undo_toast_hidden_on_step1_next_success(page, live_server):
+    """验证「下一步」成功跳转后立即隐藏撤销 Toast 并清除快照。"""
+    page.goto(f"{live_server}/#original")
+    page.wait_for_load_state("networkidle")
+
+    # 填入旧书名并应用灵感（满足校验）
+    page.fill("#og_title", "原始书名")
+    page.locator("#og_trope_pills .trope-pill").first.click()
+    page.wait_for_timeout(200)
+    assert page.locator("#og2_undo_toast").is_visible(), "应用灵感后应出现撤销 Toast"
+
+    # 点击下一步（由于已应用灵感，必填项满足，成功进入步骤 2）
+    page.locator("#btn_step1_next").click()
+    page.wait_for_timeout(300)
+
+    # 验证已进入步骤 2 且撤销 Toast 已隐藏
+    assert page.locator("#og_step_2").is_visible(), "应成功跳转到步骤 2"
+    assert not page.locator("#og2_undo_toast").is_visible(), "下一步跳转成功后撤销 Toast 必须立即隐藏"
+
+
+def test_og_undo_toast_hidden_on_user_manual_input(page, live_server):
+    """验证用户在 10 秒内手动编辑任一表单字段立即隐藏撤销 Toast 并清除快照。"""
+    page.goto(f"{live_server}/#original")
+    page.wait_for_load_state("networkidle")
+
+    # 填入旧书名并应用灵感
+    page.fill("#og_title", "测试书名")
+    page.locator("#og_trope_pills .trope-pill").first.click()
+    page.wait_for_timeout(200)
+    assert page.locator("#og2_undo_toast").is_visible(), "应用灵感后应出现撤销 Toast"
+
+    # 用户手动在书名框打字编辑
+    page.locator("#og_title").press_sequentially("新追加的文本", delay=50)
+    page.wait_for_timeout(200)
+
+    # 断言 Toast 立即隐藏
+    assert not page.locator("#og2_undo_toast").is_visible(), "用户手动编辑字段后撤销 Toast 必须立即隐藏"
+
+
+def test_og_undo_toast_375px_layout_and_no_collision(page, live_server):
+    """验证 375px 移动端下撤销 Toast 尺寸、触控区及防相交避让。"""
+    page.set_viewport_size({"width": 375, "height": 667})
+    page.goto(f"{live_server}/#original")
+    page.wait_for_load_state("networkidle")
+
+    # 先输入再应用灵感
+    page.fill("#og_title", "移动端书名")
+    page.locator("#og_trope_pills .trope-pill").first.click()
+    page.wait_for_timeout(200)
+
+    toast = page.locator("#og2_undo_toast")
+    assert toast.is_visible()
+    toast_box = toast.bounding_box()
+    assert toast_box is not None
+
+    # 1. 宽度为 calc(100vw - 32px) = 343px (允许 2px 误差)
+    assert abs(toast_box["width"] - 343) <= 2, f"375px 下宽度应为 343px，实际为 {toast_box['width']}"
+
+    # 2. 按钮与 × 的触控区不小于 36px
+    undo_btn_box = page.locator("#btn_og2_undo").bounding_box()
+    close_btn_box = page.locator("#btn_og2_undo_close").bounding_box()
+    assert undo_btn_box["width"] >= 36 and undo_btn_box["height"] >= 36, f"撤销按钮触控区不足 36px: {undo_btn_box}"
+    assert close_btn_box["width"] >= 36 and close_btn_box["height"] >= 36, f"关闭按钮触控区不足 36px: {close_btn_box}"
+
+    # 3. 验证与视口内可见的字段工具栏及下一步按钮均不相交
+    def rects_intersect(r1, r2):
+        return not (r1["x"] + r1["width"] <= r2["x"] or
+                    r1["x"] >= r2["x"] + r2["width"] or
+                    r1["y"] + r1["height"] <= r2["y"] or
+                    r1["y"] >= r2["y"] + r2["height"])
+
+    for footer in page.locator("#view-original .og2-field-footer").all():
+        if footer.is_visible():
+            fbox = footer.bounding_box()
+            if fbox and fbox["y"] < 667 and fbox["y"] + fbox["height"] > 0:
+                assert not rects_intersect(toast_box, fbox), "撤销 Toast 与字段工具栏发生了矩形相交重叠！"
+
+    # 模拟滚动使 #btn_step1_next 进入视口底部冲突区域，验证向上避让至其上方
+    page.evaluate("""() => {
+        const btn = document.getElementById('btn_step1_next');
+        const rect = btn.getBoundingClientRect();
+        window.scrollBy(0, rect.top - 620);
+        window.dispatchEvent(new Event('scroll'));
+    }""")
+    page.wait_for_timeout(200)
+
+    toast_box2 = toast.bounding_box()
+    next_box2 = page.locator("#btn_step1_next").bounding_box()
+    if next_box2 and next_box2["y"] < 667 and next_box2["y"] + next_box2["height"] > 0:
+        assert not rects_intersect(toast_box2, next_box2), "避让后撤销 Toast 仍与 #btn_step1_next 相交！"
+        if toast_box2["y"] < next_box2["y"]:
+            assert toast_box2["y"] + toast_box2["height"] <= next_box2["y"], "发生相交时撤销 Toast 必须避让置于 #btn_step1_next 上方！"
+
+
+def test_og_undo_toast_1280px_position_no_overlap_textarea(page, live_server):
+    """验证 1280px 下撤销 Toast 位于视口右下角，不遮挡正在编辑的文本框。"""
+    page.set_viewport_size({"width": 1280, "height": 800})
+    page.goto(f"{live_server}/#original")
+    page.wait_for_load_state("networkidle")
+
+    page.fill("#og_title", "桌面端书名")
+    page.locator("#og_trope_pills .trope-pill").first.click()
+    page.wait_for_timeout(200)
+
+    toast = page.locator("#og2_undo_toast")
+    assert toast.is_visible()
+    toast_box = toast.bounding_box()
+    assert toast_box is not None
+
+    right_margin = 1280 - (toast_box["x"] + toast_box["width"])
+    assert right_margin >= 16 and right_margin <= 32, f"右下角右侧间距异常: {right_margin}"
+    bottom_margin = 800 - (toast_box["y"] + toast_box["height"])
+    assert bottom_margin >= 16 and bottom_margin <= 32, f"右下角底部间距异常: {bottom_margin}"
+
+    page.locator("#og_setting").focus()
+    setting_box = page.locator("#og_setting").bounding_box()
+    assert not (toast_box["x"] < setting_box["x"] + setting_box["width"] and
+                toast_box["x"] + toast_box["width"] > setting_box["x"] and
+                toast_box["y"] < setting_box["y"] + setting_box["height"] and
+                toast_box["y"] + toast_box["height"] > setting_box["y"]), "撤销 Toast 遮挡了当前正在编辑的文本框正文"
+
+
 def test_og_screenshots_capture(page, live_server):
     """
     按照验收要求截取 1280px 与 375px 下的各状态截图并保存至 tests/e2e/artifacts/1c/。
