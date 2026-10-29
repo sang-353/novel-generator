@@ -1054,3 +1054,121 @@
     font-size: 12px;
   }
 }
+
+/* ============================================================
+   1c-2: 反馈、撤销、校验与题材提示
+   ============================================================ */
+#view-original #og_title {
+  scroll-margin-top: calc(var(--og2-header-height, 53px) + 54px);
+}
+
+.og2-flash-highlight {
+  animation: og2FlashOutline 0.6s ease forwards;
+}
+@keyframes og2FlashOutline {
+  0% {
+    outline: 2px solid var(--og2-primary);
+    outline-offset: 1px;
+    box-shadow: 0 0 0 4px var(--og2-primary-light);
+  }
+  100% {
+    outline: 2px solid transparent;
+    outline-offset: 1px;
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .og2-flash-highlight {
+    animation: none;
+    outline: none;
+    box-shadow: none;
+  }
+}
+
+#view-original .og2-genre-hint-bar {
+  background: #EFF6FF;
+  border: 1px solid #BFDBFE;
+  color: #1E40AF;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 12px;
+  animation: viewFadeIn 0.2s ease;
+}
+
+#view-original .og2-inline-tip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #FEF2F2;
+  border: 1px solid #FECACA;
+  color: #DC2626;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  margin-top: 8px;
+  animation: viewFadeIn 0.2s ease;
+}
+
+#view-original #btn_step1_next[aria-disabled="true"],
+#view-original #btn_step1_next.og2-btn-disabled {
+  background: #94A3B8;
+  border-color: #94A3B8;
+  color: #FFFFFF;
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+#view-original #btn_step1_next[aria-disabled="true"]:hover,
+#view-original #btn_step1_next.og2-btn-disabled:hover {
+  background: #94A3B8;
+  border-color: #94A3B8;
+  color: #FFFFFF;
+  transform: none;
+}
+
+#view-original .og2-undo-toast {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1050;
+  background: #0F172A;
+  color: #F8FAFC;
+  padding: 10px 16px;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13.5px;
+  font-weight: 500;
+  max-width: 90vw;
+  animation: viewFadeIn 0.2s ease;
+}
+#view-original .og2-undo-toast-btn {
+  background: var(--og2-primary);
+  color: #FFFFFF;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+#view-original .og2-undo-toast-btn:hover {
+  background: var(--og2-primary-hover);
+}
+#view-original .og2-undo-toast-close {
+  background: transparent;
+  border: none;
+  color: #94A3B8;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+#view-original .og2-undo-toast-close:hover {
+  color: #F8FAFC;
+}

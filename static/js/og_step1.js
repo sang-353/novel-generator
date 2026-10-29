@@ -6,6 +6,20 @@
 (function() {
   'use strict';
 
+  const SNAPSHOT_FIELDS = [
+    'og_title', 'og_genre', 'og_setting', 'og_characters', 'og_storyline',
+    'og_style', 'og_perspective', 'og_chapters', 'og_per_words'
+  ];
+
+  const CONTENT_FIELDS = [
+    'og_title', 'og_genre', 'og_setting', 'og_storyline', 'og_characters', 'og_style'
+  ];
+
+  let lastSnapshot = null;
+  let undoTimer = null;
+  let lastAnnouncedProgress = '';
+  let lastGenreVal = '';
+
   // 1. 同步测量 header 高度并赋给 CSS 变量 --og2-header-height
   function syncHeaderHeight() {
     const hdr = document.querySelector('header');
@@ -17,9 +31,41 @@
     }
   }
 
-  // 2. 更新摘要条内容与完成度
-  let lastAnnouncedProgress = '';
+  // 2. 检查第 1 步是否满足下一步校验规则（题材、背景、书名至少有一项非空）
+  function checkStep1Valid() {
+    const genre = $('og_genre') ? $('og_genre').value.trim() : '';
+    const setting = $('og_setting') ? $('og_setting').value.trim() : '';
+    const title = $('og_title') ? $('og_title').value.trim() : '';
+    return !!(genre || setting || title);
+  }
 
+  function updateStep1NextButtonState() {
+    const btn = $('btn_step1_next');
+    if (!btn) return;
+    const isValid = checkStep1Valid();
+    btn.setAttribute('aria-disabled', isValid ? 'false' : 'true');
+    btn.classList.toggle('og2-btn-disabled', !isValid);
+
+    if (isValid) {
+      hideStep1InlineTip();
+    }
+  }
+
+  function showStep1InlineTip() {
+    const tip = $('og2_step1_next_inline_tip');
+    if (tip) {
+      tip.style.display = 'flex';
+    }
+  }
+
+  function hideStep1InlineTip() {
+    const tip = $('og2_step1_next_inline_tip');
+    if (tip) {
+      tip.style.display = 'none';
+    }
+  }
+
+  // 3. 更新摘要条内容与完成度
   function updateOgSummary() {
     const bar = $('og2_summary_bar');
     if (!bar) return;
@@ -98,9 +144,197 @@
         announceEl.textContent = countText;
       }
     }
+
+    // 同步下一步按钮状态
+    updateStep1NextButtonState();
   }
 
-  // 3. 挂载到 window.ogStep1AfterFill 链路中（不覆盖原有钩子）
+  // 4. 快照管理
+  function takeSnapshot() {
+    const snap = {};
+    SNAPSHOT_FIELDS.forEach(id => {
+      const el = $(id);
+      snap[id] = el ? el.value : '';
+    });
+    return snap;
+  }
+
+  function restoreSnapshot(snap) {
+    if (!snap) return;
+    SNAPSHOT_FIELDS.forEach(id => {
+      const el = $(id);
+      if (el && snap[id] !== undefined) {
+        el.value = snap[id];
+      }
+    });
+
+    // 静默退出任何审阅状态
+    cancelAllReviews();
+
+    // 触发全局链路
+    if (typeof window.ogStep1AfterFill === 'function') {
+      window.ogStep1AfterFill();
+    }
+
+    // 派发 input 事件触发草稿保存
+    dispatchDraftInput();
+  }
+
+  // 派发草稿同步 input 事件
+  function dispatchDraftInput() {
+    const setEl = $('og_setting');
+    if (setEl) {
+      setEl.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  }
+
+  // 静默退出所有审阅状态
+  function cancelAllReviews() {
+    const settingReview = $('og_setting_review_bar');
+    if (settingReview && settingReview.style.display !== 'none') {
+      const btn = $('btn_setting_accept');
+      if (btn) btn.click();
+    }
+    const storylineReview = $('og_storyline_review_bar');
+    if (storylineReview && storylineReview.style.display !== 'none') {
+      const btn = $('btn_storyline_accept');
+      if (btn) btn.click();
+    }
+  }
+
+  // 5. 撤销 Toast 展示与关闭
+  function showUndoToast(tropeName) {
+    const toastEl = $('og2_undo_toast');
+    if (!toastEl) return;
+
+    clearTimeout(undoTimer);
+
+    // 隐藏可能弹出的全局通用 toast，防止重叠
+    const gToast = $('toast');
+    if (gToast) {
+      gToast.style.display = 'none';
+    }
+
+    const msgEl = $('og2_undo_toast_msg');
+    if (msgEl) {
+      msgEl.textContent = `已应用灵感「${tropeName || '未命名'}」`;
+    }
+
+    toastEl.style.display = 'flex';
+
+    // 保留 10 秒后自动消失
+    undoTimer = setTimeout(() => {
+      hideUndoToast();
+    }, 10000);
+  }
+
+  function hideUndoToast() {
+    clearTimeout(undoTimer);
+    const toastEl = $('og2_undo_toast');
+    if (toastEl) {
+      toastEl.style.display = 'none';
+    }
+  }
+
+  // 6. 灵感应用后的平滑滚动与高亮反馈
+  function feedbackAfterTropeApply() {
+    const titleEl = $('og_title');
+    if (!titleEl) return;
+
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // 检查书名框是否在可视范围内（避开 header 和 summary bar）
+    const rect = titleEl.getBoundingClientRect();
+    const headerH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--og2-header-height') || '53', 10);
+    const summaryH = 44;
+    const topSafe = headerH + summaryH + 10;
+    const inViewport = (rect.top >= topSafe && rect.bottom <= (window.innerHeight || document.documentElement.clientHeight));
+
+    if (!inViewport) {
+      titleEl.scrollIntoView({
+        behavior: reducedMotion ? 'auto' : 'smooth',
+        block: 'center'
+      });
+    }
+
+    if (reducedMotion) {
+      ['og_title', 'og_genre', 'og_setting', 'og_storyline'].forEach(id => {
+        const el = $(id);
+        if (el) el.classList.remove('og2-flash-highlight');
+      });
+    } else {
+      ['og_title', 'og_genre', 'og_setting', 'og_storyline'].forEach(id => {
+        const el = $(id);
+        if (el) {
+          el.classList.remove('og2-flash-highlight');
+          void el.offsetWidth;
+          el.classList.add('og2-flash-highlight');
+          setTimeout(() => el.classList.remove('og2-flash-highlight'), 600);
+        }
+      });
+    }
+  }
+
+  // 7. 捕获阶段拦截灵感应用
+  function handleTropeApplyCapture(e) {
+    // 捕获阶段：在 generator.js 执行 applyTropeTemplate 前取快照
+    const snapshotBefore = takeSnapshot();
+
+    // 静默结束审阅状态（撤销快照取屏幕显示的值）
+    cancelAllReviews();
+
+    // 隐藏题材更改提示条
+    hideGenreHintBar();
+
+    // 在微任务中检查应用结果
+    setTimeout(() => {
+      // 检查原本是否有内容字段存在且发生改变（避免空表单因默认章节数/单章字数误判为已有内容）
+      const isOriginallyEmpty = CONTENT_FIELDS.every(id => !(snapshotBefore[id] || '').trim());
+      const hasContentChange = CONTENT_FIELDS.some(id => {
+        const oldVal = (snapshotBefore[id] || '').trim();
+        const newVal = ($(id) ? $(id).value : '').trim();
+        return oldVal !== '' && oldVal !== newVal;
+      });
+
+      const appliedTitle = $('og_title') ? $('og_title').value.trim() : '';
+
+      if (!isOriginallyEmpty && hasContentChange) {
+        lastSnapshot = snapshotBefore;
+        showUndoToast(appliedTitle);
+      } else {
+        lastSnapshot = null;
+        hideUndoToast();
+      }
+
+      feedbackAfterTropeApply();
+      dispatchDraftInput();
+    }, 10);
+  }
+
+  // 8. 题材更改提示条
+  function showGenreHintBar() {
+    const hint = $('og2_genre_hint_bar');
+    if (hint) {
+      hint.style.display = 'block';
+    }
+  }
+
+  function hideGenreHintBar() {
+    const hint = $('og2_genre_hint_bar');
+    if (hint) {
+      hint.style.display = 'none';
+    }
+  }
+
+  function handleGenreChange() {
+    const currentGenre = $('og_genre') ? $('og_genre').value.trim() : '';
+    if (currentGenre && currentGenre !== lastGenreVal) {
+      showGenreHintBar();
+    }
+    lastGenreVal = currentGenre;
+  }
+
+  // 9. 挂载到 window.ogStep1AfterFill 链路中
   function setupHook() {
     const prevHook = window.ogStep1AfterFill;
     window.ogStep1AfterFill = function() {
@@ -111,7 +345,7 @@
     };
   }
 
-  // 4. 初始化模块
+  // 10. 初始化模块
   function init() {
     syncHeaderHeight();
     window.addEventListener('resize', syncHeaderHeight);
@@ -124,11 +358,92 @@
       if (el) {
         el.addEventListener('input', () => {
           updateOgSummary();
+          if (id === 'og_genre') {
+            handleGenreChange();
+          }
         });
       }
     });
 
-    // 初始执行一次
+    // 监听题材药丸点击
+    const pillsGenreWrap = $('og_genre_pills');
+    if (pillsGenreWrap) {
+      pillsGenreWrap.addEventListener('click', (e) => {
+        const pill = e.target.closest('.tag-pill');
+        if (pill) {
+          setTimeout(() => {
+            updateOgSummary();
+            handleGenreChange();
+          }, 10);
+        }
+      });
+    }
+
+    // 捕获阶段拦截：灵感卡片网格点击
+    const pillsWrap = $('og_trope_pills');
+    if (pillsWrap) {
+      pillsWrap.addEventListener('click', (e) => {
+        const pill = e.target.closest('.trope-pill');
+        if (pill) {
+          handleTropeApplyCapture(e);
+        }
+      }, true);
+    }
+
+    // 捕获阶段拦截：随机灵感按钮
+    const randBtn = $('btn_random_trope');
+    if (randBtn) {
+      randBtn.addEventListener('click', (e) => {
+        handleTropeApplyCapture(e);
+      }, true);
+    }
+
+    // 捕获阶段拦截：下一步按钮点击校验
+    const nextBtn = $('btn_step1_next');
+    if (nextBtn) {
+      nextBtn.addEventListener('click', (e) => {
+        if (!checkStep1Valid()) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          showStep1InlineTip();
+          const setEl = $('og_setting');
+          if (setEl) setEl.focus();
+          return;
+        }
+        hideStep1InlineTip();
+      }, true);
+    }
+
+    // 换一批按钮点击隐藏题材提示条
+    const refreshBtn = $('btn_refresh_tropes');
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', () => {
+        hideGenreHintBar();
+      });
+    }
+
+    // 撤销按钮点击绑定
+    const undoBtn = $('btn_og2_undo');
+    if (undoBtn) {
+      undoBtn.onclick = () => {
+        if (lastSnapshot) {
+          restoreSnapshot(lastSnapshot);
+          lastSnapshot = null;
+        }
+        hideUndoToast();
+      };
+    }
+
+    // 撤销关闭按钮绑定
+    const undoCloseBtn = $('btn_og2_undo_close');
+    if (undoCloseBtn) {
+      undoCloseBtn.onclick = hideUndoToast;
+    }
+
+    // 记录初始题材
+    lastGenreVal = $('og_genre') ? $('og_genre').value.trim() : '';
+
+    // 初始渲染一次
     updateOgSummary();
   }
 
@@ -136,8 +451,16 @@
   window.ogStep1Summary = {
     update: updateOgSummary,
     syncHeader: syncHeaderHeight,
-    getCount: function() {
-      return lastAnnouncedProgress;
+    checkValid: checkStep1Valid,
+    undo: function() {
+      if (lastSnapshot) {
+        restoreSnapshot(lastSnapshot);
+        lastSnapshot = null;
+        hideUndoToast();
+      }
+    },
+    getLastSnapshot: function() {
+      return lastSnapshot;
     }
   };
 

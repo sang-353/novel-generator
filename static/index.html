@@ -158,6 +158,7 @@
           <button type="button" class="trope-cat-tab" data-cat="female">情感 / 校园 / 生活</button>
           <button type="button" class="trope-cat-tab" data-cat="fantasy">幻想 / 悬疑 / 脑洞</button>
         </div>
+        <div id="og2_genre_hint_bar" class="og2-genre-hint-bar" style="display:none;" role="status">题材已更改，点「换一批」获取新灵感</div>
         <div class="trope-pills og2-trope-grid is-collapsed" id="og_trope_pills"></div>
         <div class="og2-trope-expand-wrap" id="og2_trope_expand_wrap" style="display:none;">
           <button type="button" class="btn og2-btn og2-trope-expand-btn" id="btn_toggle_more_tropes" aria-expanded="false">
@@ -236,6 +237,10 @@
               </div>
               <span class="og2-word-count" id="txt_setting_word_count">0 字</span>
             </div>
+            <div id="og2_step1_next_inline_tip" class="og2-inline-tip" style="display:none;" role="alert">
+              <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"></circle><line x1="12" y1="8" x2="12" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line><circle cx="12" cy="16" r="1" fill="currentColor"></circle></svg>
+              <span id="og2_step1_next_inline_tip_text">请至少填写题材、背景设定或书名中的一项</span>
+            </div>
           </div>
         </div>
 
@@ -295,6 +300,13 @@
           <span>下一步：人物与大纲</span>
           <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path><path d="m13 6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
         </button>
+      </div>
+
+      <!-- 1c-2: 撤销 Toast（单例） -->
+      <div id="og2_undo_toast" class="og2-undo-toast" style="display:none;" role="alert" aria-live="polite">
+        <span id="og2_undo_toast_msg" class="og2-undo-toast-msg">已应用灵感</span>
+        <button type="button" id="btn_og2_undo" class="og2-undo-toast-btn">撤销</button>
+        <button type="button" id="btn_og2_undo_close" class="og2-undo-toast-close" title="关闭提示">×</button>
       </div>
     </div>
 
