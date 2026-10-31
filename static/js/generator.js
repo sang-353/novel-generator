@@ -1006,13 +1006,30 @@ function renderOutlineEditor(outline) {
   const chs = Array.isArray(outline && outline.chapters) ? outline.chapters : [];
   const cnt = $('og_ch_count');
   if (cnt) cnt.textContent = String(chs.length);
+  const chInput = $('og_chapters');
+  if (chInput && chs.length > 0) chInput.value = chs.length;
   const container = $('og_outline_editor');
   if (!chs.length) {
     container.innerHTML = '<p class="mini" style="padding:16px 0;text-align:center;color:var(--muted)">大纲暂无章节，请点击下方「添加一章」或重新生成</p>';
   } else {
     container.innerHTML = chs.map((c, i) => {
-      const title = typeof c === 'string' ? c : (c && c.title) || ('第' + (i + 1) + '章');
-      const points = typeof c === 'string' ? '' : (c && c.points) || '';
+      let title = '';
+      let points = '';
+      if (typeof c === 'string') {
+        const mTitle = c.match(/"title"\s*:\s*"([^"]+)"/);
+        const mPoints = c.match(/"points"\s*:\s*"([^"]+)"/);
+        if (mTitle || mPoints) {
+          title = mTitle ? mTitle[1] : ('第' + (i + 1) + '章');
+          points = mPoints ? mPoints[1] : '';
+        } else {
+          title = c.replace(/^[{\[\s"]+|[}\]\s"]+$/g, '').trim() || ('第' + (i + 1) + '章');
+        }
+      } else if (c && typeof c === 'object') {
+        title = (c.title || ('第' + (i + 1) + '章')).trim();
+        points = (c.points || '').trim();
+      } else {
+        title = '第' + (i + 1) + '章';
+      }
       return `
       <div class="outline-ch" data-idx="${i}">
         <div class="outline-ch-hd">
@@ -1176,8 +1193,13 @@ on('btn_write', async () => {
   }
   try {
     payload.title = $('og_title').value.trim() || '未命名小说';
-    payload.outline = JSON.stringify(collectOutline(), null, 2);
+    const collected = collectOutline();
+    payload.outline = JSON.stringify(collected, null, 2);
     payload.bible = collectBible();
+    const reqChs = parseInt($('og_chapters').value, 10);
+    if (Array.isArray(collected.chapters) && collected.chapters.length > 0) {
+      payload.chapters = (!reqChs || reqChs > collected.chapters.length) ? collected.chapters.length : reqChs;
+    }
   } catch (e) {
     toast('大纲或设定数据不完整：' + e.message);
     if (btn) btn.disabled = false;

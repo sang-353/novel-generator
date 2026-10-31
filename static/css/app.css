@@ -407,18 +407,22 @@ button:disabled {
         box-shadow: 0 1px 3px rgba(0,0,0,0.03); transition: transform .24s ease, background-color .2s ease; }
   body.rd-scroll-down .rd-bar { transform: translateY(-110%); }
 
-  .rd-bar-left { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
+  .rd-bar-left { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1 1 auto; }
   .rd-bar-center { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
   .rd-bar-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
   .rd-desktop-actions { display: flex; align-items: center; gap: 6px; }
 
-  .rd-btitle { min-width: 0; max-width: 280px; padding: 0 4px; }
+  .rd-btitle { min-width: 0; max-width: 260px; padding: 0 4px; flex-shrink: 1; }
+  .rd-btitle-row { display: flex; align-items: center; gap: 4px; min-width: 0; }
   .rd-btitle b { display: block; font-size: 13px; font-weight: 600; letter-spacing: .04em;
-        overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--rd-ink); }
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--rd-ink); min-width: 0; flex: 1; }
+  .rd-rename-btn-compact { padding: 2px 6px !important; min-height: 24px !important; font-size: 11px !important; line-height: 1 !important; border: none !important; opacity: .7; }
+  .rd-rename-btn-compact:hover { opacity: 1; background: rgba(0,0,0,0.06) !important; }
   .rd-btitle span { display: block; font-size: 11px; color: var(--rd-muted); letter-spacing: .02em;
         font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-  .rd-meta-pill { display: flex; align-items: center; gap: 6px; margin-left: 4px; }
+  .rd-meta-pill { display: flex; align-items: center; gap: 6px; margin-left: 4px; flex-shrink: 0; white-space: nowrap; }
+  .rd-meta-pill span { white-space: nowrap; }
 
   .rd-icon { background: none; border: 1px solid transparent; color: var(--rd-ink); font-family: inherit;
         font-size: 15px; line-height: 1; padding: 7px 10px; min-height: 36px; border-radius: var(--radius-sm);
@@ -498,10 +502,13 @@ button:disabled {
                box-shadow: var(--shadow-sm); background: var(--card); position: sticky; top: 68px;
                max-height: calc(100vh - 90px); display: flex; flex-direction: column; overflow: hidden; }
   .toc-panel.collapsed { display: none; }
-  .toc-head { display: flex; align-items: center; gap: 6px; padding: 10px 12px;
-              border-bottom: 1px solid var(--line); background: var(--bg); flex-wrap: nowrap; }
-  .toc-head input { flex: 1; min-width: 0; padding: 6px 10px; font-size: 12px; border-radius: var(--radius-sm); }
-  .toc-head button { padding: 5px 10px; font-size: 12px; white-space: nowrap; flex-shrink: 0; }
+  .toc-head { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px;
+              border-bottom: 1px solid var(--line); background: var(--bg); }
+  .toc-head-search { display: flex; align-items: center; gap: 6px; width: 100%; }
+  .toc-head-search input { flex: 1; min-width: 0; padding: 6px 10px; font-size: 12px; border-radius: var(--radius-sm); }
+  .toc-head-search button { padding: 5px 10px; font-size: 12px; white-space: nowrap; flex-shrink: 0; }
+  .toc-head-actions { display: flex; align-items: center; gap: 4px; width: 100%; }
+  .toc-head-actions button { flex: 1; min-width: 0; padding: 5px 2px; font-size: 11px; white-space: nowrap; text-align: center; justify-content: center; overflow: hidden; text-overflow: ellipsis; }
   .toc-list { overflow: auto; flex: 1; overscroll-behavior: contain; }
   .toc-item { display: flex; gap: 8px; align-items: baseline; width: 100%; padding: 9px 12px;
               font-size: 13px; cursor: pointer; border: none; border-bottom: 1px solid var(--line);
@@ -1935,6 +1942,43 @@ button:disabled {
   color: var(--ink);
 }
 
+.toc-del-btn:hover {
+  background: var(--danger-subtle, rgba(239, 68, 68, 0.15));
+  color: var(--danger, #ef4444);
+}
+
+/* Studio 目录批量管理工具条与选择框 */
+.toc-batch-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--card-subtle, #f8fafc);
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  gap: 8px;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.toc-batch-info {
+  color: var(--ink-secondary, #475569);
+  white-space: nowrap;
+}
+
+.toc-batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.toc-item-check {
+  margin: 0 4px 0 0;
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: var(--accent, #3b82f6);
+}
+
 /* 大纲备忘 Panel */
 .rd-outline-memo {
   flex: 1;
@@ -2282,3 +2326,17 @@ button:disabled {
     transform: none !important;
   }
 }
+
+  @media (max-width: 1360px) {
+    #rd_export_txt, #rd_export_md, #rd_export_epub {
+      display: none !important;
+    }
+  }
+  @media (max-width: 1180px) {
+    #rd_shortcuts_btn {
+      display: none !important;
+    }
+    .rd-meta-pill .tag, .rd-meta-pill .status {
+      display: none;
+    }
+  }

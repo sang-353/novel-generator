@@ -696,9 +696,9 @@
       <div class="rd-bar-left">
         <button class="rd-icon" id="rd_back" title="返回书架" aria-label="返回书架">←</button>
         <div class="rd-btitle">
-          <div style="display:flex;align-items:center;gap:6px;">
+          <div class="rd-btitle-row">
             <b id="rd_title"></b>
-            <button class="rd-btn ghost mini-btn" id="rd_rename_btn" title="修改书名" style="padding:2px 8px;font-size:12px;">✏️ 改名</button>
+            <button class="rd-btn ghost mini-btn rd-rename-btn-compact" id="rd_rename_btn" title="修改书名" aria-label="修改书名">✏️</button>
           </div>
           <span id="rd_top_sub"></span>
         </div>
@@ -743,12 +743,27 @@
         </div>
         <div class="toc-tab-panel active" id="rd_toc_panel_dirs">
           <div class="toc-head">
-            <input id="rd_toc_filter" aria-label="过滤章节" placeholder="过滤章节标题… (Enter 搜正文)" autocomplete="off">
-            <button type="button" class="ghost mini-btn" id="rd_toc_search" title="全书搜索正文" aria-label="搜索全书正文">搜索</button>
-            <button type="button" class="ghost mini-btn" id="rd_toc_add_ch_btn" title="在文末添加新章节" aria-label="添加新章节">+ 加章</button>
-            <button type="button" class="ghost mini-btn" id="rd_toc_add_vol_btn" title="新建分卷" aria-label="新建分卷">+ 分卷</button>
+            <div class="toc-head-search">
+              <input id="rd_toc_filter" aria-label="过滤章节" placeholder="过滤章节标题… (Enter 搜正文)" autocomplete="off">
+              <button type="button" class="ghost mini-btn" id="rd_toc_search" title="全书搜索正文" aria-label="搜索全书正文">搜索</button>
+            </div>
+            <div class="toc-head-actions">
+              <button type="button" class="ghost mini-btn" id="rd_toc_add_ch_btn" title="在文末添加新章节" aria-label="添加新章节">+ 加章</button>
+              <button type="button" class="ghost mini-btn" id="rd_toc_add_vol_btn" title="新建分卷" aria-label="新建分卷">+ 分卷</button>
+              <button type="button" class="ghost mini-btn" id="rd_toc_realign_btn" title="一键对齐全书章节序号（消除跳号与重复）" aria-label="对齐章节序号">🔢 序号</button>
+              <button type="button" class="ghost mini-btn" id="rd_toc_batch_btn" title="批量选择与管理章节" aria-label="批量管理">☑️ 批量</button>
+            </div>
           </div>
           <div class="toc-list" id="rd_toc_list"></div>
+          <div class="toc-batch-bar" id="rd_toc_batch_bar" style="display:none;">
+            <div class="toc-batch-info">已选 <strong id="rd_toc_batch_count">0</strong> 章</div>
+            <div class="toc-batch-actions">
+              <button type="button" class="ghost mini-btn" id="rd_toc_batch_all">全选</button>
+              <button type="button" class="ghost mini-btn" id="rd_toc_batch_inv">反选</button>
+              <button type="button" class="danger mini-btn" id="rd_toc_batch_del">🗑️ 批量删除</button>
+              <button type="button" class="ghost mini-btn" id="rd_toc_batch_exit">退出</button>
+            </div>
+          </div>
         </div>
         <div class="toc-tab-panel" id="rd_toc_panel_outline" style="display:none;">
           <div class="rd-outline-memo" id="rd_outline_memo_content">

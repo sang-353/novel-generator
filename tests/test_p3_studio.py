@@ -240,3 +240,93 @@ def test_prompt_settings_and_novel_preferences(client):
     finally:
         if p.exists():
             p.unlink()
+
+
+def test_realign_chapter_numbers_api(client):
+    """测试一键章节序号重排与对齐 API：消除跳号与重复号，保持副标题与正文首行同步。"""
+    book_name = "test_realign_book"
+    p = app_module.NOVELS_DIR / f"{book_name}.md"
+    meta = {"title": "序号对齐测试书", "type": "original"}
+    initial_chapters = [
+        {"title": "第1章 暴雨夜", "content": "第1章 暴雨夜\n第一章正文。"},
+        {"title": "第2章 码头暗账", "content": "第2章 码头暗账\n第二章正文。"},
+        {"title": "第7章 废纸袋", "content": "第7章 废纸袋\n第三章正文（原跳号到7）。"},
+        {"title": "第7章 废纸袋", "content": "第7章 废纸袋\n第四章正文（原重复第7章）。"},
+        {"title": "第10章 领带与刀锋", "content": "第10章 领带与刀锋\n第五章正文。"},
+    ]
+    write_novel(p, meta, initial_chapters)
+    try:
+        res = client.post(f"/api/novels/{book_name}/realign-numbers")
+        assert res.status_code == 200
+        data = res.get_json()
+        assert data["ok"] is True
+        assert data["changed_count"] >= 3
+
+        meta_disk, chapters_disk, _ = parse_novel(p, repair=False)
+        expected_titles = [
+            "第1章 暴雨夜",
+            "第2章 码头暗账",
+            "第3章 废纸袋",
+            "第4章 废纸袋",
+            "第5章 领带与刀锋",
+        ]
+        actual_titles = [c["title"] for c in chapters_disk]
+        assert actual_titles == expected_titles, f"重排后标题不匹配: {actual_titles}"
+
+        # 断言正文首行也同步平移重命名
+        assert chapters_disk[2]["content"].startswith("第3章 废纸袋")
+        assert chapters_disk[3]["content"].startswith("第4章 废纸袋")
+        assert chapters_disk[4]["content"].startswith("第5章 领带与刀锋")
+    finally:
+        if p.exists():
+            p.unlink()
+
+
+def test_batch_delete_chapters_api(client):
+    """测试章节批量删除 API：支持多选删除、原作保护与自动重排序号。"""
+    book_name = "test_batch_del_book"
+    p = app_module.NOVELS_DIR / f"{book_name}.md"
+    meta = {"title": "批量删除测试书", "type": "original", "original_count": 1}
+    initial_chapters = [
+        {"title": "原作", "content": "原作正文。"},
+        {"title": "第1章 发展", "content": "第1章 发展\n内容1。"},
+        {"title": "第2章 废章A", "content": "第2章 废章A\n内容2。"},
+        {"title": "第3章 推进", "content": "第3章 推进\n内容3。"},
+        {"title": "第4章 废章B", "content": "第4章 废章B\n内容4。"},
+        {"title": "第5章 决战", "content": "第5章 决战\n内容5。"},
+    ]
+    write_novel(p, meta, initial_chapters)
+    try:
+        # 1. 尝试删除原作章节（下标 0），应被拒绝 400
+        res_deny = client.post(f"/api/novels/{book_name}/chapters/batch-delete", json={
+            "indices": [0, 2],
+            "auto_realign": True
+        })
+        assert res_deny.status_code == 400
+        assert "原作章节不可删除" in res_deny.get_json()["error"]
+
+        # 2. 正确批量删除第 2 章废章A（下标 2）与第 4 章废章B（下标 4）
+        res_ok = client.post(f"/api/novels/{book_name}/chapters/batch-delete", json={
+            "indices": [2, 4],
+            "auto_realign": True
+        })
+        assert res_ok.status_code == 200
+        data = res_ok.get_json()
+        assert data["ok"] is True
+        assert data["deleted_count"] == 2
+        assert data["remaining_count"] == 4
+
+        # 3. 校验磁盘落盘情况
+        meta_disk, chapters_disk, _ = parse_novel(p, repair=False)
+        assert len(chapters_disk) == 4
+        # 原作保留在 0
+        assert chapters_disk[0]["title"] == "原作"
+        # 剩余章节序号自动平移对齐为第 1 章、第 2 章、第 3 章
+        expected_titles = ["原作", "第1章 发展", "第2章 推进", "第3章 决战"]
+        actual_titles = [c["title"] for c in chapters_disk]
+        assert actual_titles == expected_titles, f"批量删除后重排不符: {actual_titles}"
+    finally:
+        if p.exists():
+            p.unlink()
+
+

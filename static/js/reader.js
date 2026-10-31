@@ -1,6 +1,31 @@
 // ==================== 阅读器 ====================
 let readerData = null, readerIdx = 0, tocMode = 'toc';
+let tocBatchMode = false;
+const tocSelectedIndices = new Set();
 const chapterFetchPromises = new Map();
+
+function updateTocBatchCount() {
+  const countEl = $('rd_toc_batch_count');
+  if (countEl) countEl.textContent = tocSelectedIndices.size;
+  const delBtn = $('rd_toc_batch_del');
+  if (delBtn) delBtn.disabled = (tocSelectedIndices.size === 0);
+}
+
+function setTocBatchMode(active) {
+  tocBatchMode = !!active;
+  if (!tocBatchMode) {
+    tocSelectedIndices.clear();
+  }
+  const bar = $('rd_toc_batch_bar');
+  if (bar) bar.style.display = tocBatchMode ? 'flex' : 'none';
+  const batchBtn = $('rd_toc_batch_btn');
+  if (batchBtn) {
+    batchBtn.classList.toggle('active', tocBatchMode);
+    batchBtn.textContent = tocBatchMode ? '✓ 结束' : '☑️ 批量';
+  }
+  updateTocBatchCount();
+  renderToc($('rd_toc_filter') ? $('rd_toc_filter').value : '');
+}
 
 async function ensureChapterContent(novelName, idx) {
   if (!readerData || readerData.name !== novelName) return null;
@@ -198,6 +223,7 @@ function syncReaderHash(name, idx, replace) {
 
 async function openReader(name, idx, opts) {
   opts = opts || {};
+  setTocBatchMode(false);
   // 同一本书：只切章，不重新拉接口（目录、深层链接、生成完成回调都会走到这里）
   if (readerData && readerData.name === name && !opts.reload) {
     showReaderView();
@@ -753,16 +779,23 @@ function renderToc(filterText) {
 
     filteredItems.forEach(({ ch: c, idx: i }) => {
       const words = typeof c.words === 'number' ? c.words : (c.content ? c.content.replace(/\s/g, '').length : 0);
+      const isSelected = tocSelectedIndices.has(i);
       html += `
-        <div class="toc-item ${i === readerIdx ? 'active' : ''}">
+        <div class="toc-item ${i === readerIdx ? 'active' : ''} ${isSelected ? 'selected' : ''}" data-item-idx="${i}">
+          ${tocBatchMode ? `
+            <input type="checkbox" class="toc-item-check" data-idx="${i}" ${isSelected ? 'checked' : ''} aria-label="选择第${chapterFolio(i)}章">
+          ` : ''}
           <button type="button" class="toc-title-btn" data-i="${i}" style="background:none;border:none;padding:0;text-align:left;flex:1;cursor:pointer;display:flex;align-items:center;min-width:0;color:inherit;">
             <span class="num" style="margin-right:6px;font-size:11px;color:var(--muted);">${chapterFolio(i)}</span>
             <span class="t" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;">${escapeHtml(chapterRealTitle(i))}</span>
           </button>
+          ${!tocBatchMode ? `
           <div class="toc-reorder-btns">
             <button type="button" class="toc-reorder-btn" data-act="up" data-idx="${i}" title="上移">▲</button>
             <button type="button" class="toc-reorder-btn" data-act="down" data-idx="${i}" title="下移">▼</button>
+            <button type="button" class="toc-reorder-btn toc-del-btn" data-act="del" data-idx="${i}" title="删除本章" aria-label="删除本章">🗑️</button>
           </div>
+          ` : ''}
           <span class="mini" style="font-size:10px;color:var(--muted);margin-left:4px;">${words.toLocaleString()}字</span>
         </div>`;
     });
@@ -770,20 +803,61 @@ function renderToc(filterText) {
 
   list.innerHTML = html || '<p class="mini" style="padding:12px">无匹配章节</p>';
 
-  list.querySelectorAll('.toc-title-btn').forEach(el => {
-    el.onclick = () => gotoChapter(parseInt(el.dataset.i, 10));
-  });
+  if (tocBatchMode) {
+    list.querySelectorAll('.toc-item-check').forEach(chk => {
+      chk.onchange = (e) => {
+        e.stopPropagation();
+        const idx = parseInt(chk.dataset.idx, 10);
+        if (chk.checked) tocSelectedIndices.add(idx);
+        else tocSelectedIndices.delete(idx);
+        updateTocBatchCount();
+      };
+    });
+    list.querySelectorAll('.toc-title-btn').forEach(el => {
+      el.onclick = () => {
+        const idx = parseInt(el.dataset.i, 10);
+        const chk = list.querySelector(`.toc-item-check[data-idx="${idx}"]`);
+        if (chk) {
+          chk.checked = !chk.checked;
+          if (chk.checked) tocSelectedIndices.add(idx);
+          else tocSelectedIndices.delete(idx);
+          updateTocBatchCount();
+        }
+      };
+    });
+  } else {
+    list.querySelectorAll('.toc-title-btn').forEach(el => {
+      el.onclick = () => gotoChapter(parseInt(el.dataset.i, 10));
+    });
 
-  list.querySelectorAll('.toc-reorder-btn').forEach(btn => {
-    btn.onclick = async (e) => {
-      e.stopPropagation();
-      const act = btn.dataset.act;
-      const fromIdx = parseInt(btn.dataset.idx, 10);
-      const toIdx = act === 'up' ? fromIdx - 1 : fromIdx + 1;
-      if (toIdx < 0 || toIdx >= d.chapters.length) return;
-      await reorderChapterItem(fromIdx, toIdx);
-    };
-  });
+    list.querySelectorAll('.toc-reorder-btn').forEach(btn => {
+      btn.onclick = async (e) => {
+        e.stopPropagation();
+        const act = btn.dataset.act;
+        const fromIdx = parseInt(btn.dataset.idx, 10);
+        if (act === 'del') {
+          const c = d.chapters[fromIdx];
+          if (!c) return;
+          const t = chapterRealTitle(fromIdx);
+          if (!confirm(`确定删除「${t}」？删除前会自动备份到「设置 → 章节备份」，可随时恢复。`)) return;
+          const name = d.name;
+          const next = Math.max(0, fromIdx >= d.chapters.length - 1 ? fromIdx - 1 : fromIdx);
+          try {
+            await api('/api/novels/' + encodeURIComponent(name) + '/chapters/delete', 'POST', { index: fromIdx });
+            toast('已删除「' + t + '」（已备份）');
+            readerData = null;
+            openReader(name, next);
+          } catch (err) {
+            toast(err.message);
+          }
+          return;
+        }
+        const toIdx = act === 'up' ? fromIdx - 1 : fromIdx + 1;
+        if (toIdx < 0 || toIdx >= d.chapters.length) return;
+        await reorderChapterItem(fromIdx, toIdx);
+      };
+    });
+  }
 
   const act = list.querySelector('.toc-item.active');
   if (act && !isWide() && $('rd_toc').classList.contains('open')) act.scrollIntoView({ block: 'center' });
@@ -1510,6 +1584,96 @@ function initStudioPanels() {
           }));
           await api('/api/novels/' + encodeURIComponent(readerData.name) + '/reorder-chapters', 'POST', { order });
         } catch (e) {}
+      }
+    };
+  }
+
+  const realignBtn = $('rd_toc_realign_btn');
+  if (realignBtn) {
+    realignBtn.onclick = async () => {
+      if (!readerData) return;
+      if (!confirm('确定自动对齐全书所有章节序号？（将消除跳号与重复，保持副标题与正文首行同步）')) return;
+      const name = readerData.name;
+      try {
+        const res = await api('/api/novels/' + encodeURIComponent(name) + '/realign-numbers', 'POST', {});
+        toast(`序号对齐完成（已修正 ${res.changed_count || 0} 处）`);
+        readerData = null;
+        openReader(name, readerIdx);
+      } catch (e) {
+        toast('对齐失败：' + e.message);
+      }
+    };
+  }
+
+  const batchBtn = $('rd_toc_batch_btn');
+  if (batchBtn) {
+    batchBtn.onclick = () => {
+      setTocBatchMode(!tocBatchMode);
+    };
+  }
+
+  const batchAllBtn = $('rd_toc_batch_all');
+  if (batchAllBtn) {
+    batchAllBtn.onclick = () => {
+      const list = $('rd_toc_list');
+      if (!list) return;
+      list.querySelectorAll('.toc-item-check').forEach(chk => {
+        chk.checked = true;
+        const idx = parseInt(chk.dataset.idx, 10);
+        if (!isNaN(idx)) tocSelectedIndices.add(idx);
+      });
+      updateTocBatchCount();
+    };
+  }
+
+  const batchInvBtn = $('rd_toc_batch_inv');
+  if (batchInvBtn) {
+    batchInvBtn.onclick = () => {
+      const list = $('rd_toc_list');
+      if (!list) return;
+      list.querySelectorAll('.toc-item-check').forEach(chk => {
+        chk.checked = !chk.checked;
+        const idx = parseInt(chk.dataset.idx, 10);
+        if (!isNaN(idx)) {
+          if (chk.checked) tocSelectedIndices.add(idx);
+          else tocSelectedIndices.delete(idx);
+        }
+      });
+      updateTocBatchCount();
+    };
+  }
+
+  const batchExitBtn = $('rd_toc_batch_exit');
+  if (batchExitBtn) {
+    batchExitBtn.onclick = () => {
+      setTocBatchMode(false);
+    };
+  }
+
+  const batchDelBtn = $('rd_toc_batch_del');
+  if (batchDelBtn) {
+    batchDelBtn.onclick = async () => {
+      if (!readerData) return;
+      if (tocSelectedIndices.size === 0) {
+        toast('请先勾选需要删除的章节');
+        return;
+      }
+      const count = tocSelectedIndices.size;
+      const sortedIndices = Array.from(tocSelectedIndices).sort((a, b) => a - b);
+      if (!confirm(`确定批量删除选中的 ${count} 个章节？删除前会自动备份到「设置 → 章节备份」，删除后将自动对齐剩余章节序号。`)) return;
+      const name = readerData.name;
+      try {
+        const res = await api('/api/novels/' + encodeURIComponent(name) + '/chapters/batch-delete', 'POST', {
+          indices: sortedIndices,
+          auto_realign: true
+        });
+        toast(`批量删除成功，已移除 ${res.deleted_count || count} 章并对齐序号（已备份）`);
+        setTocBatchMode(false);
+        readerData = null;
+        const safeIdx = Math.max(0, Math.min(readerIdx, (res.remaining_count || 1) - 1));
+        openReader(name, safeIdx);
+      } catch (e) {
+        toast('批量删除失败：' + e.message);
       }
     };
   }

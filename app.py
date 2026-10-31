@@ -8,6 +8,7 @@
 
 运行：python app.py  然后浏览器打开 http://127.0.0.1:8000
 """
+import difflib
 import hashlib
 import hmac
 import html
@@ -499,10 +500,35 @@ def extract_json(text):
         if match.group(2) is not None:
             salvaged[k] = match.group(2)
         elif match.group(3) is not None:
+            raw_arr = match.group(3).strip()
             try:
-                salvaged[k] = json.loads("[" + match.group(3) + "]")
+                salvaged[k] = json.loads("[" + raw_arr + "]")
             except Exception:
-                salvaged[k] = [x.strip().strip("\"") for x in match.group(3).split(",") if x.strip()]
+                # 若包含对象特征（有 { 开头或包含对象结构），尝试正则抢救内部各个对象，避免逗号粗暴切碎键值对
+                sub_objs = []
+                if "{" in raw_arr:
+                    for sub_m in re.finditer(r"\{[^{}]*\}", raw_arr, re.S):
+                        try:
+                            sub_objs.append(json.loads(sub_m.group(0)))
+                        except Exception:
+                            pass
+                    # 若存在未闭合的末尾对象（如截断在对象内部），尝试补全后抢救
+                    last_brace = raw_arr.rfind("{")
+                    if last_brace != -1 and (not sub_objs or last_brace > raw_arr.rfind("}")):
+                        tail = raw_arr[last_brace:].strip()
+                        if tail.count("\"") % 2 != 0:
+                            tail += "\""
+                        if not tail.endswith("}"):
+                            tail += "}"
+                        try:
+                            sub_objs.append(json.loads(tail))
+                        except Exception:
+                            pass
+                if sub_objs:
+                    salvaged[k] = sub_objs
+                else:
+                    # 纯标量数组才退化为逗号分割，并过滤掉含有未闭合大括号的无效碎片
+                    salvaged[k] = [x.strip().strip("\"") for x in raw_arr.split(",") if x.strip() and not x.strip().startswith("{")]
         elif match.group(4) is not None:
             try:
                 salvaged[k] = json.loads(match.group(4))
@@ -1476,6 +1502,47 @@ FANFIC_SYS = (
 )
 
 
+def calc_text_similarity(s1: str, s2: str) -> float:
+    """计算两段文本的字符级序列相似度（0.0 ~ 1.0），忽略空白与标点"""
+    if not s1 or not s2:
+        return 0.0
+    c1 = re.sub(r"[\s\W_]+", "", s1)
+    c2 = re.sub(r"[\s\W_]+", "", s2)
+    if not c1 or not c2:
+        return 0.0
+    if c1 == c2:
+        return 1.0
+    return difflib.SequenceMatcher(None, c1, c2).quick_ratio()
+
+
+def check_chapter_duplicate(prev_ch: dict, new_title: str, new_body: str) -> tuple[bool, float, str]:
+    """比对新生成章节与上一章节，判断是否存在大模型打转重复生成的情况。
+    返回 (is_duplicate, similarity, reason)
+    """
+    if not prev_ch or not isinstance(prev_ch, dict):
+        return False, 0.0, ""
+
+    prev_title = prev_ch.get("title") or ""
+    prev_content = prev_ch.get("content") or ""
+
+    # 提取核心标题（去掉 第X章 前缀）
+    t1_core = re.sub(r"^第\s*\d+\s*[章回节卷]?\s*", "", prev_title).strip()
+    t2_core = re.sub(r"^第\s*\d+\s*[章回节卷]?\s*", "", new_title).strip()
+    same_core_title = bool(t1_core and t2_core and (t1_core == t2_core or t1_core in t2_core or t2_core in t1_core))
+
+    # 取前 400 字比对正文开头情节
+    p1_head = prev_content[:400]
+    p2_head = new_body[:400]
+    sim = calc_text_similarity(p1_head, p2_head)
+
+    if same_core_title and sim >= 0.60:
+        return True, sim, f"标题与上一章高度重合且开头情节相似度达到 {sim:.1%}"
+    if sim >= 0.80:
+        return True, sim, f"正文开头情节与上一章相似度高达 {sim:.1%}"
+
+    return False, sim, ""
+
+
 def run_original_job(job, data):
     title = data.get("title") or "未命名小说"
     n = int(data.get("chapters") or 10)
@@ -1483,6 +1550,17 @@ def run_original_job(job, data):
     start = max(1, int(data.get("start_chapter") or 1))
     outline = data.get("outline") or ""
     provider_id = data.get("provider_id")
+
+    # 若大纲为有效结构且定义了章节列表，生成章节数绝不超过大纲实际章节数（防止断头裸奔重复）
+    outline_obj = None
+    if outline:
+        try:
+            outline_obj = json.loads(outline) if isinstance(outline, str) else outline
+            if isinstance(outline_obj, dict) and isinstance(outline_obj.get("chapters"), list) and len(outline_obj["chapters"]) > 0:
+                outline_len = len(outline_obj["chapters"])
+                n = min(n, outline_len) if n > 0 else outline_len
+        except Exception:
+            outline_obj = None
 
     novel_name = data.get("novel_name")
     if novel_name and (NOVELS_DIR / f"{novel_name}.md").exists():
@@ -1526,6 +1604,33 @@ def run_original_job(job, data):
                 with JOBS_LOCK:
                     job["streaming_text"] = (job.get("streaming_text") or "") + token
 
+            # 提取本章大纲指引
+            curr_ch = None
+            if outline_obj and isinstance(outline_obj, dict):
+                chs_list = outline_obj.get("chapters") or []
+                if 0 <= i - 1 < len(chs_list):
+                    curr_ch = chs_list[i - 1]
+
+            ch_task_hint = ""
+            if curr_ch:
+                if isinstance(curr_ch, dict):
+                    c_title = curr_ch.get("title") or f"第{i}章"
+                    c_pts = curr_ch.get("points") or ""
+                    ch_task_hint = f"\n【本章规划目标】\n本章规划标题：{c_title}\n本章剧情要点：{c_pts}\n"
+                elif isinstance(curr_ch, str):
+                    ch_task_hint = f"\n【本章规划目标】\n本章要点：{curr_ch}\n"
+
+            prev_titles = [c.get("title", "") for c in chapters if c.get("title")]
+            avoid_dup_hint = ""
+            if prev_titles:
+                last_t = prev_titles[-1]
+                avoid_dup_hint = (
+                    f"\n【重要写作规范与防重复约束】\n"
+                    f"1. 上一章（{last_t}）已完结。本章必须承接上一章末尾的最新时间线与故事进展继续向后写！\n"
+                    f"2. 严禁重复前文已写过的剧情、事件或场景（绝对不要把上一章情节换个写法重述）！\n"
+                    f"3. 严禁使用已用过的章节标题（已有标题：{', '.join(prev_titles[-5:])}）！\n"
+                )
+
             def mk_msgs(sofar, i=i, prev=prev):
                 msgs = [
                     {"role": "system", "content": ORIGINAL_SYS + build_style_instruction(data.get("style_template") or data.get("prompt_template"))},
@@ -1533,6 +1638,8 @@ def run_original_job(job, data):
                         f"【小说设定】\n{setup}\n\n"
                         f"【章节大纲】\n{outline_text}\n\n"
                         f"【前情提要】\n{prev or '（这是第一章，无前文）'}\n\n"
+                        f"{ch_task_hint}"
+                        f"{avoid_dup_hint}"
                         f"现在创作第 {i} 章正文，约 {per} 字。"
                     )},
                 ]
@@ -1543,6 +1650,50 @@ def run_original_job(job, data):
 
             content = generate_text(mk_msgs, max_chars=int(per * 1.6), provider_id=provider_id, on_chunk=on_chunk)
             title_line, body = chapter_title_from(content, i)
+
+            # 策略 3：相似度熔断重试守卫（仅在有前置章节且非第一章时比对）
+            if chapters:
+                prev_ch = chapters[-1]
+                is_dup, sim, reason = check_chapter_duplicate(prev_ch, title_line, body)
+                if is_dup:
+                    print(f"[DuplicateGuard] 检测到第 {i} 章与第 {i-1} 章严重重复 ({reason})，正在触发纠偏重试...")
+                    update_job(job, step=f"检测到第 {i} 章内容打转，正在纠偏重写...")
+                    with JOBS_LOCK:
+                        job["streaming_text"] = ""
+
+                    retry_hint = (
+                        f"\n【紧急纠偏警告：严禁重复】\n"
+                        f"你刚刚生成的内容被检测到与上一章《{prev_ch.get('title', '')}》高度重复（{reason}）！\n"
+                        f"上一章的情节已经结束，请绝对不要再描写上一章的内容！\n"
+                        f"必须顺延最新时间线，描写全新的剧情推进，并使用全新的章节标题！\n"
+                    )
+
+                    def mk_retry_msgs(sofar, i=i, prev=prev):
+                        msgs = [
+                            {"role": "system", "content": ORIGINAL_SYS + build_style_instruction(data.get("style_template") or data.get("prompt_template"))},
+                            {"role": "user", "content": (
+                                f"【小说设定】\n{setup}\n\n"
+                                f"【章节大纲】\n{outline_text}\n\n"
+                                f"【前情提要】\n{prev or '（这是第一章，无前文）'}\n\n"
+                                f"{ch_task_hint}"
+                                f"{avoid_dup_hint}"
+                                f"{retry_hint}"
+                                f"现在创作第 {i} 章正文，约 {per} 字。"
+                            )},
+                        ]
+                        if sofar:
+                            msgs.append({"role": "assistant", "content": sofar})
+                            msgs.append({"role": "user", "content": "继续写这一章，接着上面的内容往下写，不要重复。"})
+                        return msgs
+
+                    content = generate_text(mk_retry_msgs, max_chars=int(per * 1.6), provider_id=provider_id, on_chunk=on_chunk)
+                    title_line, body = chapter_title_from(content, i)
+                    # 二次兜底：若标题仍相同，则强制区分
+                    t1_c = re.sub(r"^第\s*\d+\s*[章回节卷]?\s*", "", prev_ch.get("title", "")).strip()
+                    t2_c = re.sub(r"^第\s*\d+\s*[章回节卷]?\s*", "", title_line).strip()
+                    if t1_c and t2_c and (t1_c == t2_c):
+                        title_line = f"{title_line}（续）"
+
             with lock_novel(path.stem):
                 chapters.append({"title": title_line, "content": body})
                 meta["status"] = "generating"
@@ -1725,6 +1876,49 @@ def run_continuation_job(job, data):
 
             content = generate_text(mk_msgs, max_chars=int(per * 1.6), provider_id=provider_id, on_chunk=on_chunk)
             title_line, body = chapter_title_from(content, i)
+
+            # 策略 3：相似度熔断重试守卫（仅在有前置章节且非第一章时比对）
+            if chapters:
+                prev_ch = chapters[-1]
+                is_dup, sim, reason = check_chapter_duplicate(prev_ch, title_line, body)
+                if is_dup:
+                    print(f"[DuplicateGuard] 检测到第 {i} 章与第 {i-1} 章严重重复 ({reason})，正在触发纠偏重试...")
+                    update_job(job, step=f"检测到第 {i} 章内容打转，正在纠偏重写...")
+                    with JOBS_LOCK:
+                        job["streaming_text"] = ""
+
+                    retry_hint = (
+                        f"\n【紧急纠偏警告：严禁重复】\n"
+                        f"你刚刚生成的内容被检测到与上一章《{prev_ch.get('title', '')}》高度重复（{reason}）！\n"
+                        f"上一章的情节已经结束，请绝对不要再描写上一章的内容！\n"
+                        f"必须顺延最新时间线，描写全新的剧情推进，并使用全新的章节标题！\n"
+                    )
+
+                    def mk_retry_msgs(sofar, i=i, prev=prev):
+                        msgs = [
+                            {"role": "system", "content": sys_prompt},
+                            {"role": "user", "content": (
+                                (f"【原作截止位置之前的正文节选】\n{context_text or '（无原文）'}\n\n" if not chapters or (original_count and len(chapters) <= original_count) else "") +
+                                f"【续写历史摘要】\n{meta.get('story_summary') or '（暂无）'}\n\n"
+                                f"【前情提要】\n{prev or '（暂无）'}\n\n"
+                                f"【历史续写指示】\n{hist or '（无）'}\n\n"
+                                f"{retry_hint}\n\n"
+                                f"现在续写第 {i} 章，约 {per} 字。{naming_hint}"
+                            )},
+                        ]
+                        if sofar:
+                            msgs.append({"role": "assistant", "content": sofar})
+                            msgs.append({"role": "user", "content": "继续写这一章，接着上面的内容往下写，不要重复。"})
+                        return msgs
+
+                    content = generate_text(mk_retry_msgs, max_chars=int(per * 1.6), provider_id=provider_id, on_chunk=on_chunk)
+                    title_line, body = chapter_title_from(content, i)
+                    # 二次兜底：若标题仍相同，则强制区分
+                    t1_c = re.sub(r"^第\s*\d+\s*[章回节卷]?\s*", "", prev_ch.get("title", "")).strip()
+                    t2_c = re.sub(r"^第\s*\d+\s*[章回节卷]?\s*", "", title_line).strip()
+                    if t1_c and t2_c and (t1_c == t2_c):
+                        title_line = f"{title_line}（续）"
+
             with lock_novel(path.stem):
                 chapters.append({"title": title_line, "content": body})
                 meta["status"] = "generating"
@@ -3293,6 +3487,110 @@ def api_delete_chapter(name):
         return jsonify({"ok": True, "removed": removed["title"]})
 
 
+def _realign_chapters_internal(chapters, original_count=0):
+    """将章节标题中的编号规范重排为与自然位次对齐（如 第1章、第2章...），同步修正正文首行标题。"""
+    changed_count = 0
+    seq = 1
+    for idx in range(original_count, len(chapters)):
+        ch = chapters[idx]
+        old_title = (ch.get("title") or "").strip()
+        m = re.match(r"^(?:第\s*\d+\s*[章回节话卷]|Chapter\s*\d+)[\s:：、]*(.*)$", old_title, re.I)
+        sub_name = m.group(1).strip() if m else old_title
+        new_title = f"第{seq}章 {sub_name}".strip() if sub_name else f"第{seq}章"
+        if new_title != old_title:
+            ch["title"] = new_title
+            content = (ch.get("content") or "").strip()
+            lines = content.splitlines()
+            if lines:
+                first_l = lines[0].strip()
+                if re.match(r"^(?:#+\s*)?(?:第\s*\d+\s*[章回节话卷]|Chapter\s*\d+)", first_l, re.I):
+                    prefix = re.match(r"^(#+\s*)?", first_l).group(1) or ""
+                    lines[0] = f"{prefix}{new_title}".strip()
+                    ch["content"] = "\n".join(lines)
+            changed_count += 1
+        seq += 1
+    return changed_count
+
+
+@app.post("/api/novels/<name>/realign-numbers")
+def api_realign_chapter_numbers(name):
+    """一键对齐全书章节序号（消除跳号、重复号）。"""
+    p = safe_novel_path(name)
+    if not p:
+        return jsonify({"error": "小说不存在"}), 404
+
+    with lock_novel(p.stem):
+        data = request.get_json(silent=True) or {}
+        meta, chapters, _ = parse_novel(p, repair=False)
+        if _deny_private(meta, _request_token(data)):
+            return jsonify({"error": "隐私书架已锁定，请先输入隐私密码", "locked": True}), 403
+        if book_busy(p.stem):
+            return jsonify({"error": "小说正在生成中，暂时无法对齐序号"}), 409
+
+        original_count = int(meta.get("original_count") or 0)
+        changed_count = _realign_chapters_internal(chapters, original_count)
+        if changed_count > 0:
+            write_novel(p, meta, chapters)
+        return jsonify({"ok": True, "changed_count": changed_count})
+
+
+@app.post("/api/novels/<name>/chapters/batch-delete")
+def api_batch_delete_chapters(name):
+    """批量删除指定章节（倒序逐章弹出并备份，可选自动对齐剩余章节序号）。"""
+    p = safe_novel_path(name)
+    if not p:
+        return jsonify({"error": "小说不存在"}), 404
+
+    data = request.get_json(force=True) or {}
+    indices = data.get("indices") or []
+    if not isinstance(indices, list) or not indices:
+        return jsonify({"error": "请提供要删除的章节序号列表"}), 400
+
+    auto_realign = bool(data.get("auto_realign", True))
+
+    with lock_novel(p.stem):
+        meta, chapters, _ = parse_novel(p, repair=False)
+        if _deny_private(meta, _request_token(data)):
+            return jsonify({"error": "隐私书架已锁定，请先输入隐私密码", "locked": True}), 403
+        if book_busy(p.stem):
+            return jsonify({"error": "小说正在生成中，暂时无法删除章节"}), 409
+
+        original_count = int(meta.get("original_count") or 0)
+        parsed_indices = []
+        for item in indices:
+            try:
+                parsed_indices.append(int(item))
+            except (ValueError, TypeError):
+                continue
+        valid_indices = sorted(list(set(i for i in parsed_indices if 0 <= i < len(chapters))), reverse=True)
+        if not valid_indices:
+            return jsonify({"error": "无有效可删除章节"}), 400
+        if any(i < original_count for i in valid_indices):
+            return jsonify({"error": "原作章节不可删除"}), 400
+
+        # 倒序弹出并备份
+        removed_titles = []
+        for idx in valid_indices:
+            _backup_chapter(p.stem, idx, chapters[idx])
+            removed_titles.append(chapters.pop(idx)["title"])
+
+        realigned_count = 0
+        if auto_realign and chapters:
+            realigned_count = _realign_chapters_internal(chapters, original_count)
+
+        meta["words"] = sum(len(re.sub(r"\s", "", c["content"])) for c in chapters)
+        meta["story_summary"] = ""
+        meta["summary_upto"] = 0
+        meta["status"] = "done"
+        write_novel(p, meta, chapters)
+        return jsonify({
+            "ok": True,
+            "deleted_count": len(removed_titles),
+            "realigned_count": realigned_count,
+            "remaining_count": len(chapters)
+        })
+
+
 @app.post("/api/novels/<name>/chapters/rewrite")
 def api_rewrite_chapter(name):
     """重写指定章节（job 化）：删除该章，并以其前文为上下文重新生成一章替换。"""
@@ -3891,6 +4189,16 @@ def api_generate():
         if not data.get("outline"):
             return jsonify({"error": "缺少大纲，请先生成大纲"}), 400
         n = int(data.get("chapters") or 10)
+        outline_val = data.get("outline")
+        if outline_val:
+            try:
+                ot = json.loads(outline_val) if isinstance(outline_val, str) else outline_val
+                if isinstance(ot, dict) and isinstance(ot.get("chapters"), list) and len(ot["chapters"]) > 0:
+                    outline_len = len(ot["chapters"])
+                    n = min(n, outline_len) if n > 0 else outline_len
+                    data["chapters"] = n
+            except Exception:
+                pass
         job = new_job("original", n)
     elif mode in ("continuation", "fanfic"):
         n = int(data.get("chapters") or 1)

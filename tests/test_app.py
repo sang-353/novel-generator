@@ -768,5 +768,88 @@ def test_build_continuation_setup_with_bible():
     assert "变异生物与绿洲避难所的冲突" in setup_text
 
 
+def test_extract_json_object_array_resilience():
+    from app import extract_json
+    # 模拟大模型输出残损（缺少单个对象的闭合大括号，或存在逗号但属于对象属性）
+    raw = '''{
+  "logline": "一句话梗概",
+  "chapters": [
+    { "title": "第1章 开始", "points": "要点内容1，带有中文逗号和细节"
+  ]
+}'''
+    res = extract_json(raw)
+    assert "chapters" in res
+    chs = res["chapters"]
+    assert isinstance(chs, list)
+    # 严禁将对象按逗号切碎成字符串片段（如 '{"title":...' 和 'points":...'）
+    assert not any(isinstance(c, str) and 'points":' in c for c in chs), f"chapters 内部对象被切碎: {chs}"
+    if chs:
+        # 首项应为 dict 或至少完整保留标题
+        if isinstance(chs[0], dict):
+            assert "第1章 开始" in chs[0].get("title", "")
+
+
+def test_api_generate_original_syncs_outline_chapters(monkeypatch, tmpdir):
+    import app as app_module
+    client = _privacy_env(monkeypatch, tmpdir)
+    # 测试当 mode == 'original' 且传入了 3 章的大纲，但 chapters 参数误传为 10 时，
+    # 接口与创建的 job 必须以大纲实际章节数 3 为准，绝不盲目按 10 处理
+    outline_data = {
+        "logline": "梗概",
+        "chapters": [
+            {"title": "第1章 A", "points": "要点A"},
+            {"title": "第2章 B", "points": "要点B"},
+            {"title": "第3章 C", "points": "要点C"}
+        ]
+    }
+    payload = {
+        "mode": "original",
+        "title": "大纲章节对齐测试书",
+        "outline": json.dumps(outline_data, ensure_ascii=False),
+        "chapters": 10  # 前端历史残留或未同步的旧值
+    }
+    res = client.post("/api/generate", json=payload)
+    assert res.status_code == 200
+    job_id = res.get_json()["job_id"]
+    job = app_module.JOBS.get(job_id)
+    assert job is not None
+    assert job["total"] == 3, f"job total 应为大纲的 3 章，实际为 {job['total']}"
+
+
+def test_chapter_duplicate_guard():
+    from app import calc_text_similarity, check_chapter_duplicate
+
+    # 1. 相似度基础函数
+    assert calc_text_similarity("", "abc") == 0.0
+    assert calc_text_similarity("你好世界", "你好世界") == 1.0
+    assert calc_text_similarity("今天天气真好，我们去公园散步吧！", "今天天气真好，咱们去公园走走吧！") > 0.6
+    assert calc_text_similarity("修仙界浩劫降临，万道崩碎。", "现代都市金融风暴，盛氏集团陷入危机。") < 0.2
+
+    # 2. 真实案例复现验证
+    prev_chapter = {
+        "title": "第7章 废纸袋",
+        "content": "周一早上七点四十分，深湾市刚经历过一场夜雨，写字楼玻璃幕墙上还挂着水痕，把晨光折射成一片凌乱的碎金。盛栀在八点零五分走进核心区时，注意到何丽正在打印室门口跟保安老蔡说话。何丽手里抱着一摞待销毁的废纸，最上面几张是部门间的备忘录，中间夹着几张报销单复印件..."
+    }
+
+    # 重复章节案例：标题同为废纸袋，正文开头高度雷同
+    dup_title = "第8章 废纸袋"
+    dup_body = "周一早上七点四十分，深湾市刚经历过一场夜雨，写字楼玻璃幕墙上还挂着水痕，把晨光折射成一片凌乱的碎金。盛栀走进盛氏大楼四十七层核心区时，注意到何丽正抱着一摞待销毁的废纸往回收间走，最上面几张是部门备忘录..."
+    is_dup, sim, reason = check_chapter_duplicate(prev_chapter, dup_title, dup_body)
+    assert is_dup is True
+    assert sim >= 0.70
+    assert "废纸袋" in prev_chapter["title"]
+    assert "标题与上一章高度重合" in reason
+
+    # 正常章节案例：新标题，新情节推进
+    normal_title = "第8章 烟与签报"
+    normal_body = "林知遥把烟盒扣在玻璃茶几上，发出沉闷的一声响。盛栀端着咖啡从走廊尽头走过来，目光扫过桌上摊开的半截签报单据..."
+    is_dup2, sim2, reason2 = check_chapter_duplicate(prev_chapter, normal_title, normal_body)
+    assert is_dup2 is False
+    assert sim2 < 0.30
+
+
+
+
+
 
 
