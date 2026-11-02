@@ -1548,43 +1548,53 @@ function initStudioPanels() {
 
   const addChBtn = $('rd_toc_add_ch_btn');
   if (addChBtn) {
-    addChBtn.onclick = async () => {
+    addChBtn.onclick = () => {
       if (!readerData) return;
       const chNum = (readerData.chapters ? readerData.chapters.length : 0) + 1;
-      const newTitle = prompt('请输入新章节标题：', `第${chNum}章 `);
-      if (!newTitle) return;
-      readerData.chapters.push({
-        title: newTitle.trim(),
-        content: '',
-        volume: '正文',
-        words: 0
+      showInlineTocInput({
+        title: '✨ 新增章节',
+        defaultValue: `第${chNum}章 `,
+        placeholder: '输入新章节标题…',
+        onConfirm: newTitle => {
+          readerData.chapters.push({
+            title: newTitle.trim(),
+            content: '',
+            volume: '正文',
+            words: 0
+          });
+          renderToc();
+          gotoChapter(readerData.chapters.length - 1, false);
+          enterChapterEdit();
+          toast('已新增章节，请开始创作！');
+        }
       });
-      renderToc();
-      gotoChapter(readerData.chapters.length - 1, false);
-      enterChapterEdit();
-      toast('已新增章节，请开始创作！');
     };
   }
 
   const addVolBtn = $('rd_toc_add_vol_btn');
   if (addVolBtn) {
-    addVolBtn.onclick = async () => {
+    addVolBtn.onclick = () => {
       if (!readerData) return;
-      const volTitle = prompt('请输入新分卷名称（例如：第二卷 龙争虎斗）：');
-      if (!volTitle) return;
-      if (readerData.chapters && readerData.chapters[readerIdx]) {
-        readerData.chapters[readerIdx].volume = volTitle.trim();
-        renderToc();
-        toast(`已将当前第 ${readerIdx + 1} 章划分至【${volTitle.trim()}】`);
-        try {
-          const order = readerData.chapters.map((c, i) => ({
-            index: i,
-            volume: c.volume || '正文',
-            title: c.title
-          }));
-          await api('/api/novels/' + encodeURIComponent(readerData.name) + '/reorder-chapters', 'POST', { order });
-        } catch (e) {}
-      }
+      showInlineTocInput({
+        title: '📑 新建分卷',
+        defaultValue: '第二卷 ',
+        placeholder: '例如：第二卷 龙争虎斗…',
+        onConfirm: async volTitle => {
+          if (readerData.chapters && readerData.chapters[readerIdx]) {
+            readerData.chapters[readerIdx].volume = volTitle.trim();
+            renderToc();
+            toast(`已将当前第 ${readerIdx + 1} 章划分至【${volTitle.trim()}】`);
+            try {
+              const order = readerData.chapters.map((c, i) => ({
+                index: i,
+                volume: c.volume || '正文',
+                title: c.title
+              }));
+              await api('/api/novels/' + encodeURIComponent(readerData.name) + '/reorder-chapters', 'POST', { order });
+            } catch (e) {}
+          }
+        }
+      });
     };
   }
 
@@ -1719,16 +1729,15 @@ function initStudioPanels() {
   const addCharBtn = $('btn_add_ast_char');
   if (addCharBtn) {
     addCharBtn.onclick = () => {
-      const name = prompt('角色姓名：');
-      if (!name) return;
-      const desc = prompt('角色身份、性格与目标：') || '';
-      const list = $('ast_bible_chars');
-      if (list) {
-        const card = document.createElement('div');
-        card.className = 'ast-char-card';
-        card.innerHTML = `<div class="ast-char-name">${escapeHtml(name)}</div><div class="ast-char-desc">${escapeHtml(desc)}</div>`;
-        list.appendChild(card);
-      }
+      showCharBlueprintModal((name, desc) => {
+        const list = $('ast_bible_chars');
+        if (list) {
+          const card = document.createElement('div');
+          card.className = 'ast-char-card';
+          card.innerHTML = `<div class="ast-char-name">${escapeHtml(name)}</div><div class="ast-char-desc">${escapeHtml(desc)}</div>`;
+          list.appendChild(card);
+        }
+      });
     };
   }
 

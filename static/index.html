@@ -754,6 +754,14 @@
               <button type="button" class="ghost mini-btn" id="rd_toc_batch_btn" title="批量选择与管理章节" aria-label="批量管理">☑️ 批量</button>
             </div>
           </div>
+          <div class="atelier-inline-bar" id="rd_inline_toc_bar" style="display:none;">
+            <div class="inline-bar-label" id="rd_inline_label">新增章节</div>
+            <div class="inline-bar-inner">
+              <input type="text" class="inline-bar-input" id="rd_inline_input" placeholder="请输入…" autocomplete="off" />
+              <button type="button" class="inline-bar-btn confirm" id="rd_inline_confirm_btn" title="确认创建 (Enter)">✓</button>
+              <button type="button" class="inline-bar-btn cancel" id="rd_inline_cancel_btn" title="取消 (Esc)">✕</button>
+            </div>
+          </div>
           <div class="toc-list" id="rd_toc_list"></div>
           <div class="toc-batch-bar" id="rd_toc_batch_bar" style="display:none;">
             <div class="toc-batch-info">已选 <strong id="rd_toc_batch_count">0</strong> 章</div>
@@ -1358,7 +1366,39 @@
   </div>
 </div>
 
+<!-- ================= 角色蓝图档案卡片模态框 (Group 3) ================= -->
+<div class="modal-mask" id="char_blueprint_modal" role="dialog" aria-modal="true" aria-labelledby="cb_modal_title">
+  <div class="modal-box" style="max-width:440px;">
+    <h3 id="cb_modal_title">✨ 添加登场角色档案</h3>
+    <label for="cb_name_inp">角色姓名</label>
+    <input type="text" id="cb_name_inp" placeholder="例如：林澈 / 楚晚宁…" autocomplete="off">
+    <label for="cb_desc_inp" style="margin-top:12px;">身份、性格与执念目标</label>
+    <textarea id="cb_desc_inp" rows="3" placeholder="例如：潜行骇客，冷静果断，寻找失踪的姐姐…" style="resize:vertical;"></textarea>
+    <div class="actions" style="margin-top:16px;">
+      <button class="primary" id="cb_save_btn">保存角色</button>
+      <button class="secondary" id="cb_cancel_btn">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 安全密码鉴权弹窗 (Group 4) ================= -->
+<div class="modal-mask" id="security_pwd_modal" role="dialog" aria-modal="true" aria-labelledby="sec_pwd_title">
+  <div class="modal-box" style="max-width:400px;">
+    <h3 id="sec_pwd_title">🛡️ 安全身份验证</h3>
+    <p class="mini" id="sec_pwd_desc" style="margin:4px 0 10px;color:var(--muted);">请输入访问口令以继续：</p>
+    <div class="sec-pwd-wrapper">
+      <input type="password" id="sec_pwd_input" placeholder="输入访问口令…" autocomplete="current-password">
+      <button type="button" class="sec-pwd-toggle-btn" id="sec_pwd_toggle_vis" title="显示口令">👁️</button>
+    </div>
+    <div class="actions" style="margin-top:16px;">
+      <button class="primary" id="sec_pwd_confirm_btn">确认</button>
+      <button class="secondary" id="sec_pwd_cancel_btn">取消</button>
+    </div>
+  </div>
+</div>
+
   <script src="/static/js/util.js"></script>
+  <script src="/static/js/dialog.js"></script>
   <script src="/static/js/state.js"></script>
   <script src="/static/js/generator.js"></script>
   <script defer src="/static/js/og_refine.js"></script>
