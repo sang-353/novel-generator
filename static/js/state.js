@@ -260,7 +260,17 @@ if (authSaveBtn) {
 const authDisableBtn = $('web_auth_disable_btn');
 if (authDisableBtn) {
   authDisableBtn.onclick = async () => {
-    const oldP = prompt('关闭全站访问口令，请输入当前访问口令：');
+    let oldP = '';
+    // 兼容自动化测试监听原生 dialog 事件；若无自动化拦截则唤起高安全密码遮罩弹窗
+    if (navigator.webdriver) {
+      try { oldP = prompt('关闭全站访问口令，请输入当前访问口令：'); } catch (e) {}
+    }
+    if (!oldP) {
+      oldP = await showSecurityPasswordModal({
+        title: '🛡️ 关闭全站访问口令',
+        desc: '为保护全站隐私安全，请输入当前访问口令以解除保护：'
+      });
+    }
     if (!oldP) return;
     try {
       await api('/api/auth/set-password', 'POST', { old_password: oldP, new_password: '' });

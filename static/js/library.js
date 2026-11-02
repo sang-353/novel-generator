@@ -269,23 +269,22 @@ function renderLibraryView() {
     const moreBtn = card.querySelector('[data-act=more]');
     if (moreBtn) moreBtn.onclick = e => {
       e.stopPropagation();
-      const choice = prompt(`《${item ? item.title : name}》更多操作：\n1. 修改书名\n2. 移入隐私书架\n3. 导出 TXT\n4. 导出 Markdown\n5. 删除到回收站\n\n请输入数字 (1-5)：`);
-      if (choice === '1') {
-        openRenameModal(name, item ? item.title : name);
-      } else if (choice === '2') {
-        api('/api/novels/' + encodeURIComponent(name) + '/privacy', 'POST', { private: true })
-          .then(() => { toast('已移入隐私书架'); loadLibrary(); loadPrivateShelf(); })
-          .catch(err => { if (err.locked) toast('隐私书架已锁定，请先解锁'); else toast(err.message); });
-      } else if (choice === '3') {
-        exportNovel(name, 'txt');
-      } else if (choice === '4') {
-        exportNovel(name, 'md');
-      } else if (choice === '5') {
-        if (!confirm(`确定删除《${item ? item.title : name}》？删除后先移入回收站。`)) return;
-        api('/api/novels/' + encodeURIComponent(name), 'DELETE')
-          .then(() => { toast('已移入回收站'); loadLibrary(); })
-          .catch(err => toast(err.message));
-      }
+      openCardMoreMenu(moreBtn, item || { name, title: name }, {
+        rename: () => openRenameModal(name, item ? item.title : name),
+        privacy: () => {
+          api('/api/novels/' + encodeURIComponent(name) + '/privacy', 'POST', { private: true })
+            .then(() => { toast('已移入隐私书架'); loadLibrary(); loadPrivateShelf(); })
+            .catch(err => { if (err.locked) toast('隐私书架已锁定，请先解锁'); else toast(err.message); });
+        },
+        export_txt: () => exportNovel(name, 'txt'),
+        export_md: () => exportNovel(name, 'md'),
+        delete: () => {
+          if (!confirm(`确定删除《${item ? item.title : name}》？删除后先移入回收站。`)) return;
+          api('/api/novels/' + encodeURIComponent(name), 'DELETE')
+            .then(() => { toast('已移入回收站'); loadLibrary(); })
+            .catch(err => toast(err.message));
+        }
+      });
     };
   });
 

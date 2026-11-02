@@ -2340,3 +2340,217 @@ button:disabled {
       display: none;
     }
   }
+
+/* ============================================================
+   NovelStudio Modern Atelier Dialog & Popover Design System
+   Group 1: 书架气泡上下文菜单 (.atelier-popover-menu)
+   Group 2: 目录行内吸附输入条 (.atelier-inline-bar)
+   Group 3: 角色档案与安全弹窗部件
+   ============================================================ */
+
+.atelier-popover-menu {
+  position: absolute;
+  width: 210px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  padding: 6px;
+  z-index: 1050;
+  color: var(--ink);
+  opacity: 0;
+  transform: translateY(6px) scale(0.96);
+  pointer-events: none;
+  transition: opacity 160ms cubic-bezier(0.16, 1, 0.3, 1), transform 160ms cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+}
+
+.atelier-popover-menu.visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.atelier-popover-menu .popover-header {
+  padding: 6px 10px 6px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 4px;
+}
+
+.atelier-popover-menu .popover-title {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.atelier-popover-menu .popover-meta {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 1px;
+}
+
+.atelier-popover-menu .popover-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.atelier-popover-menu .popover-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.atelier-popover-menu .popover-item:hover {
+  background: var(--card-subtle);
+  color: var(--accent);
+}
+
+.atelier-popover-menu .popover-item.danger {
+  color: var(--err);
+}
+
+.atelier-popover-menu .popover-item.danger:hover {
+  background: var(--err-soft);
+  color: var(--err);
+}
+
+.atelier-popover-menu .popover-icon {
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.atelier-popover-menu .popover-text {
+  flex: 1;
+}
+
+.atelier-popover-menu .popover-divider {
+  height: 1px;
+  background: var(--line);
+  margin: 4px 6px;
+}
+
+/* Group 2: 目录行内吸附输入条 */
+.atelier-inline-bar {
+  margin: 8px 12px;
+  padding: 8px 10px;
+  background: var(--card);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  box-shadow: 0 4px 14px -2px rgba(37, 99, 235, 0.16);
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 160ms cubic-bezier(0.16, 1, 0.3, 1), transform 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.atelier-inline-bar.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.atelier-inline-bar .inline-bar-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 5px;
+}
+
+.atelier-inline-bar .inline-bar-inner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.atelier-inline-bar .inline-bar-input {
+  flex: 1;
+  padding: 5px 8px;
+  font-size: 12px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--ink);
+  outline: none;
+  min-width: 0;
+}
+
+.atelier-inline-bar .inline-bar-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-ring);
+}
+
+.atelier-inline-bar .inline-bar-btn {
+  padding: 4px 8px;
+  font-size: 12px;
+  border-radius: 5px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  transition: background 120ms;
+}
+
+.atelier-inline-bar .inline-bar-btn.confirm {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.atelier-inline-bar .inline-bar-btn.confirm:hover {
+  background: var(--accent-hover);
+}
+
+.atelier-inline-bar .inline-bar-btn.cancel {
+  background: var(--card-subtle);
+  color: var(--muted);
+  border-color: var(--line);
+}
+.atelier-inline-bar .inline-bar-btn.cancel:hover {
+  background: var(--line);
+  color: var(--ink);
+}
+
+/* Group 4: 密码掩码包装器 */
+.sec-pwd-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.sec-pwd-wrapper input {
+  width: 100%;
+  padding-right: 36px;
+}
+
+.sec-pwd-toggle-btn {
+  position: absolute;
+  right: 8px;
+  background: transparent;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--muted);
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+.sec-pwd-toggle-btn:hover {
+  color: var(--ink);
+  background: var(--card-subtle);
+}
