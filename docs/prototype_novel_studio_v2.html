@@ -1,0 +1,1407 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>NovelStudio - 原创小说创作中枢 v2 交互原型</title>
+<style>
+/* ============================================================
+   NovelStudio · Modern Literary Atelier Design System
+   纯净纸面基底 #F8F9FA + 石板墨字色 #111827 + 皇家钴蓝 #2563EB
+   ============================================================ */
+:root {
+  --bg: #F8F9FA;
+  --card: #FFFFFF;
+  --card-subtle: #F3F4F6;
+  --card-warm: #FAF9F6;
+  --ink: #111827;
+  --ink-soft: #374151;
+  --muted: #6B7280;
+  --faint: #9CA3AF;
+  --line: #E5E7EB;
+  --line-focus: #2563EB;
+  --accent: #2563EB;
+  --accent-hover: #1D4ED8;
+  --accent-soft: #EFF6FF;
+  --accent-soft-hover: #DBEAFE;
+  --accent-ring: rgba(37, 99, 235, 0.18);
+  --ok: #059669;
+  --ok-soft: #ECFDF5;
+  --err: #DC2626;
+  --err-soft: #FEF2F2;
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --shadow-xs: 0 1px 2px rgba(17, 24, 39, 0.04);
+  --shadow-sm: 0 1px 3px rgba(17, 24, 39, 0.05), 0 1px 2px rgba(17, 24, 39, 0.03);
+  --shadow: 0 2px 4px rgba(17, 24, 39, 0.04), 0 8px 20px -4px rgba(17, 24, 39, 0.05);
+  --shadow-lg: 0 4px 6px -1px rgba(17, 24, 39, 0.05), 0 16px 32px -4px rgba(17, 24, 39, 0.08);
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---- 顶部导航栏 (与现有系统 100% 一致) ---- */
+header {
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line);
+  box-shadow: var(--shadow-xs);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  padding: 0 32px;
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+}
+header .brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-right: 36px;
+  user-select: none;
+}
+header .brand-mark {
+  display: block;
+  flex-shrink: 0;
+}
+header h1 {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  padding: 16px 0 14px;
+  color: var(--ink);
+}
+header button.nav {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--muted);
+  padding: 16px 18px 14px;
+  border-bottom: 2px solid transparent;
+  letter-spacing: .03em;
+  transition: all .15s ease;
+}
+header button.nav:hover {
+  color: var(--ink);
+  background-color: rgba(0, 0, 0, 0.02);
+}
+header button.nav.active {
+  color: var(--accent);
+  font-weight: 600;
+  border-bottom-color: var(--accent);
+}
+
+/* ---- 主内容容器 ---- */
+main {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 28px 24px 100px;
+}
+section.view { display: none; }
+section.view.active { display: block; animation: viewFadeIn .2s ease-out; }
+@keyframes viewFadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ---- 卡片与标题 ---- */
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 26px 28px;
+  margin-bottom: 22px;
+  position: relative;
+}
+h2 {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: .03em;
+  margin: 0 0 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+}
+.h2-folio {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 22px;
+  padding: 0 7px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: var(--radius-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- 必填 / 可选 视觉微章 ---- */
+.badge-req {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #EFF6FF;
+  color: #2563EB;
+  border: 1px solid #BFDBFE;
+}
+.badge-opt {
+  font-size: 11px;
+  font-weight: normal;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #F1F5F9;
+  color: #64748B;
+  border: 1px solid #E2E8F0;
+}
+
+/* ---- 按钮系统 ---- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 13.5px;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all .15s ease;
+  user-select: none;
+}
+.btn.primary, button.primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.2);
+}
+.btn.primary:hover, button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.btn.secondary, button.secondary {
+  background: var(--card);
+  border-color: var(--line);
+  color: var(--ink);
+}
+.btn.secondary:hover, button.secondary:hover { background: var(--card-subtle); border-color: var(--faint); }
+.btn.ghost, button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+.btn.ghost:hover, button.ghost:hover { background: var(--card-subtle); color: var(--ink); }
+.mini-btn { padding: 5px 10px; font-size: 12px; border-radius: 6px; }
+
+/* ---- 表单输入控件 ---- */
+label { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); margin: 14px 0 6px; }
+input[type=text], input[type=search], input[type=number], textarea, select {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 13.5px;
+  line-height: 1.5;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+/* ---- 步骤导航条 (Stepper Bar) ---- */
+.stepper-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 14px 0 20px;
+  padding: 10px 16px;
+  background: var(--card-subtle);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.stepper-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  transition: color .15s ease;
+  user-select: none;
+}
+.stepper-step:hover { color: var(--ink); }
+.stepper-step.active { color: var(--accent); font-weight: 700; }
+.stepper-step.done { color: var(--ink); }
+.stepper-step .step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 12px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  color: inherit;
+  font-weight: 700;
+}
+.stepper-step.active .step-num {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+.stepper-step.done .step-num {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+}
+.stepper-line { flex: 1; height: 2px; margin: 0 12px; background: var(--line); border-radius: 1px; }
+
+/* ---- 摘要与完成度指示条 ---- */
+.og2-summary-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--card-warm);
+  border: 1px solid #EFECE6;
+  border-radius: var(--radius);
+  margin-bottom: 20px;
+  font-size: 12px;
+}
+.og2-summary-meta { display: flex; align-items: center; gap: 8px; color: var(--ink-soft); }
+.og2-summary-meta b { color: var(--ink); }
+
+/* ---- 标签选择 (Chips) ---- */
+.genre-rack { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 12px; }
+.tag-pill {
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 12px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: all .12s ease;
+  user-select: none;
+}
+.tag-pill:hover { border-color: var(--accent); color: var(--accent); }
+.tag-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 500; }
+
+/* ---- 灵感脑洞卡片 (支持完全取消/可选) ---- */
+.trope-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; margin-top: 10px; }
+.trope-card {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+.trope-card:hover { border-color: var(--accent); box-shadow: var(--shadow-sm); transform: translateY(-1px); }
+.trope-card.active { border-color: var(--accent); background: var(--accent-soft); }
+.trope-card h4 { font-size: 13px; font-weight: 600; margin-bottom: 4px; color: var(--ink); }
+.trope-card p { font-size: 12px; color: var(--muted); line-height: 1.45; }
+
+/* ---- 核心通用组件：SpecField 字段包装器 & 工具条 ---- */
+.spec-field-wrap {
+  position: relative;
+  margin-bottom: 18px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  transition: border-color .15s ease;
+}
+.spec-field-wrap:focus-within { border-color: #CBD5E1; }
+.spec-field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.spec-field-label-group { display: flex; align-items: center; gap: 8px; }
+.spec-field-label { font-size: 13px; font-weight: 600; color: var(--ink); }
+
+/* 字段工具条 (规范：任何可润色的地方，都必须同时具备重写！) */
+.og2-toolbar { display: inline-flex; align-items: center; gap: 6px; }
+.og2-toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted);
+  background: #F4F4F7;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all .12s ease;
+  user-select: none;
+}
+.og2-toolbar-btn:hover { color: var(--ink); background: #fff; border-color: #CBD5E1; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+.og2-toolbar-btn.locked { color: #D97706; background: #FEF3C7; border-color: #FDE68A; }
+
+/* 审阅模式对比栏 */
+.og2-review-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: #F9FAFB;
+  border: 1px solid #E5E7EB;
+  border-radius: 6px;
+}
+.og2-seg-group { display: inline-flex; background: #E5E7EB; border-radius: 5px; padding: 2px; }
+.og2-seg-btn {
+  padding: 2px 8px; font-size: 11.5px; border: none; background: transparent; color: var(--muted); border-radius: 4px; cursor: pointer;
+}
+.og2-seg-btn.active { background: #fff; color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
+.diff-content {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: #FFF;
+  border: 1px dashed var(--accent);
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.diff-del { background: #FEE2E2; color: #DC2626; text-decoration: line-through; padding: 1px 3px; border-radius: 3px; }
+.diff-ins { background: #DCFCE7; color: #16A34A; font-weight: 600; padding: 1px 3px; border-radius: 3px; }
+
+/* 通用叙事校验指示器 (中立化表达) */
+.rule-indicators { display: flex; align-items: center; gap: 12px; font-size: 11.5px; color: var(--muted); margin-top: 6px; }
+.rule-indicator.ok { color: var(--ok); font-weight: 500; }
+
+/* 附带指令展开框 */
+.directive-input-bar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 6px 8px;
+  background: var(--accent-soft);
+  border: 1px solid #BFDBFE;
+  border-radius: 6px;
+}
+.directive-input-bar input { flex: 1; padding: 4px 8px; font-size: 12px; border: 1px solid #BFDBFE; border-radius: 4px; }
+
+/* 路线图与阶段卡片 (Roadmap) */
+.roadmap-container { position: relative; padding-left: 24px; margin-top: 14px; }
+.roadmap-axis { position: absolute; left: 8px; top: 12px; bottom: 12px; width: 2px; background: #CBD5E1; }
+.stage-card {
+  position: relative;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-sm);
+}
+.stage-card.active-stage { border-color: var(--accent); border-width: 2px; box-shadow: var(--shadow); }
+.stage-dot {
+  position: absolute;
+  left: -20px;
+  top: 18px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--accent);
+}
+.anchor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-top: 10px;
+  font-size: 12.5px;
+}
+.anchor-box {
+  background: var(--card-subtle);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+.anchor-box span.anchor-title { font-size: 11px; font-weight: 700; color: var(--muted); display: block; margin-bottom: 2px; }
+
+/* 写作台节拍表与流式终端 */
+.beat-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+.beat-item.climax { border-color: #F59E0B; background: #FFFBEB; }
+.beat-item.hook { border-color: #8B5CF6; background: #F5F3FF; }
+.stream-terminal {
+  background: #111827;
+  color: #F3F4F6;
+  border-radius: 6px;
+  padding: 14px 16px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  max-height: 200px;
+  overflow-y: auto;
+  margin: 10px 0;
+}
+
+/* 一键推演模态框 */
+.modal-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.45);
+  backdrop-filter: blur(4px);
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal-box {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 24px 28px;
+  width: 520px;
+  max-width: 90vw;
+  box-shadow: var(--shadow-lg);
+}
+.progress-step-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--card-subtle);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+/* 布局网格 */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.nav-row { display: flex; justify-content: space-between; align-items: center; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--line); }
+</style>
+</head>
+<body>
+
+<!-- ================= 顶栏：NovelStudio 官方同款吸顶导航 ================= -->
+<header>
+  <div class="brand">
+    <svg class="brand-mark" viewBox="0 0 32 32" width="22" height="22" aria-hidden="true">
+      <path d="M3 5 L15 7 L15 25 L3 23 Z" fill="var(--ink)"/>
+      <path d="M29 5 L17 7 L17 25 L29 23 Z" fill="var(--accent)"/>
+    </svg>
+    <h1>NovelStudio</h1>
+  </div>
+  <button class="nav active" data-view="original" onclick="switchNav('original')">原创生成</button>
+  <button class="nav" data-view="continuation" onclick="switchNav('continuation')">续写 · 同人</button>
+  <button class="nav" data-view="library" onclick="switchNav('library')">书架</button>
+  <button class="nav" data-view="settings" onclick="switchNav('settings')">设置</button>
+</header>
+
+<main id="main">
+
+  <!-- ================= VIEW 1: 原创小说生成 (全面重构的 4 工位体系) ================= -->
+  <section class="view active" id="view-original">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <h2 style="margin:0"><span class="h2-folio">01</span>原创小说创作中枢 <span style="font-size:12px;color:var(--muted);font-weight:normal;margin-left:8px;">中立通用架构 · 支持各类型题材自由创作</span></h2>
+        
+        <div style="display:flex;align-items:center;gap:8px;">
+          <!-- 题材风格快速切换器演示 -->
+          <div style="display:flex;align-items:center;gap:6px;background:var(--card-subtle);padding:3px 8px;border-radius:6px;border:1px solid var(--line);font-size:12px;">
+            <span style="color:var(--muted)">演示预设:</span>
+            <button type="button" class="btn ghost mini-btn" id="btn_demo_romance" style="padding:2px 6px;color:var(--accent);font-weight:600;" onclick="loadDemo('romance')">言情·都市甜宠</button>
+            <span style="color:var(--line)">|</span>
+            <button type="button" class="btn ghost mini-btn" id="btn_demo_fantasy" style="padding:2px 6px;" onclick="loadDemo('fantasy')">幻想·赛博修真</button>
+          </div>
+          <button type="button" class="btn primary mini-btn" onclick="openChainedModal()">⚡ 一键分段推演全案</button>
+        </div>
+      </div>
+
+      <!-- P2: 分步向导导航条 (Wizard Stepper) -->
+      <div class="stepper-bar" id="og_stepper_bar">
+        <div class="stepper-step active" id="step_tab_1" onclick="goToStep(1)">
+          <span class="step-num">1</span>
+          <span class="step-title">灵魂定调</span>
+        </div>
+        <div class="stepper-line"></div>
+        <div class="stepper-step" id="step_tab_2" onclick="goToStep(2)">
+          <span class="step-num">2</span>
+          <span class="step-title">舞台与群像</span>
+        </div>
+        <div class="stepper-line"></div>
+        <div class="stepper-step" id="step_tab_3" onclick="goToStep(3)">
+          <span class="step-num">3</span>
+          <span class="step-title">航线路标</span>
+        </div>
+        <div class="stepper-line"></div>
+        <div class="stepper-step" id="step_tab_4" onclick="goToStep(4)">
+          <span class="step-num">4</span>
+          <span class="step-title">阶段写作台</span>
+        </div>
+      </div>
+
+      <!-- 作品卡摘要与完成度条 -->
+      <div class="og2-summary-bar">
+        <div class="og2-summary-meta">
+          <span>题材：<b id="sum_genre">都市言情 / 甜宠治愈</b></span>
+          <span>·</span>
+          <span>作品：<b id="sum_title">《微醺心跳定律》</b></span>
+          <span>·</span>
+          <span style="color:var(--ok)">● 设定架构自洽 (Sidecar 同步中)</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span style="color:var(--muted)">核心项已就绪 · 细节项自由选填</span>
+          <button type="button" class="btn secondary mini-btn" onclick="toggleQuickDrawer()">📖 设定全景速览</button>
+        </div>
+      </div>
+
+      <!-- ================= 工位 1：灵魂定调 ================= -->
+      <div id="station_1" class="station-panel">
+        <!-- 1 · 题材选择 (必填) -->
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+          <label style="margin:0">1 · 选择题材</label>
+          <span class="badge-req">必填</span>
+          <span style="font-size:12px;color:var(--muted)">决定叙事惯性与情感基调</span>
+        </div>
+        <div class="genre-rack">
+          <button type="button" class="tag-pill active" onclick="selectGenre(this)">都市言情</button>
+          <button type="button" class="tag-pill active" onclick="selectGenre(this)">青春校园</button>
+          <button type="button" class="tag-pill" onclick="selectGenre(this)">甜宠日常</button>
+          <button type="button" class="tag-pill" onclick="selectGenre(this)">经商种田</button>
+          <button type="button" class="tag-pill" onclick="selectGenre(this)">职场婚恋</button>
+          <button type="button" class="tag-pill" onclick="selectGenre(this)">古风权谋</button>
+          <button type="button" class="tag-pill" onclick="selectGenre(this)">玄幻修真</button>
+          <button type="button" class="tag-pill" onclick="selectGenre(this)">悬疑推理</button>
+          <button type="button" class="tag-pill" onclick="selectGenre(this)">科幻未来</button>
+        </div>
+
+        <!-- 2 · 灵感脑洞库 (可选) -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <label style="margin:0">2 · 挑选灵感脑洞</label>
+            <span class="badge-opt">可选</span>
+            <span style="font-size:12px;color:var(--muted)">可单选填入，也可不选直接自由手写</span>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button type="button" class="btn secondary mini-btn" id="btn_clear_trope" onclick="clearTropeSelection()" style="color:var(--muted);">✕ 不使用灵感 (自由创作)</button>
+            <button type="button" class="btn secondary mini-btn" onclick="randomTrope()">🎲 随机选用</button>
+            <button type="button" class="btn secondary mini-btn" onclick="alert('AI 正在依据当前题材生成一批新灵感...')">🔄 换一批</button>
+          </div>
+        </div>
+        <div class="trope-grid" id="trope_cards_container">
+          <div class="trope-card active" onclick="chooseTrope(this)">
+            <h4 id="trope_t1">假戏真做：合租室友的心跳契约</h4>
+            <p id="trope_d1">因租房中介暴雷被迫同住屋檐下，高冷调香师与元气插画师在日常琐碎试探中渐生情愫。</p>
+          </div>
+          <div class="trope-card" onclick="chooseTrope(this)">
+            <h4 id="trope_t2">职场重逢：年少暗恋者的逆袭重逢</h4>
+            <p id="trope_d2">学生时代默默守护的小透明，多年后化身投行王牌空降女主公司，只为兑现曾经的诺言。</p>
+          </div>
+          <div class="trope-card" onclick="chooseTrope(this)">
+            <h4 id="trope_t3">破镜重圆：时光慢递信件的救赎</h4>
+            <p id="trope_d3">一封五年前迟到的手写信重新连接了彼此，解开当年未能说出口的误会，慢热治愈。</p>
+          </div>
+        </div>
+
+        <!-- 3 · 个性化内容字段 (SpecField 规范驱动：有润色必须有重写) -->
+        <div style="margin-top:20px;">
+          <!-- FIELD: 书名 (必填) -->
+          <div class="spec-field-wrap">
+            <div class="spec-field-head">
+              <div class="spec-field-label-group">
+                <span class="spec-field-label">小说书名</span>
+                <span class="badge-req">必填</span>
+              </div>
+              <div class="og2-toolbar">
+                <button type="button" class="og2-toolbar-btn" onclick="mockAiAction('title', 'rewrite')">🔄 重写</button>
+                <button type="button" class="og2-toolbar-btn" onclick="mockAiAction('title', 'polish')">✨ 润色</button>
+              </div>
+            </div>
+            <input type="text" id="val_title" value="微醺心跳定律">
+          </div>
+
+          <!-- FIELD: 一句话故事创意 (Logline) (必填) -->
+          <div class="spec-field-wrap" id="wrap_logline">
+            <div class="spec-field-head">
+              <div class="spec-field-label-group">
+                <span class="spec-field-label">一句话故事创意（Logline）</span>
+                <span class="badge-req">必填</span>
+                <span style="font-size:12px;color:var(--muted)">故事最核心的人物意图、冲突情境与期待走向</span>
+              </div>
+              <div class="og2-toolbar">
+                <button type="button" class="og2-toolbar-btn" onclick="toggleDirective('logline')">+ 指令</button>
+                <button type="button" class="og2-toolbar-btn" onclick="mockAiAction('logline', 'rewrite')">🔄 AI 重写</button>
+                <button type="button" class="og2-toolbar-btn" onclick="mockAiAction('logline', 'polish')">✨ AI 润色</button>
+                <button type="button" class="og2-toolbar-btn" id="lock_logline" onclick="toggleLock('logline')">🔒 锁定</button>
+                <button type="button" class="og2-toolbar-btn" onclick="alert('【历史版本】\n1. 11:30 最新版\n2. 11:20 初始推演版')">🕒 历史</button>
+              </div>
+            </div>
+
+            <!-- 附带指令输入条 -->
+            <div id="dir_logline" class="directive-input-bar" style="display:none;">
+              <input type="text" id="dir_input_logline" placeholder="输入一句话指令，如：强化男女主性格反差，增强暧昧拉扯与生活烟火气...">
+              <button type="button" class="btn primary mini-btn" onclick="submitDirective('logline')">执行重写</button>
+            </div>
+
+            <textarea id="val_logline" rows="2">习惯用理智与配方丈量一切的高冷调香师，偶然与热情直率但生活一团糟的绘本作家成为合租室友；在一场关于‘气味与心动’的假扮情侣合约中，两人逐步解开心结，确认了彼此是唯一的解药。</textarea>
+
+            <!-- 审阅模式对比栏 -->
+            <div id="review_logline" class="og2-review-bar" style="display:none;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="font-size:12px;font-weight:600;color:var(--accent);">AI 提议版本 (1/2)</span>
+                <div class="og2-seg-group">
+                  <button type="button" class="og2-seg-btn active">行内对比</button>
+                  <button type="button" class="og2-seg-btn">并排查看</button>
+                </div>
+              </div>
+              <div style="display:flex;gap:6px;">
+                <button type="button" class="btn primary mini-btn" onclick="acceptDiff('logline')">✓ 保留此版</button>
+                <button type="button" class="btn secondary mini-btn" onclick="revertDiff('logline')">✕ 撤回</button>
+              </div>
+            </div>
+            <div id="diff_logline" class="diff-content" style="display:none;">
+              习惯用理智丈量一切的高冷调香师，偶然与热情直率的绘本作家成为合租室友；<span class="diff-del">在一场关于‘气味与心动’的假扮情侣合约中</span><span class="diff-ins">在同居日常与相互救赎的微醺气味中</span>，两人逐步解开心结，确认了彼此是唯一的解药。
+            </div>
+
+            <div class="rule-indicators">
+              <span class="rule-indicator ok">✓ 核心主角明确</span>
+              <span class="rule-indicator ok">✓ 核心情境/阻碍到位</span>
+              <span class="rule-indicator ok">✓ 互动/行动路径清晰</span>
+              <span class="rule-indicator ok">✓ 情绪期待与终极追求明确</span>
+            </div>
+          </div>
+
+          <!-- FIELD: 核心卖点 Hook & 目标读者期待 (可选) -->
+          <div class="grid-2">
+            <div class="spec-field-wrap">
+              <div class="spec-field-head">
+                <div class="spec-field-label-group">
+                  <span class="spec-field-label">核心卖点（Hook / 爽点 / 甜点 / 看点）</span>
+                  <span class="badge-opt">可选</span>
+                </div>
+                <div class="og2-toolbar">
+                  <button type="button" class="og2-toolbar-btn" onclick="mockAiAction('hook', 'rewrite')">🔄 重写</button>
+                  <button type="button" class="og2-toolbar-btn" onclick="mockAiAction('hook', 'polish')">✨ 润色</button>
+                </div>
+              </div>
+              <textarea id="val_hook" rows="3">“气味嗅觉通感 + 极致暧昧拉扯”。男主是嗅觉超凡却情感钝感的调香师，女主是感知丰富却嗅觉有创伤的画师；以香气为暗号，逐步试探彼此底线。</textarea>
+            </div>
+            <div class="spec-field-wrap">
+              <div class="spec-field-head">
+                <div class="spec-field-label-group">
+                  <span class="spec-field-label">目标读者情绪期待</span>
+                  <span class="badge-opt">可选</span>
+                </div>
+                <div class="og2-toolbar">
+                  <button type="button" class="og2-toolbar-btn" onclick="mockAiAction('reader', 'rewrite')">🔄 重写</button>
+                  <button type="button" class="og2-toolbar-btn" onclick="mockAiAction('reader', 'polish')">✨ 润色</button>
+                </div>
+              </div>
+              <textarea id="val_reader" rows="3">追求高糖微酸的沉浸式恋爱代入感、成年人克制而汹涌的心动细节、相互治愈的精神共振与温馨治愈的日常烟火气。</textarea>
+            </div>
+          </div>
+
+          <!-- FIELD: 深层立意 Theme & 叙事基调 Tone (可选) -->
+          <div class="grid-2">
+            <div class="spec-field-wrap">
+              <div class="spec-field-head">
+                <div class="spec-field-label-group">
+                  <span class="spec-field-label">深层立意（Theme）</span>
+                  <span class="badge-opt">可选</span>
+                </div>
+                <div class="og2-toolbar">
+                  <button type="button" class="og2-toolbar-btn" onclick="mockAiAction('theme', 'rewrite')">🔄 重写</button>
+                  <button type="button" class="og2-toolbar-btn" onclick="mockAiAction('theme', 'polish')">✨ 润色</button>
+                </div>
+              </div>
+              <input type="text" id="val_theme" value="真正的相爱不是成为无懈可击的完美伴侣，而是敢于在对方面前袒露不完美的软肋。">
+            </div>
+            <div class="spec-field-wrap">
+              <div class="spec-field-head">
+                <div class="spec-field-label-group">
+                  <span class="spec-field-label">叙事基调与语言风格（Tone）</span>
+                  <span class="badge-opt">可选</span>
+                </div>
+                <div class="og2-toolbar">
+                  <button type="button" class="og2-toolbar-btn" onclick="mockAiAction('tone', 'rewrite')">🔄 重写</button>
+                  <button type="button" class="og2-toolbar-btn" onclick="mockAiAction('tone', 'polish')">✨ 润色</button>
+                </div>
+              </div>
+              <input type="text" id="val_tone" value="轻快幽默中带着细腻酸甜，对白自然生活化，多用意象白描心动瞬间；第三人称双重视角。">
+            </div>
+          </div>
+        </div>
+
+        <div class="nav-row">
+          <span style="font-size:12px;color:var(--muted)">必填项已就绪，随时可进入下一工位或直接开始</span>
+          <button type="button" class="btn primary" onclick="goToStep(2)">下一步：工位 2 · 舞台与群像 →</button>
+        </div>
+      </div>
+
+      <!-- ================= 工位 2：舞台与群像 ================= -->
+      <div id="station_2" class="station-panel" style="display:none;">
+        <div style="margin-bottom:12px;">
+          <h3 style="font-size:14px;font-weight:700;">世界观与环境法则设定（细节均为可选）</h3>
+          <p style="font-size:12px;color:var(--muted)">无论幻想世界还是现代现实生活，均可在下方设定专属的环境约束或生活质感。</p>
+        </div>
+
+        <!-- 舞台设定 / 核心规则与代价 (可选) -->
+        <div class="spec-field-wrap" style="background:#FAF9F6;">
+          <div class="spec-field-head">
+            <div class="spec-field-label-group">
+              <span class="spec-field-label">核心规则 / 时代壁垒 / 现实约束 (可选)</span>
+              <span class="badge-opt">可选</span>
+            </div>
+            <div class="og2-toolbar">
+              <button type="button" class="og2-toolbar-btn" onclick="mockAiAction('rules', 'rewrite')">🔄 重写</button>
+              <button type="button" class="og2-toolbar-btn" onclick="mockAiAction('rules', 'polish')">✨ 润色</button>
+            </div>
+          </div>
+          <textarea id="val_rules" rows="2" placeholder="如：修真的硬代价、现实中职场避嫌规定、家庭阶层壁垒、特殊病理约束等（没有可留空）">【职业与心理约束】：男主家族企业对调香师有严苛的“感情中立”职业伦理，认为恋爱会让情绪波动破坏嗅觉灵敏度；女主因童年火灾创伤对焦糊味有应激反应。</textarea>
+        </div>
+
+        <!-- 市井与生活质感细节 (可选) -->
+        <div class="spec-field-wrap">
+          <div class="spec-field-head">
+            <div class="spec-field-label-group">
+              <span class="spec-field-label">生活质感与日常细节补充 (可选)</span>
+              <span class="badge-opt">可选</span>
+            </div>
+            <div class="og2-toolbar">
+              <button type="button" class="og2-toolbar-btn" onclick="mockAiAction('micro', 'rewrite')">🔄 重写</button>
+              <button type="button" class="og2-toolbar-btn" onclick="mockAiAction('micro', 'polish')">✨ 润色</button>
+            </div>
+          </div>
+          <input type="text" id="val_micro" value="老城区梧桐树下的两居室老洋房；男主书房陈列着 300 种冷门香料浸膏；女主阳台堆满多肉植物与涂鸦画板。">
+        </div>
+
+        <!-- 角色架构 (主角必填，其余全可选，宿敌彻底可选) -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin:20px 0 10px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <label style="margin:0">角色网络档案（主角必填，配角/CP/对手自由选填）</label>
+            <span class="badge-req">主角必填</span>
+            <span class="badge-opt">其他角色可选</span>
+          </div>
+          <button type="button" class="btn secondary mini-btn" onclick="alert('已新增一位自定义角色卡片')">+ 添加人物档案</button>
+        </div>
+
+        <!-- 主角卡片 (必填) -->
+        <div class="spec-field-wrap" style="border-left:3px solid var(--accent);">
+          <div class="spec-field-head" style="border-bottom:1px solid var(--line);padding-bottom:8px;">
+            <div class="spec-field-label-group">
+              <span class="spec-field-label" id="c1_name_badge">第一主角 · 陆承舟 (Lu Chengzhou)</span>
+              <span class="badge-req">主角必填</span>
+            </div>
+            <div class="og2-toolbar">
+              <button type="button" class="og2-toolbar-btn" onclick="mockAiAction('char1', 'rewrite')">🔄 重写人物</button>
+              <button type="button" class="og2-toolbar-btn" onclick="mockAiAction('char1', 'polish')">✨ 润色</button>
+            </div>
+          </div>
+          <div class="grid-2" style="margin-top:10px;">
+            <div>
+              <span style="font-size:11px;font-weight:700;color:#D97706;display:block;margin-bottom:2px;">外在目标 / 追求 (Want - 开局迫切目标) <span class="badge-req">必填</span></span>
+              <input type="text" id="c1_want" value="研发出失传的‘第七号白夜’香水，保住独立工作室经营权">
+            </div>
+            <div>
+              <span style="font-size:11px;font-weight:700;color:var(--ok);display:block;margin-bottom:2px;">内在缺失 / 心结 (Need - 心灵成长点) <span class="badge-opt">可选</span></span>
+              <input type="text" id="c1_need" value="打破冰冷理性防线，学会向信任的人表达真实情感">
+            </div>
+            <div>
+              <span style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:2px;">创伤成因 / 执念 (Wound) <span class="badge-opt">可选</span></span>
+              <input type="text" id="c1_wound" value="童年被家族视作没有感情的调香机器，害怕被抛弃">
+            </div>
+            <div>
+              <span style="font-size:11px;font-weight:700;color:var(--accent);display:block;margin-bottom:2px;">行事底线 / 高光品质 (Principle) <span class="badge-opt">可选</span></span>
+              <input type="text" id="c1_principle" value="绝不用廉价工业香精伪造手作香，尊重每一个生命的嗅觉记忆">
+            </div>
+          </div>
+        </div>
+
+        <!-- 关键对手 / CP对象 / 重要配角卡片 (可选，完全不限于敌人) -->
+        <div class="spec-field-wrap">
+          <div class="spec-field-head" style="border-bottom:1px solid var(--line);padding-bottom:8px;">
+            <div class="spec-field-label-group">
+              <span class="spec-field-label" id="c2_name_badge">重要角色 / CP对象 · 姜幼柠 (Jiang Youning)</span>
+              <span class="badge-opt">可选</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="font-size:11px;color:var(--muted)">定位：</span>
+              <select style="width:110px;padding:2px 6px;font-size:11.5px;">
+                <option selected>恋爱/CP对象</option>
+                <option>欢喜冤家</option>
+                <option>竞争对手/宿敌</option>
+                <option>好友/闺蜜</option>
+                <option>导师/长辈</option>
+              </select>
+              <div class="og2-toolbar" style="margin-left:6px;">
+                <button type="button" class="og2-toolbar-btn" onclick="mockAiAction('char2', 'rewrite')">🔄 重写</button>
+                <button type="button" class="og2-toolbar-btn" onclick="mockAiAction('char2', 'polish')">✨ 润色</button>
+              </div>
+            </div>
+          </div>
+          <div class="grid-2" style="margin-top:10px;">
+            <div>
+              <span style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:2px;">核心性格与驱动力 (Motivation) <span class="badge-opt">可选</span></span>
+              <input type="text" id="c2_mot" value="乐天随性却坚韧，急需完成个人首部绘本出版以证明自己的创作价值">
+            </div>
+            <div>
+              <span style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:2px;">与主角的互动焦点 / 矛盾点 (Relation) <span class="badge-opt">可选</span></span>
+              <input type="text" id="c2_rel" value="作息黑白颠倒、生活习惯大碰撞，但能精准捕捉男主隐藏的脆弱">
+            </div>
+          </div>
+        </div>
+
+        <div class="nav-row">
+          <button type="button" class="btn secondary" onclick="goToStep(1)">← 上一步</button>
+          <button type="button" class="btn primary" onclick="goToStep(3)">下一步：工位 3 · 航线路标 →</button>
+        </div>
+      </div>
+
+      <!-- ================= 工位 3：航线路标 ================= -->
+      <div id="station_3" class="station-panel" style="display:none;">
+        <!-- 全书终局与核心主线 (可选) -->
+        <div class="spec-field-wrap" style="background:#FAF5FF;border-color:#E9D5FF;">
+          <div class="spec-field-head">
+            <div class="spec-field-label-group">
+              <span class="spec-field-label" style="color:#7E22CE">全书预期大结局走向 (Ending) 与贯穿主线 (可选)</span>
+              <span class="badge-opt">可选</span>
+            </div>
+            <div class="og2-toolbar">
+              <button type="button" class="og2-toolbar-btn" onclick="mockAiAction('ending', 'rewrite')">🔄 重写</button>
+              <button type="button" class="og2-toolbar-btn" onclick="mockAiAction('ending', 'polish')">✨ 润色</button>
+            </div>
+          </div>
+          <textarea id="val_ending" rows="2" placeholder="预期大结局走向，如：甜美HE领证合伙开店、主角解开心结各自成长、夺得冠军等（可留空随写随定）">男女主克服误会与家族干预，联手以属于两人的‘第七号白夜’香氛绘本赢得国际大奖；陆承舟在全城花期大典上公开告白，圆满HE。</textarea>
+        </div>
+
+        <!-- 纵向分卷路线图 (Roadmap) -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin:18px 0 8px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <label style="margin:0">阶段性大纲与四大锚点（1 阶段 = 1 分卷）</label>
+            <span class="badge-req">第1阶段必填</span>
+            <span class="badge-opt">后续阶段可选</span>
+          </div>
+          <button type="button" class="btn secondary mini-btn" onclick="alert('已新增一个分卷阶段')">+ 增加一卷阶段</button>
+        </div>
+
+        <div class="roadmap-container">
+          <div class="roadmap-axis"></div>
+
+          <!-- 第一阶段卡片 -->
+          <div class="stage-card active-stage">
+            <div class="stage-dot"></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:8px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <b id="st1_title" style="color:var(--accent);font-size:14px;">第一卷：试探同居与薄荷微风</b>
+                <span class="tag-pill active mini-btn" style="padding:2px 8px;">当前攻坚卷</span>
+                <span style="font-size:12px;color:var(--muted)">预估 10 章 · 约 2 万字</span>
+              </div>
+              <div style="display:flex;gap:6px;">
+                <button type="button" class="og2-toolbar-btn" onclick="mockAiAction('stage1', 'rewrite')">🔄 重写本卷锚点</button>
+                <button type="button" class="btn primary mini-btn" onclick="goToStep(4)">去写作台攻坚本卷 ➔</button>
+              </div>
+            </div>
+            <div class="anchor-grid">
+              <div class="anchor-box">
+                <span class="anchor-title">① 阶段核心目标 <span class="badge-req">必填</span></span>
+                <span id="st1_a1">两人被迫开启同居生活，在生活习惯的剧烈碰撞中订立三条‘互不越界’的合租契约。</span>
+              </div>
+              <div class="anchor-box">
+                <span class="anchor-title">② 核心阻力 / 羁绊障碍 <span class="badge-opt">可选</span></span>
+                <span id="st1_a2">男主严重的洁癖与感情防备，以及女主因手部神经痛面临绘本截稿危机。</span>
+              </div>
+              <div class="anchor-box" style="border-color:#FCD34D;background:#FEFCE8;">
+                <span class="anchor-title" style="color:#B45309">③ 阶段高潮 / 情感引爆点 <span class="badge-opt">可选</span></span>
+                <span id="st1_a3">台风停电之夜，女主幽闭发作，男主打破理性第一次破例拥抱安抚，感情实质破冰。</span>
+              </div>
+              <div class="anchor-box" style="border-color:#DDD6FE;background:#F5F3FF;">
+                <span class="anchor-title" style="color:#6D28D9">④ 破局跳板 / 新引子 <span class="badge-opt">可选</span></span>
+                <span id="st1_a4">男主母亲突然登门拜访，为了应对危机，男主主动提议签署为期三个月的‘假扮情侣’协议。</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 第二阶段卡片 -->
+          <div class="stage-card">
+            <div class="stage-dot" style="border-color:var(--muted)"></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:8px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <b id="st2_title" style="color:var(--ink);font-size:14px;">第二卷：契约情侣与香调升温</b>
+                <span class="tag-pill mini-btn" style="padding:2px 8px;">待前卷完成</span>
+                <span style="font-size:12px;color:var(--muted)">预估 12 章 · 约 2.5 万字</span>
+              </div>
+              <button type="button" class="btn secondary mini-btn" onclick="alert('编辑第二卷锚点')">编辑锚点</button>
+            </div>
+            <div class="anchor-grid">
+              <div class="anchor-box">
+                <span class="anchor-title">核心目标</span>
+                <span id="st2_a1">以情侣身份出席艺术展，在公开场合高甜互动逐渐弄假成真</span>
+              </div>
+              <div class="anchor-box">
+                <span class="anchor-title">高潮引爆点</span>
+                <span id="st2_a3">雨中露天酒会初吻，假戏真做情感彻底失控</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="nav-row">
+          <button type="button" class="btn secondary" onclick="goToStep(2)">← 上一步</button>
+          <button type="button" class="btn primary" onclick="goToStep(4)">下一步：工位 4 · 阶段写作台 →</button>
+        </div>
+      </div>
+
+      <!-- ================= 工位 4：阶段写作台 ================= -->
+      <div id="station_4" class="station-panel" style="display:none;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <div>
+            <h3 id="st4_cur_title" style="font-size:15px;font-weight:700;color:var(--ink)">本卷攻坚：第一卷 · 试探同居与薄荷微风</h3>
+            <span style="font-size:12px;color:var(--muted)">两段式写作：先推演章节节拍表，再严格按节拍逐章攻坚</span>
+          </div>
+          <span class="tag-pill active mini-btn" id="st4_status_tag">节拍就绪 · 待攻坚</span>
+        </div>
+
+        <!-- 节拍表 -->
+        <div class="spec-field-wrap">
+          <div class="spec-field-head">
+            <span class="spec-field-label">本卷章节节拍表 (Beat List · 共 6 节拍章)</span>
+            <button type="button" class="btn secondary mini-btn" onclick="alert('已重新规划节拍')">🔄 重新推演节拍</button>
+          </div>
+          <div id="beats_list">
+            <div class="beat-item">
+              <div><b style="color:var(--accent);margin-right:8px;">第 1 章</b> <span id="b1_t">暴雨合租夜</span> <span class="tag-pill mini-btn">开篇相遇</span></div>
+              <span style="font-size:12px;color:var(--muted)" id="b1_d">中介携款潜逃，两人因同一套房源在雨夜对峙，最终各退一步合租</span>
+            </div>
+            <div class="beat-item">
+              <div><b style="color:var(--accent);margin-right:8px;">第 2 章</b> <span id="b2_t">界线分明的三条家规</span> <span class="tag-pill mini-btn">互动推进</span></div>
+              <span style="font-size:12px;color:var(--muted)" id="b2_d">男主画地为界，女主外卖气味引发嗅觉警报，笑料百出</span>
+            </div>
+            <div class="beat-item climax">
+              <div><b style="color:#B45309;margin-right:8px;">第 5 章</b> <span id="b5_t">台风停电夜的拥抱</span> <span class="tag-pill active mini-btn" style="background:#F59E0B;border-color:#F59E0B">💖 阶段情感引爆</span></div>
+              <span style="font-size:12px;color:#92400E" id="b5_d">雷鸣电闪引发女主创伤应激，男主本能破防，将她紧紧护在怀中</span>
+            </div>
+            <div class="beat-item hook">
+              <div><b style="color:#6D28D9;margin-right:8px;">第 6 章</b> <span id="b6_t">意外造访的情侣契约</span> <span class="tag-pill active mini-btn" style="background:#8B5CF6;border-color:#8B5CF6">⚡ 破局跳板</span></div>
+              <span style="font-size:12px;color:#5B21B6" id="b6_d">家族长辈突然查岗，情急之下两人签下为期三月的恋爱协议</span>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;padding-top:10px;border-top:1px solid var(--line);">
+            <span style="font-size:12px;color:var(--ok)">✓ 预检通过：故事状态记忆层已加载，无上游阻断</span>
+            <button type="button" class="btn primary" id="btn_run_stage" onclick="simulateStageRunning()">▶ 开始全卷攻坚写作 (按节拍推演)</button>
+          </div>
+        </div>
+
+        <!-- 流式打字机运行态 (默认隐藏) -->
+        <div id="box_stage_running" class="spec-field-wrap" style="display:none;border-color:var(--accent);">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <b id="running_ch_title" style="color:var(--accent);font-size:13px;">正在攻坚：第 5 章 · 台风停电夜的拥抱 (阶段情感引爆)</b>
+            <span style="font-size:12px;color:var(--muted)">速度: 42 tokens/s · 进度: 85%</span>
+          </div>
+          <div class="stream-terminal" id="terminal_content">
+            <p style="color:#9CA3AF;">// 注入上下文：人物心结（姜幼柠怕黑怕火） + 故事状态（两人已合租三周）...</p>
+            <p>窗外的暴雨狂乱拍打着玻璃，客厅顶灯闪烁了两次，骤然沉入伸手不见五指的漆黑。</p>
+            <p>“啪——”是绘本颜料水杯打翻在木地板上的沉闷脆响，紧接着是姜幼柠压抑着颤抖的急促呼吸声。</p>
+            <p style="color:#93C5FD;">素来有严重洁癖、从不与外人肢体接触的陆承舟，甚至没顾上去开手机的手电筒。他摸着黑径直撞开书房门，一把抓住了缩在墙角发抖的冰凉手指，将她整个人稳稳捞进了怀里。“别怕，”他的嗓音比平日里任何一款苦橙香氛都要低沉沙哑，“我在。”</p>
+          </div>
+        </div>
+
+        <!-- 阶段检查点成果卡 (默认隐藏) -->
+        <div id="box_checkpoint" class="spec-field-wrap" style="display:none;border:2px solid var(--ok);background:#F0FDF4;">
+          <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #BBF7D0;padding-bottom:8px;">
+            <b style="color:var(--ok);font-size:14px;">第一卷攻坚完成 · 阶段检查点复盘成果卡</b>
+            <span style="font-size:12px;color:var(--muted)">共 6 章 · 14,820 字 · 已写盘落锁</span>
+          </div>
+          <div class="grid-2" style="margin:10px 0;">
+            <div style="background:#fff;padding:8px 12px;border-radius:6px;border:1px solid #BBF7D0;">
+              <span style="font-size:11px;font-weight:700;color:var(--muted);display:block;">实际生成与原锚点偏差分析</span>
+              <p style="font-size:12.5px;" id="chk_dev">高潮情感互动自然真挚；增加了男主为女主煮姜茶的细节白描，羁绊升温顺畅。</p>
+            </div>
+            <div style="background:#fff;padding:8px 12px;border-radius:6px;border:1px solid #BBF7D0;">
+              <span style="font-size:11px;font-weight:700;color:var(--ok);display:block;">AI 大纲校准建议 (对第二卷)</span>
+              <p style="font-size:12.5px;" id="chk_adv">建议第二卷开篇强化契约情侣在朋友面前‘演戏’时的吃醋微表情，增加戏剧性。</p>
+            </div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding-top:6px;">
+            <span style="font-size:12px;color:var(--muted)">已更新故事状态记忆层</span>
+            <div style="display:flex;gap:8px;">
+              <button type="button" class="btn secondary mini-btn" onclick="alert('已一键将校准建议回写更新到第二卷设定中！')">一键回写修正下一阶段大纲</button>
+              <button type="button" class="btn primary mini-btn" onclick="alert('已无缝跳转至 Studio 双栏阅读器，当前分卷已解锁供人工精修！')">进入 Studio 沉浸精修 ➔</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="nav-row">
+          <button type="button" class="btn secondary" onclick="goToStep(3)">← 上一步</button>
+          <span style="font-size:12px;color:var(--muted)">第一卷攻坚完成即可启动第二卷</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= VIEW 2: 续写 · 同人 ================= -->
+  <section class="view" id="view-continuation">
+    <div class="card">
+      <h2><span class="h2-folio">02</span>续写 / 同人</h2>
+      <div style="margin-bottom:14px;padding:10px 14px;background:var(--card-subtle);border:1px solid var(--line);border-radius:var(--radius);display:flex;align-items:center;justify-content:space-between;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:13px;font-weight:600;">为已有书籍续写：</span>
+          <select style="max-width:240px;padding:5px 8px;font-size:12px;">
+            <option>《微醺心跳定律》</option>
+            <option>《三体：红岸纪元》</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button type="button" class="btn secondary mini-btn">⚡ 快捷续写弹窗</button>
+          <button type="button" class="btn primary mini-btn">🎲 2 选 1 分支小样续写</button>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div>
+          <label>原作书名</label>
+          <input type="text" value="三体">
+        </div>
+        <div>
+          <label>原作作者</label>
+          <input type="text" value="刘慈欣">
+        </div>
+      </div>
+      <label>原作正文（作为风格分析与续写起点）</label>
+      <textarea rows="6">叶文洁站在红岸基地的雷达天线之下，冰冷的山风呼啸而过。发射键按下的那一刻，她知道一切都将改变...</textarea>
+      <div style="margin-top:14px;display:flex;justify-content:flex-end;">
+        <button type="button" class="btn primary">开始 AI 深度风格分析并续写</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= VIEW 3: 书架 ================= -->
+  <section class="view" id="view-library">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+        <h2 style="margin:0"><span class="h2-folio">03</span>我的书架</h2>
+        <div style="display:flex;gap:8px;">
+          <input type="search" placeholder="🔍 搜索书名、题材..." style="width:200px;padding:4px 8px;font-size:12px;">
+          <button type="button" class="btn primary mini-btn">📥 导入 TXT</button>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:16px;">
+        <div style="border:1px solid var(--line);border-radius:var(--radius);padding:14px;background:#fff;box-shadow:var(--shadow-sm);">
+          <div style="height:110px;background:linear-gradient(135deg, #FCE7F3, #F472B6);border-radius:6px;display:flex;align-items:center;justify-content:center;color:#831843;font-weight:700;margin-bottom:10px;">
+            微醺心跳
+          </div>
+          <b style="font-size:14px;">《微醺心跳定律》</b>
+          <p style="font-size:12px;color:var(--muted);margin:4px 0;">原创 · 都市言情 · 第一卷就绪</p>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
+            <span style="font-size:11px;color:var(--ok)">共 6 章 · 1.4 万字</span>
+            <button type="button" class="btn secondary mini-btn" onclick="switchNav('original');goToStep(4)">进入写作</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= VIEW 4: 设置 ================= -->
+  <section class="view" id="view-settings">
+    <div class="card">
+      <h2><span class="h2-folio">04</span>创作模型与系统设置</h2>
+      <div style="max-width:600px;">
+        <label>创作模型 API Key (DeepSeek / 通义千问 / Kimi / Ollama)</label>
+        <input type="text" value="sk-d19*********************************">
+        <label>API 请求端点 Endpoint</label>
+        <input type="text" value="https://api.deepseek.com/v1">
+        <div style="margin-top:16px;">
+          <button type="button" class="btn primary">保存模型设置</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ================= 一键分段推演全案进度模态框 ================= -->
+<div id="chained_modal" class="modal-mask" style="display:none;">
+  <div class="modal-box">
+    <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:14px;">
+      <b style="font-size:14px;color:var(--ink)">⚡ AI 分段流式推演全案中...</b>
+      <span style="font-size:12px;font-weight:700;color:var(--accent)" id="pip_percent">0%</span>
+    </div>
+    <div class="progress-step-item">
+      <span>1. 创意与灵魂定调 (Logline, Hook, Theme)</span>
+      <b id="pip_s1" style="color:var(--accent)">等待中...</b>
+    </div>
+    <div class="progress-step-item">
+      <span>2. 舞台法则与角色弧光 (Want, Need, Wound)</span>
+      <b id="pip_s2" style="color:var(--muted)">等待中...</b>
+    </div>
+    <div class="progress-step-item">
+      <span>3. 全书宏观终局与总对抗矛盾</span>
+      <b id="pip_s3" style="color:var(--muted)">等待中...</b>
+    </div>
+    <div class="progress-step-item">
+      <span>4. 阶段里程碑分卷与四大锚点规划</span>
+      <b id="pip_s4" style="color:var(--muted)">等待中...</b>
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-top:14px;">
+      <button type="button" class="btn secondary mini-btn" onclick="closeChainedModal()">取消推演</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---- 顶栏多视图切换 (原创生成 / 续写 · 同人 / 书架 / 设置) ----
+function switchNav(viewName) {
+  document.querySelectorAll('header button.nav').forEach(b => {
+    b.classList.toggle('active', b.dataset.view === viewName);
+  });
+  document.querySelectorAll('main section.view').forEach(v => {
+    v.classList.toggle('active', v.id === `view-${viewName}`);
+  });
+}
+
+// ---- 原创生成 4 工位切换 ----
+function goToStep(stepNum) {
+  for (let i = 1; i <= 4; i++) {
+    const tab = document.getElementById(`step_tab_${i}`);
+    const panel = document.getElementById(`station_${i}`);
+    if (tab && panel) {
+      tab.classList.toggle('active', i === stepNum);
+      tab.classList.toggle('done', i < stepNum);
+      panel.style.display = (i === stepNum) ? 'block' : 'none';
+    }
+  }
+}
+
+// ---- 题材点击 ----
+function selectGenre(btn) {
+  btn.classList.toggle('active');
+}
+
+// ---- 灵感挑选 (支持完全可选/取消) ----
+function chooseTrope(card) {
+  const isAct = card.classList.contains('active');
+  document.querySelectorAll('.trope-card').forEach(c => c.classList.remove('active'));
+  if (!isAct) card.classList.add('active');
+}
+function clearTropeSelection() {
+  document.querySelectorAll('.trope-card').forEach(c => c.classList.remove('active'));
+  alert('已取消选用脑洞，将完全依据你的手写输入进行创作！');
+}
+function randomTrope() {
+  const cards = document.querySelectorAll('.trope-card');
+  const rand = cards[Math.floor(Math.random() * cards.length)];
+  chooseTrope(rand);
+}
+
+// ---- SpecField 动作：重写 / 润色 / Diff 对比 ----
+function mockAiAction(fieldId, mode) {
+  const rev = document.getElementById(`review_${fieldId}`);
+  const diff = document.getElementById(`diff_${fieldId}`);
+  if (!rev || !diff) {
+    alert(`【${fieldId}】正在根据全案上下文执行 ${mode === 'rewrite' ? 'AI 全新重写' : 'AI 局部精修润色'}...`);
+    return;
+  }
+  rev.style.display = 'flex';
+  diff.style.display = 'block';
+}
+
+function acceptDiff(fieldId) {
+  const rev = document.getElementById(`review_${fieldId}`);
+  const diff = document.getElementById(`diff_${fieldId}`);
+  const val = document.getElementById(`val_${fieldId}`);
+  if (rev) rev.style.display = 'none';
+  if (diff) diff.style.display = 'none';
+  if (val) {
+    val.value = "习惯用理智丈量一切的高冷调香师，偶然与热情直率的绘本作家成为合租室友；在同居日常与相互救赎的微醺气味中，两人逐步解开心结，确认了彼此是唯一的解药。";
+  }
+}
+
+function revertDiff(fieldId) {
+  const rev = document.getElementById(`review_${fieldId}`);
+  const diff = document.getElementById(`diff_${fieldId}`);
+  if (rev) rev.style.display = 'none';
+  if (diff) diff.style.display = 'none';
+}
+
+function toggleDirective(fieldId) {
+  const d = document.getElementById(`dir_${fieldId}`);
+  if (d) d.style.display = (d.style.display === 'none') ? 'flex' : 'none';
+}
+
+function submitDirective(fieldId) {
+  const d = document.getElementById(`dir_${fieldId}`);
+  if (d) d.style.display = 'none';
+  mockAiAction(fieldId, 'rewrite');
+}
+
+function toggleLock(fieldId) {
+  const btn = document.getElementById(`lock_${fieldId}`);
+  if (btn) {
+    btn.classList.toggle('locked');
+    btn.innerText = btn.classList.contains('locked') ? '🔒 已锁定' : '🔒 锁定';
+  }
+}
+
+// ---- 演示题材快速切换 (言情甜宠 vs 赛博修真) ----
+function loadDemo(type) {
+  const btnR = document.getElementById('btn_demo_romance');
+  const btnF = document.getElementById('btn_demo_fantasy');
+  if (type === 'romance') {
+    btnR.style.color = "var(--accent)"; btnR.style.fontWeight = "600";
+    btnF.style.color = ""; btnF.style.fontWeight = "normal";
+
+    document.getElementById('sum_genre').innerText = "都市言情 / 甜宠治愈";
+    document.getElementById('sum_title').innerText = "《微醺心跳定律》";
+    document.getElementById('val_title').value = "微醺心跳定律";
+    document.getElementById('val_logline').value = "习惯用理智与配方丈量一切的高冷调香师，偶然与热情直率但生活一团糟的绘本作家成为合租室友；在一场关于‘气味与心动’的假扮情侣合约中，两人逐步解开心结，确认了彼此是唯一的解药。";
+    document.getElementById('val_hook').value = "“气味嗅觉通感 + 极致暧昧拉扯”。男主是嗅觉超凡却情感钝感的调香师，女主是感知丰富却嗅觉有创伤的画师；以香气为暗号，逐步试探彼此底线。";
+    document.getElementById('val_reader').value = "追求高糖微酸的沉浸式恋爱代入感、成年人克制而汹涌的心动细节、相互治愈的精神共振与温馨治愈的日常烟火气。";
+    document.getElementById('val_theme').value = "真正的相爱不是成为无懈可击的完美伴侣，而是敢于在对方面前袒露不完美的软肋。";
+    document.getElementById('val_tone').value = "轻快幽默中带着细腻酸甜，对白自然生活化，多用意象白描心动瞬间；第三人称双重视角。";
+
+    document.getElementById('c1_name_badge').innerText = "第一主角 · 陆承舟 (Lu Chengzhou)";
+    document.getElementById('c1_want').value = "研发出失传的‘第七号白夜’香水，保住独立工作室经营权";
+    document.getElementById('c1_need').value = "打破冰冷理性防线，学会向信任的人表达真实情感";
+    document.getElementById('c2_name_badge').innerText = "重要角色 / CP对象 · 姜幼柠 (Jiang Youning)";
+    document.getElementById('c2_mot').value = "乐天随性却坚韧，急需完成个人首部绘本出版以证明自己的创作价值";
+    document.getElementById('c2_rel').value = "作息黑白颠倒、生活习惯大碰撞，但能精准捕捉男主隐藏的脆弱";
+
+    document.getElementById('val_ending').value = "男女主克服误会与家族干预，联手以属于两人的‘第七号白夜’香氛绘本赢得国际大奖；陆承舟在全城花期大典上公开告白，圆满HE。";
+    document.getElementById('st1_title').innerText = "第一卷：试探同居与薄荷微风";
+    document.getElementById('st1_a1').innerText = "两人被迫开启同居生活，在生活习惯的剧烈碰撞中订立三条‘互不越界’的合租契约。";
+    document.getElementById('st1_a2').innerText = "男主严重的洁癖与感情防备，以及女主因手部神经痛面临绘本截稿危机。";
+    document.getElementById('st1_a3').innerText = "台风停电之夜，女主幽闭发作，男主打破理性第一次破例拥抱安抚，感情实质破冰。";
+    document.getElementById('st1_a4').innerText = "男主母亲突然登门拜访，为了应对危机，男主主动提议签署为期三个月的‘假扮情侣’协议。";
+
+    document.getElementById('st4_cur_title').innerText = "本卷攻坚：第一卷 · 试探同居与薄荷微风";
+    document.getElementById('b1_t').innerText = "暴雨合租夜";
+    document.getElementById('b1_d').innerText = "中介携款潜逃，两人因同一套房源在雨夜对峙，最终各退一步合租";
+    document.getElementById('b5_t').innerText = "台风停电夜的拥抱";
+    document.getElementById('b5_d').innerText = "雷鸣电闪引发女主创伤应激，男主本能破防，将她紧紧护在怀中";
+    document.getElementById('running_ch_title').innerText = "正在攻坚：第 5 章 · 台风停电夜的拥抱 (阶段情感引爆)";
+    document.getElementById('terminal_content').innerHTML = `<p style="color:#9CA3AF;">// 注入上下文：人物心结（姜幼柠怕黑怕火） + 故事状态（两人已合租三周）...</p><p>窗外的暴雨狂乱拍打着玻璃，客厅顶灯闪烁了两次，骤然沉入伸手不见五指的漆黑。</p><p>“啪——”是绘本颜料水杯打翻在木地板上的沉闷脆响，紧接着是姜幼柠压抑着颤抖的急促呼吸声。</p><p style="color:#93C5FD;">素来有严重洁癖、从不与外人肢体接触的陆承舟，摸着黑撞开书房门，一把抓住了缩在墙角发抖的冰凉手指，将她整个人稳稳捞进了怀里。“别怕，”他的嗓音比平日里任何一款苦橙香氛都要沙哑，“我在。”</p>`;
+    document.getElementById('chk_dev').innerText = "高潮情感互动自然真挚；增加了男主为女主煮姜茶的细节白描，羁绊升温顺畅。";
+    document.getElementById('chk_adv').innerText = "建议第二卷开篇强化契约情侣在长辈面前‘演戏’时的吃醋微表情，增加戏剧性。";
+  } else {
+    btnF.style.color = "var(--accent)"; btnF.style.fontWeight = "600";
+    btnR.style.color = ""; btnR.style.fontWeight = "normal";
+
+    document.getElementById('sum_genre').innerText = "玄幻修真 / 赛博朋克";
+    document.getElementById('sum_title').innerText = "《赛博道祖：代码修真》";
+    document.getElementById('val_title').value = "赛博道祖：代码修真";
+    document.getElementById('val_logline').value = "一名身患脑机衰竭症的底层义体维修工，偶然解析出了古代修真残卷的神经底层代码，为了在各大赛博财阀的追杀中逆天改命，他必须以身化为数字道祖，重构九重天网络秩序。";
+    document.getElementById('val_hook').value = "“赛博朋克 + 硬核古典道教符箓”。把符咒解析为自解压缩式神经毒素与防护盾，将元婴化生理解为云端算力超频容器。";
+    document.getElementById('val_reader').value = "渴望看到底层蝼蚁利用高智商与古修逻辑，逐步打穿高高在上的财阀神明；追求智斗解谜与极致阶级复仇的宣泄爽感。";
+    document.getElementById('val_theme').value = "血肉苦弱不是因为躯体，而是因为被剥夺了飞升的尊严；人性的光辉在于反抗异化。";
+    document.getElementById('val_tone').value = "冷硬派黑色电影质感，细节真实白描，高潮处爆发雷霆张力；第三人称沉浸有限全知。";
+
+    document.getElementById('c1_name_badge').innerText = "第一主角 · 陈默 (Chen Mo)";
+    document.getElementById('c1_want').value = "搞到 5 万信用点，买下抑制剂挽救即将死去的义妹";
+    document.getElementById('c1_need').value = "学会接纳他人与信赖同伴，走出被出卖的孤狼阴影";
+    document.getElementById('c2_name_badge').innerText = "宿敌/核心对手 · 司徒雷 (雷霆公司执行董事)";
+    document.getElementById('c2_mot').value = "推行全城意识上云工程，完成永生序列化治理";
+    document.getElementById('c2_rel').value = "掌握第九区的所有电力与神经接口断供权，将主角定为暴恐分子";
+
+    document.getElementById('val_ending').value = "陈默在虚空网络顶点将自己的纯阳元神编译为开源神经防火墙，击溃司徒雷的数字飞升矩阵，将算力自由还给全人类。";
+    document.getElementById('st1_title').innerText = "第一卷：暗巷泥沼与神经初悟";
+    document.getElementById('st1_a1').innerText = "修好义妹衰竭器官，初次以代码运转《引气诀》突破至炼气一层。";
+    document.getElementById('st1_a2').innerText = "黑虎帮地头蛇暴力催债，以及雷霆公司巡逻无人机组全面搜捕。";
+    document.getElementById('st1_a3').innerText = "暴雨之夜在下水道仓库，以残卷筑基符逆向黑死整队财阀机甲。";
+    document.getElementById('st1_a4').innerText = "机甲残骸中掉落上层区实验室绝密芯片，暴露义妹身世，被迫北上。";
+
+    document.getElementById('st4_cur_title').innerText = "本卷攻坚：第一卷 · 暗巷泥沼与神经初悟";
+    document.getElementById('b1_t').innerText = "破损义体与废弃残卷";
+    document.getElementById('b1_d').innerText = "主角接黑市悬赏，偶然解析出未知古符代码";
+    document.getElementById('b5_t').innerText = "暴雨之夜雷霆火莲";
+    document.getElementById('b5_d').innerText = "筑基符逆向爆发，整队财阀机甲神经短路自爆";
+    document.getElementById('running_ch_title').innerText = "正在攻坚：第 5 章 · 暴雨之夜雷霆火莲 (引爆高潮)";
+    document.getElementById('terminal_content').innerHTML = `<p style="color:#9CA3AF;">// 注入上下文：世界硬约束（神经突触灼烧） + 故事状态（斗气残存 30%）...</p><p>暴雨像铅块一样重重砸在下水道防空闸门上。陈默背靠着冰冷潮湿的钢铁管路，全息视界不断跳出猩红告警。</p><p style="color:#93C5FD;">陈默抬手狠狠抹了一把脸上的血水，嘴角却咧开一丝极度冰冷的弧度。他将最后三组自编译的破法代码强行接驳进义肢接口中——整座管网备用电闸瞬间被抽干成死寂！</p>`;
+    document.getElementById('chk_dev').innerText = "高潮决战完全兑现；微调了配角义妹的台词，增加了神秘吊坠伏笔。";
+    document.getElementById('chk_adv').innerText = "建议第二卷开篇强化吊坠对浮空城扫描仪的抗干扰逻辑。";
+  }
+}
+
+// ---- 写作台运行态仿真 ----
+function simulateStageRunning() {
+  const runBox = document.getElementById('box_stage_running');
+  const chkBox = document.getElementById('box_checkpoint');
+  const tag = document.getElementById('st4_status_tag');
+  const btn = document.getElementById('btn_run_stage');
+
+  if (runBox) runBox.style.display = 'block';
+  if (btn) btn.disabled = true;
+  if (tag) {
+    tag.innerText = "攻坚进行中 (第 5 章高潮)";
+    tag.style.background = "#059669";
+    tag.style.borderColor = "#059669";
+  }
+
+  setTimeout(() => {
+    if (runBox) runBox.style.display = 'none';
+    if (chkBox) chkBox.style.display = 'block';
+    if (tag) {
+      tag.innerText = "第一卷完成 · 待复盘审阅";
+      tag.style.background = "#7C3AED";
+      tag.style.borderColor = "#7C3AED";
+    }
+  }, 2600);
+}
+
+// ---- 一键分段推演全案仿真 ----
+function openChainedModal() {
+  const m = document.getElementById('chained_modal');
+  const pct = document.getElementById('pip_percent');
+  const s1 = document.getElementById('pip_s1');
+  const s2 = document.getElementById('pip_s2');
+  const s3 = document.getElementById('pip_s3');
+  const s4 = document.getElementById('pip_s4');
+
+  m.style.display = 'flex';
+  pct.innerText = '10%';
+  s1.innerText = '推演中...'; s1.style.color = 'var(--accent)';
+  s2.innerText = '等待中...'; s2.style.color = 'var(--muted)';
+  s3.innerText = '等待中...'; s3.style.color = 'var(--muted)';
+  s4.innerText = '等待中...'; s4.style.color = 'var(--muted)';
+
+  setTimeout(() => { pct.innerText = '35%'; s1.innerText = '✓ 完成'; s1.style.color = 'var(--ok)'; s2.innerText = '推演中...'; s2.style.color = 'var(--accent)'; }, 500);
+  setTimeout(() => { pct.innerText = '65%'; s2.innerText = '✓ 完成'; s2.style.color = 'var(--ok)'; s3.innerText = '推演中...'; s3.style.color = 'var(--accent)'; }, 1000);
+  setTimeout(() => { pct.innerText = '90%'; s3.innerText = '✓ 完成'; s3.style.color = 'var(--ok)'; s4.innerText = '推演中...'; s4.style.color = 'var(--accent)'; }, 1500);
+  setTimeout(() => {
+    pct.innerText = '100%'; s4.innerText = '✓ 完成'; s4.style.color = 'var(--ok)';
+    setTimeout(() => { m.style.display = 'none'; alert('全案 6 步已分段推演完成并无损填入各工位！'); }, 300);
+  }, 2000);
+}
+function closeChainedModal() {
+  document.getElementById('chained_modal').style.display = 'none';
+}
+
+function toggleQuickDrawer() {
+  alert('【全景设定速览】\n当前题材：' + document.getElementById('sum_genre').innerText + '\n当前作品：' + document.getElementById('sum_title').innerText + '\n核心主线：' + document.getElementById('val_logline').value);
+}
+</script>
+</body>
+</html>
