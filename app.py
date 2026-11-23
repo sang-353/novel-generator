@@ -1543,171 +1543,6 @@ def check_chapter_duplicate(prev_ch: dict, new_title: str, new_body: str) -> tup
     return False, sim, ""
 
 
-def run_original_job(job, data):
-    title = data.get("title") or "未命名小说"
-    n = int(data.get("chapters") or 10)
-    per = int(data.get("per_chapter_words") or 1500)
-    start = max(1, int(data.get("start_chapter") or 1))
-    outline = data.get("outline") or ""
-    provider_id = data.get("provider_id")
-
-    # 若大纲为有效结构且定义了章节列表，生成章节数绝不超过大纲实际章节数（防止断头裸奔重复）
-    outline_obj = None
-    if outline:
-        try:
-            outline_obj = json.loads(outline) if isinstance(outline, str) else outline
-            if isinstance(outline_obj, dict) and isinstance(outline_obj.get("chapters"), list) and len(outline_obj["chapters"]) > 0:
-                outline_len = len(outline_obj["chapters"])
-                n = min(n, outline_len) if n > 0 else outline_len
-        except Exception:
-            outline_obj = None
-
-    novel_name = data.get("novel_name")
-    if novel_name and (NOVELS_DIR / f"{novel_name}.md").exists():
-        path = NOVELS_DIR / f"{novel_name}.md"
-        meta, chapters, _ = parse_novel(path)
-        if data.get("bible"):
-            meta["bible"] = data.get("bible")
-    else:
-        path = unique_path(title)
-        meta = {
-            "title": title,
-            "type": "original",
-            "status": "generating",
-            "created": now_iso(),
-            "job_payload": data,
-        }
-        if data.get("bible"):
-            meta["bible"] = data.get("bible")
-        chapters = []
-
-    outline_text = outline if isinstance(outline, str) else json.dumps(outline, ensure_ascii=False, indent=1)
-    setup = build_original_setup(data)
-    provider = get_provider(provider_id)
-    meta["model_used"] = get_provider_meta(provider)
-    meta["provider_id"] = provider.get("id")
-
-    if not acquire_book(path.stem, holder=job["id"]):
-        raise BookBusyError(f"《{path.stem}》已有生成任务在进行中，请等待完成或取消后再试。")
-    try:
-        update_job(job, novel_name=path.stem, step="开始写作")
-        for i in range(start, n + 1):
-            if job.get("cancel"):
-                _finalize_cancelled(job, path, meta, chapters)
-                return
-            update_job(job, step=f"正在写第 {i}/{n} 章", current=i, streaming_text="")
-            prev = context_from(chapters)
-
-            def on_chunk(token):
-                if job.get("cancel"):
-                    raise JobCancelledError()
-                with JOBS_LOCK:
-                    job["streaming_text"] = (job.get("streaming_text") or "") + token
-
-            # 提取本章大纲指引
-            curr_ch = None
-            if outline_obj and isinstance(outline_obj, dict):
-                chs_list = outline_obj.get("chapters") or []
-                if 0 <= i - 1 < len(chs_list):
-                    curr_ch = chs_list[i - 1]
-
-            ch_task_hint = ""
-            if curr_ch:
-                if isinstance(curr_ch, dict):
-                    c_title = curr_ch.get("title") or f"第{i}章"
-                    c_pts = curr_ch.get("points") or ""
-                    ch_task_hint = f"\n【本章规划目标】\n本章规划标题：{c_title}\n本章剧情要点：{c_pts}\n"
-                elif isinstance(curr_ch, str):
-                    ch_task_hint = f"\n【本章规划目标】\n本章要点：{curr_ch}\n"
-
-            prev_titles = [c.get("title", "") for c in chapters if c.get("title")]
-            avoid_dup_hint = ""
-            if prev_titles:
-                last_t = prev_titles[-1]
-                avoid_dup_hint = (
-                    f"\n【重要写作规范与防重复约束】\n"
-                    f"1. 上一章（{last_t}）已完结。本章必须承接上一章末尾的最新时间线与故事进展继续向后写！\n"
-                    f"2. 严禁重复前文已写过的剧情、事件或场景（绝对不要把上一章情节换个写法重述）！\n"
-                    f"3. 严禁使用已用过的章节标题（已有标题：{', '.join(prev_titles[-5:])}）！\n"
-                )
-
-            def mk_msgs(sofar, i=i, prev=prev):
-                msgs = [
-                    {"role": "system", "content": ORIGINAL_SYS + build_style_instruction(data.get("style_template") or data.get("prompt_template"))},
-                    {"role": "user", "content": (
-                        f"【小说设定】\n{setup}\n\n"
-                        f"【章节大纲】\n{outline_text}\n\n"
-                        f"【前情提要】\n{prev or '（这是第一章，无前文）'}\n\n"
-                        f"{ch_task_hint}"
-                        f"{avoid_dup_hint}"
-                        f"现在创作第 {i} 章正文，约 {per} 字。"
-                    )},
-                ]
-                if sofar:
-                    msgs.append({"role": "assistant", "content": sofar})
-                    msgs.append({"role": "user", "content": "继续写这一章，接着上面的内容往下写，不要重复。"})
-                return msgs
-
-            content = generate_text(mk_msgs, max_chars=int(per * 1.6), provider_id=provider_id, on_chunk=on_chunk)
-            title_line, body = chapter_title_from(content, i)
-
-            # 策略 3：相似度熔断重试守卫（仅在有前置章节且非第一章时比对）
-            if chapters:
-                prev_ch = chapters[-1]
-                is_dup, sim, reason = check_chapter_duplicate(prev_ch, title_line, body)
-                if is_dup:
-                    print(f"[DuplicateGuard] 检测到第 {i} 章与第 {i-1} 章严重重复 ({reason})，正在触发纠偏重试...")
-                    update_job(job, step=f"检测到第 {i} 章内容打转，正在纠偏重写...")
-                    with JOBS_LOCK:
-                        job["streaming_text"] = ""
-
-                    retry_hint = (
-                        f"\n【紧急纠偏警告：严禁重复】\n"
-                        f"你刚刚生成的内容被检测到与上一章《{prev_ch.get('title', '')}》高度重复（{reason}）！\n"
-                        f"上一章的情节已经结束，请绝对不要再描写上一章的内容！\n"
-                        f"必须顺延最新时间线，描写全新的剧情推进，并使用全新的章节标题！\n"
-                    )
-
-                    def mk_retry_msgs(sofar, i=i, prev=prev):
-                        msgs = [
-                            {"role": "system", "content": ORIGINAL_SYS + build_style_instruction(data.get("style_template") or data.get("prompt_template"))},
-                            {"role": "user", "content": (
-                                f"【小说设定】\n{setup}\n\n"
-                                f"【章节大纲】\n{outline_text}\n\n"
-                                f"【前情提要】\n{prev or '（这是第一章，无前文）'}\n\n"
-                                f"{ch_task_hint}"
-                                f"{avoid_dup_hint}"
-                                f"{retry_hint}"
-                                f"现在创作第 {i} 章正文，约 {per} 字。"
-                            )},
-                        ]
-                        if sofar:
-                            msgs.append({"role": "assistant", "content": sofar})
-                            msgs.append({"role": "user", "content": "继续写这一章，接着上面的内容往下写，不要重复。"})
-                        return msgs
-
-                    content = generate_text(mk_retry_msgs, max_chars=int(per * 1.6), provider_id=provider_id, on_chunk=on_chunk)
-                    title_line, body = chapter_title_from(content, i)
-                    # 二次兜底：若标题仍相同，则强制区分
-                    t1_c = re.sub(r"^第\s*\d+\s*[章回节卷]?\s*", "", prev_ch.get("title", "")).strip()
-                    t2_c = re.sub(r"^第\s*\d+\s*[章回节卷]?\s*", "", title_line).strip()
-                    if t1_c and t2_c and (t1_c == t2_c):
-                        title_line = f"{title_line}（续）"
-
-            with lock_novel(path.stem):
-                chapters.append({"title": title_line, "content": body})
-                meta["status"] = "generating"
-                write_novel(path, meta, chapters)
-
-        with lock_novel(path.stem):
-            meta["status"] = "done"
-            meta["words"] = sum(len(re.sub(r"\s", "", c["content"])) for c in chapters)
-            write_novel(path, meta, chapters)
-        update_job(job, status="done", step="完成", message="生成完成", novel_name=path.stem)
-    finally:
-        release_book(path.stem)
-
-
 def _finalize_cancelled(job, path, meta, chapters):
     """任务取消收尾：书标记为 cancelled（保留已生成章节），job 标记已取消。"""
     with lock_novel(path.stem):
@@ -2116,9 +1951,7 @@ def run_rewrite_job(job, data):
 def run_job_safe(job, data, target_book=None):
     try:
         mode = data.get("mode")
-        if mode == "original":
-            run_original_job(job, data)
-        elif mode == "analyze":
+        if mode == "analyze":
             run_analyze_job(job, data)
         elif mode == "rewrite":
             run_rewrite_job(job, data)
@@ -3960,88 +3793,6 @@ def api_suggest_tropes():
         return jsonify({"error": f"生成灵感脑洞失败：{str(e)}"}), 500
 
 
-@app.post("/api/generate-bible")
-def api_generate_bible():
-    data = request.get_json(force=True) or {}
-    setup = build_original_setup(data)
-    provider_id = data.get("provider_id")
-    title = (data.get("title") or "").strip()
-    genre = (data.get("genre") or "").strip()
-
-    if not setup and not genre and not title:
-        return jsonify({"error": "请至少填写题材或部分设定"}), 400
-
-    user = (
-        f"【已知信息】\n"
-        f"书名：{title or '（待AI拟定）'}\n"
-        f"题材：{genre or '网络小说'}\n"
-        f"{setup}\n\n"
-        "请为这部小说构建一套详尽、扎实且极具吸引力的【世界观与角色设定集（World & Character Bible）】。\n"
-        "要求以 JSON 格式输出，结构严格如下：\n"
-        "{\n"
-        '  "suggested_title": "推荐书名（若用户已提供书名则沿用原书名，未提供则自拟一个爆款书名）",\n'
-        '  "candidate_titles": ["备选书名1", "备选书名2", "备选书名3", "备选书名4"],\n'
-        '  "setting": "世界观与背景设定（时代背景、地理势力格局、核心法则/力量体系，300-500字）",\n'
-        '  "characters": [\n'
-        '    {"name": "主角姓名", "role": "主角身份/定位", "desc": "外貌与核心性格特征", "goal": "核心动机与驱动目标"},\n'
-        '    {"name": "重要配角姓名", "role": "配角身份/关系", "desc": "性格与特点", "goal": "动机与跟主角的关系"},\n'
-        '    {"name": "主要对手或关键人物", "role": "反派/竞争者身份", "desc": "能力与性格", "goal": "阻碍主角的动机"}\n'
-        "  ],\n"
-        '  "conflict": "核心冲突与故事主线（主要的矛盾交锋、终极挑战或阶段目标）",\n'
-        '  "tone": "叙事基调与风格特点"\n'
-        "}\n"
-        "不要输出任何其他解释文字。"
-    )
-    try:
-        content, _ = chat(
-            [{"role": "system", "content": "你是一位顶级网络小说策划主编与世界观架构师，擅长构筑逻辑严密、人物鲜活、看点十足的设定集。"},
-             {"role": "user", "content": user}],
-            max_tokens=3000,
-            json_mode=True,
-            provider_id=provider_id,
-        )
-        bible = extract_json(content)
-        if isinstance(bible, list):
-            bible = {"characters": bible}
-        elif not isinstance(bible, dict):
-            bible = {}
-        return jsonify({"ok": True, "bible": bible})
-    except Exception as e:
-        return jsonify({"error": "生成设定档案失败：" + str(e)}), 500
-
-
-@app.post("/api/outline")
-def api_outline():
-    data = request.get_json(force=True) or {}
-    setup = build_original_setup(data)
-    n = int(data.get("chapters") or 10)
-    provider_id = data.get("provider_id")
-    if not setup:
-        return jsonify({"error": "请至少填写一项设定内容"}), 400
-    user = (
-        f"{setup}\n\n"
-        f"请为这部小说生成共 {n} 章的章节大纲。\n\n"
-        "以 JSON 输出，格式：{\"logline\": \"一句话梗概\", \"chapters\": [{\"title\": \"第1章标题\", \"points\": \"本章要点\"}]}\n"
-        "每章 points 写 2-4 句要点，包含情节推进、人物变化、冲突与伏笔。不要输出其他内容。"
-    )
-    try:
-        content, _ = chat(
-            [{"role": "system", "content": "你是一位资深小说编辑与大纲规划师。"},
-             {"role": "user", "content": user}],
-            max_tokens=4000,
-            json_mode=True,
-            provider_id=provider_id,
-        )
-        outline = extract_json(content)
-        if isinstance(outline, list):
-            outline = {"logline": "", "chapters": outline}
-        elif not isinstance(outline, dict):
-            outline = {"logline": "", "chapters": []}
-        return jsonify({"outline": outline})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
 @app.post("/api/analyze-style")
 def api_analyze_style():
     data = request.get_json(force=True) or {}
@@ -4281,6 +4032,11 @@ def _lan_urls(port):
     except Exception:
         pass
     return urls
+
+
+# 注册新版原创小说创作 Studio 蓝图 (Greenfield Architecture)
+from original_studio.routes import original_studio_bp
+app.register_blueprint(original_studio_bp)
 
 
 if __name__ == "__main__":

@@ -789,33 +789,6 @@ def test_extract_json_object_array_resilience():
             assert "第1章 开始" in chs[0].get("title", "")
 
 
-def test_api_generate_original_syncs_outline_chapters(monkeypatch, tmpdir):
-    import app as app_module
-    client = _privacy_env(monkeypatch, tmpdir)
-    # 测试当 mode == 'original' 且传入了 3 章的大纲，但 chapters 参数误传为 10 时，
-    # 接口与创建的 job 必须以大纲实际章节数 3 为准，绝不盲目按 10 处理
-    outline_data = {
-        "logline": "梗概",
-        "chapters": [
-            {"title": "第1章 A", "points": "要点A"},
-            {"title": "第2章 B", "points": "要点B"},
-            {"title": "第3章 C", "points": "要点C"}
-        ]
-    }
-    payload = {
-        "mode": "original",
-        "title": "大纲章节对齐测试书",
-        "outline": json.dumps(outline_data, ensure_ascii=False),
-        "chapters": 10  # 前端历史残留或未同步的旧值
-    }
-    res = client.post("/api/generate", json=payload)
-    assert res.status_code == 200
-    job_id = res.get_json()["job_id"]
-    job = app_module.JOBS.get(job_id)
-    assert job is not None
-    assert job["total"] == 3, f"job total 应为大纲的 3 章，实际为 {job['total']}"
-
-
 def test_chapter_duplicate_guard():
     from app import calc_text_similarity, check_chapter_duplicate
 

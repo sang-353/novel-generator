@@ -104,8 +104,6 @@ def test_web_auth_all_endpoints_gate(client):
         ("POST", "/api/suggest-titles"),
         ("GET", "/api/suggest-tropes"),
         ("POST", "/api/suggest-tropes"),
-        ("POST", "/api/generate-bible"),
-        ("POST", "/api/outline"),
         ("POST", "/api/analyze-style"),
         ("POST", "/api/analyze"),
         ("POST", "/api/generate-variants"),
@@ -494,16 +492,6 @@ def test_llm_markdown_fence_extraction_resilience(client):
         assert r.status_code == 200
         assert len(r.get_json()["tropes"]) == 1
 
-    with patch("app.chat", return_value=('```json\n{"suggested_title": "设定书", "setting": "宏大"}\n```', "stop")):
-        r = client.post("/api/generate-bible", json={"genre": "玄幻"})
-        assert r.status_code == 200
-        assert r.get_json()["bible"]["suggested_title"] == "设定书"
-
-    with patch("app.chat", return_value=('```json\n{"logline": "梗概", "chapters": [{"title": "第1章"}]}\n```', "stop")):
-        r = client.post("/api/outline", json={"genre": "都市", "chapters": 5})
-        assert r.status_code == 200
-        assert "outline" in r.get_json()
-
 
 def test_llm_field_name_mutation_resilience(client):
     """测试 LLM 输出字段漂移 (tropes -> templates / list) 时的容错。"""
@@ -521,7 +509,7 @@ def test_llm_timeout_and_empty_handling(client):
         assert "error" in r.get_json()
 
     with patch("app.chat", return_value=("", "stop")):
-        r = client.post("/api/generate-bible", json={"genre": "玄幻"})
+        r = client.post("/api/suggest-tropes", json={"genre": "都市"})
         assert r.status_code == 500
         assert "error" in r.get_json()
 

@@ -78,7 +78,7 @@ def test_llm_abnormal_malformed_json_resilience(page, live_server):
     FakeLLMState.reset()
 
 
-FEATURES = ["suggest-tropes", "generate-bible", "outline", "generate-variants"]
+FEATURES = ["suggest-tropes", "generate-variants"]
 MODES = ["missing_fields", "field_drift", "top_level_array", "malformed_json", "empty"]
 
 
@@ -87,7 +87,7 @@ MODES = ["missing_fields", "field_drift", "top_level_array", "malformed_json", "
 def test_llm_abnormal_matrix(page, live_server, feature, mode):
     """
     参数化全矩阵容错测试：
-    对 suggest-tropes、generate-bible、outline、generate-variants 四个功能，
+    对 suggest-tropes、generate-variants 功能，
     分别在 missing_fields / field_drift / top_level_array / malformed_json / empty 五种模式下运行。
     断言页面无 undefined/null/[object Object]，相关按钮仍可点击，有友好提示。
     """
@@ -109,51 +109,6 @@ def test_llm_abnormal_matrix(page, live_server, feature, mode):
             tropes_count = page.locator("#og_trope_pills .trope-pill").count()
             pills_text = page.locator("#og_trope_pills").inner_text()
             assert tropes_count > 0 or len(pills_text.strip()) > 0, f"[{feature}][{mode}] 未展示任何提示或脑洞药丸"
-
-        elif feature == "generate-bible":
-            page.goto(f"{live_server}/#original")
-            page.wait_for_load_state("networkidle")
-            page.fill("#og_title", f"设定集容错_{mode}")
-            page.fill("#og_genre", "科幻")
-            page.fill("#og_setting", "测试在设定集异常下的系统容错能力。")
-            page.locator("#btn_step1_next").click()
-            page.wait_for_timeout(200)
-
-            btn = page.locator("#btn_outline")
-            assert btn.is_visible()
-            btn.click()
-            # 等待生成完成（或异常捕获后释放按钮）
-            for _ in range(20):
-                page.wait_for_timeout(250)
-                if btn.is_enabled():
-                    break
-            assert btn.is_enabled(), f"[{feature}][{mode}] 规划按钮被锁死未复原"
-
-            status_text = page.locator("#og_status").inner_text()
-            bible_visible = page.locator("#og_bible_card").is_visible()
-            assert len(status_text.strip()) > 0 or bible_visible, f"[{feature}][{mode}] 既无状态提示也无设定卡片"
-
-        elif feature == "outline":
-            page.goto(f"{live_server}/#original")
-            page.wait_for_load_state("networkidle")
-            page.fill("#og_title", f"大纲容错_{mode}")
-            page.fill("#og_genre", "都市")
-            page.fill("#og_setting", "测试在大纲推演异常下的系统容错能力。")
-            page.locator("#btn_step1_next").click()
-            page.wait_for_timeout(200)
-
-            btn = page.locator("#btn_outline")
-            assert btn.is_visible()
-            btn.click()
-            for _ in range(20):
-                page.wait_for_timeout(250)
-                if btn.is_enabled():
-                    break
-            assert btn.is_enabled(), f"[{feature}][{mode}] 规划按钮被锁死未复原"
-
-            status_text = page.locator("#og_status").inner_text()
-            outline_editor_text = page.locator("#og_outline_editor").inner_text()
-            assert len(status_text.strip()) > 0 or len(outline_editor_text.strip()) > 0, f"[{feature}][{mode}] 既无状态提示也无大纲提示"
 
         elif feature == "generate-variants":
             title = f"小样容错测试_{mode}"
