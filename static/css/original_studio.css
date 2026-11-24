@@ -412,18 +412,18 @@ input:focus, textarea:focus, select:focus {
   margin: 10px 0;
 }
 
-/* 一键推演模态框 */
-.modal-mask {
+/* 一键推演与阶段复盘模态框 */
+.og-modal-mask {
   position: fixed;
   inset: 0;
   background: rgba(17, 24, 39, 0.45);
   backdrop-filter: blur(4px);
-  z-index: 999;
-  display: flex;
+  z-index: 1055;
+  display: none;
   align-items: center;
   justify-content: center;
 }
-.modal-box {
+.og-modal-box {
   background: #fff;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);

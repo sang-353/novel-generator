@@ -4035,6 +4035,8 @@ def _lan_urls(port):
 
 
 # 注册新版原创小说创作 Studio 蓝图 (Greenfield Architecture)
+if __name__ == "__main__":
+    sys.modules.setdefault("app", sys.modules[__name__])
 from original_studio.routes import original_studio_bp
 app.register_blueprint(original_studio_bp)
 

@@ -612,7 +612,7 @@ class StageRunner:
 
                 # 构建单章提示词
                 story_state = runtime.get("story_state") or {}
-                prev_context = context_from(chapters, limit=2)
+                prev_context = context_from(chapters[-2:] if chapters else [])
                 per_words = int(spec.get("meta", {}).get("target_words_per_chapter") or 2500)
 
                 user_prompt = (
@@ -678,10 +678,17 @@ class StageRunner:
             })
 
         except Exception as e:
-            self.emit("error", {"error": str(e)})
-            runtime = load_novel_runtime(self.novel_id)
-            runtime["status"] = "failed"
-            save_novel_runtime(self.novel_id, runtime)
+            if self.is_cancelled:
+                self.emit("cancelled", {"message": "任务已取消"})
+                runtime = load_novel_runtime(self.novel_id)
+                runtime["status"] = "idle"
+                runtime["active_job"] = None
+                save_novel_runtime(self.novel_id, runtime)
+            else:
+                self.emit("error", {"error": str(e)})
+                runtime = load_novel_runtime(self.novel_id)
+                runtime["status"] = "failed"
+                save_novel_runtime(self.novel_id, runtime)
         finally:
             release_book(stem)
             with _RUNNER_LOCK:

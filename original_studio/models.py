@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -252,11 +253,20 @@ def save_novel_spec(novel_id: str, spec_dict: Dict[str, Any]) -> bool:
     stem = sanitize_filename(novel_id)
     p = get_spec_path(stem)
     with lock_novel(stem):
-        p.parent.mkdir(parents=True, exist_ok=True)
-        tmp_p = p.with_suffix(".tmp")
-        with open(tmp_p, "w", encoding="utf-8") as f:
-            json.dump(clean_spec, f, ensure_ascii=False, indent=2)
-        os.replace(tmp_p, p)
+        dir_name = p.parent
+        dir_name.mkdir(parents=True, exist_ok=True)
+        tmp_p = dir_name / f".tmp_{p.stem}_{os.getpid()}_{time.time_ns()}.tmp"
+        try:
+            with open(tmp_p, "w", encoding="utf-8") as f:
+                json.dump(clean_spec, f, ensure_ascii=False, indent=2)
+            os.replace(str(tmp_p), str(p))
+        except Exception:
+            try:
+                if tmp_p.exists():
+                    tmp_p.unlink()
+            except Exception:
+                pass
+            raise
     return True
 
 
@@ -276,11 +286,20 @@ def save_novel_runtime(novel_id: str, runtime_dict: Dict[str, Any]) -> bool:
     stem = sanitize_filename(novel_id)
     p = get_runtime_path(stem)
     with lock_novel(stem):
-        p.parent.mkdir(parents=True, exist_ok=True)
-        tmp_p = p.with_suffix(".tmp")
-        with open(tmp_p, "w", encoding="utf-8") as f:
-            json.dump(clean_runtime, f, ensure_ascii=False, indent=2)
-        os.replace(tmp_p, p)
+        dir_name = p.parent
+        dir_name.mkdir(parents=True, exist_ok=True)
+        tmp_p = dir_name / f".tmp_{p.stem}_{os.getpid()}_{time.time_ns()}.tmp"
+        try:
+            with open(tmp_p, "w", encoding="utf-8") as f:
+                json.dump(clean_runtime, f, ensure_ascii=False, indent=2)
+            os.replace(str(tmp_p), str(p))
+        except Exception:
+            try:
+                if tmp_p.exists():
+                    tmp_p.unlink()
+            except Exception:
+                pass
+            raise
     return True
 
 

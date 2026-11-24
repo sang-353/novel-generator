@@ -1279,8 +1279,8 @@
 </main>
 
 <!-- ================= 一键分段推演全案进度模态框 ================= -->
-<div id="chained_modal" class="modal-mask" style="display:none;">
-  <div class="modal-box">
+<div id="chained_modal" class="og-modal-mask" style="display:none;">
+  <div class="og-modal-box">
     <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:14px;">
       <b style="font-size:14px;color:var(--ink)">⚡ AI 分段流式推演全案中...</b>
       <span style="font-size:12px;font-weight:700;color:var(--accent)" id="pip_percent">0%</span>
@@ -1308,8 +1308,8 @@
 </div>
 
 <!-- ================= 章节节拍表 (Beat List) 编辑抽屉 ================= -->
-<div id="beat_drawer_mask" class="modal-mask" style="display:none;" onclick="closeBeatDrawer()"></div>
-<div id="beat_drawer" class="modal-box" style="display:none;position:fixed;top:0;right:0;bottom:0;width:min(600px, 90vw);height:100vh;max-height:100vh;border-radius:0;z-index:1060;flex-direction:column;box-shadow:-4px 0 20px rgba(0,0,0,0.15);overflow:hidden;">
+<div id="beat_drawer_mask" class="og-modal-mask" style="display:none;" onclick="closeBeatDrawer()"></div>
+<div id="beat_drawer" style="display:none;position:fixed;top:0;right:0;bottom:0;width:min(600px, 90vw);height:100vh;max-height:100vh;background:#fff;border-radius:0;z-index:1060;flex-direction:column;box-shadow:-4px 0 20px rgba(0,0,0,0.15);overflow:hidden;">
   <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line);">
     <h3 style="margin:0;font-size:16px;"><span class="h2-folio">04</span>本卷章节节拍表 (Beat List)</h3>
     <button type="button" class="btn ghost mini-btn" onclick="closeBeatDrawer()">✕ 关闭</button>
@@ -1324,8 +1324,8 @@
 </div>
 
 <!-- ================= 阶段检查点成果与偏差复盘模态框 ================= -->
-<div id="checkpoint_modal" class="modal-mask" style="display:none;">
-  <div class="modal-box" style="max-width:560px;">
+<div id="checkpoint_modal" class="og-modal-mask" style="display:none;">
+  <div class="og-modal-box" style="max-width:560px;">
     <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:14px;">
       <b style="font-size:15px;color:var(--ok);">🎉 阶段攻坚完成 · 检查点复盘成果卡</b>
       <button type="button" class="btn ghost mini-btn" onclick="closeCheckpointModal()">✕</button>
