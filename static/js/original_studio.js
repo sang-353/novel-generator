@@ -23,7 +23,11 @@
     checkpointStageIndex: 1,
     isStagePaused: false,
     runnerTotalChapters: 0,
+    isRestoring: false,
+    draftRestored: false,
   };
+
+  const OG_DRAFT_KEY = 'novel_og_studio_draft_v2';
 
   // 预设样例库（供创作者快速对比体验言情与科幻等全题材中立能力）
   const PRESETS = {
@@ -256,6 +260,7 @@
     });
     syncStageSelector();
     refreshOverview();
+    saveOgDraft();
   };
 
   window.goToStep = function(stepNum, stageIdx) {
@@ -278,6 +283,7 @@
     }
     if (stepNum === 4) syncStageSelector();
     updateSummaryBar();
+    saveOgDraft();
     const sheet = getEl('og_sheet');
     if (sheet && sheet.getBoundingClientRect().top < 0) window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -306,6 +312,7 @@
     btn.classList.add('active');
     setElVal('val_genre', btn.textContent.trim());
     updateSummaryBar();
+    saveOgDraft();
   };
 
   function syncGenreChips(genreText) {
@@ -334,6 +341,7 @@
     if (titleEl && descEl) {
       setElVal('selected_trope_val', `${titleEl.textContent.trim()}: ${descEl.textContent.trim()}`);
     }
+    saveOgDraft();
   };
 
   window.clearTropeSelection = function() {
@@ -342,6 +350,7 @@
       container.querySelectorAll('.og-trope').forEach(c => c.classList.remove('active'));
     }
     setElVal('selected_trope_val', '');
+    saveOgDraft();
     if (window.toast) window.toast('已取消灵感选择，进入纯自主自由构思模式');
   };
 
@@ -455,7 +464,7 @@
 
     try {
       const payload = {
-        novel_id: state.novelId || safeVal('val_title') || 'temp_book',
+        novel_id: resolveNovelId('temp_book'),
         field_path: fieldPath,
         mode: mode,
         current_value: currentVal,
@@ -581,7 +590,7 @@
     if (window.toast) window.toast(`正在${mode === 'polish' ? '润色' : '重写'}人物设定…`);
     try {
       const res = await window.api('/api/novel/original/refine-field', 'POST', {
-        novel_id: state.novelId || safeVal('val_title') || 'temp_book',
+        novel_id: resolveNovelId('temp_book'),
         field_path: isMain ? 'protagonist.want' : 'characters[0].role_desc',
         mode: mode || 'polish',
         current_value: currentVal,
@@ -643,7 +652,7 @@
     if (window.toast) window.toast('正在重新推演本卷锚点…');
     try {
       const res = await window.api('/api/novel/original/refine-field', 'POST', {
-        novel_id: state.novelId || safeVal('val_title') || 'temp_book',
+        novel_id: resolveNovelId('temp_book'),
         field_path: `stages[${st - 1}].anchors.stage_goal`,
         mode: 'rewrite',
         current_value: currentGoal,
@@ -678,6 +687,7 @@
       });
       if (btnEl) btnEl.textContent = '编辑锚点';
       updateSummaryBar();
+      saveOgDraft();
       if (window.toast) window.toast(`第 ${st} 卷锚点编辑已保存`);
     } else {
       card.dataset.editing = '1';
@@ -911,9 +921,18 @@
     updateSummaryBar();
   }
 
+  function resolveNovelId(fallback) {
+    const title = safeVal('val_title').trim();
+    if (title) {
+      state.novelId = title;
+      return title;
+    }
+    return state.novelId || fallback || 'current_novel';
+  }
+
   async function ensureSpecSynced() {
     const spec = collectSpecFromForm();
-    const novelId = state.novelId || spec.meta.title || 'current_novel';
+    const novelId = resolveNovelId((spec.meta && spec.meta.title) || 'current_novel');
     state.novelId = novelId;
     await window.api('/api/novel/original/spec', 'PUT', {
       novel_id: novelId,
@@ -998,6 +1017,7 @@
         state.novelId = deducedSpec.meta.title;
         window.api('/api/novel/original/spec', 'PUT', { novel_id: state.novelId, spec: deducedSpec });
         autosize(document);
+        saveOgDraft();
         if (window.toast) window.toast('全案推演完成，已填入各工位，请逐项审阅');
       }, 400);
 
@@ -1128,6 +1148,45 @@
     return (raw && raw.data && typeof raw.data === 'object') ? raw.data : raw;
   }
 
+  function ensureRunnerCaret(container) {
+    if (!container) return null;
+    let caret = container.querySelector('.og-caret');
+    let host = container.querySelector('p:last-of-type');
+    if (!host || host.classList.contains('og-note')) {
+      host = document.createElement('p');
+      container.appendChild(host);
+    }
+    if (!caret) {
+      caret = document.createElement('span');
+      caret.className = 'og-caret';
+      caret.setAttribute('aria-hidden', 'true');
+    }
+    if (caret.parentNode !== host || host.lastChild !== caret) {
+      host.appendChild(caret);
+    }
+    return caret;
+  }
+
+  function removeRunnerCaret(container) {
+    if (!container) return;
+    container.querySelectorAll('.og-caret').forEach(el => el.remove());
+  }
+
+  function setRunnerCaretPaused(container, paused) {
+    if (!container) return;
+    container.querySelectorAll('.og-caret').forEach(el => {
+      el.classList.toggle('is-paused', !!paused);
+    });
+  }
+
+  function appendRunnerTokenHtml(container, rawToken) {
+    if (!container || rawToken === undefined || rawToken === null) return;
+    const caret = ensureRunnerCaret(container);
+    if (!caret) return;
+    const html = esc(String(rawToken)).replace(/\n/g, '<br>');
+    caret.insertAdjacentHTML('beforebegin', html);
+  }
+
   function setRunnerControls(running, paused) {
     const pauseBtn = getEl('btn_runner_pause');
     const cancelBtn = getEl('btn_runner_cancel');
@@ -1170,11 +1229,13 @@
         state.isStagePaused = true;
         setRunnerControls(true, true);
         setRunnerProgress(null, '已暂停');
+        setRunnerCaretPaused(getEl('runner_typewriter_content'), true);
         if (window.toast) window.toast('已暂停本卷写作，可随时点击继续');
       } else if (act === 'resume') {
         state.isStagePaused = false;
         setRunnerControls(true, false);
         setRunnerProgress(null, '继续写作中…');
+        setRunnerCaretPaused(getEl('runner_typewriter_content'), false);
         if (window.toast) window.toast('已恢复本卷写作');
       } else if (act === 'cancel') {
         if (state.eventSource) {
@@ -1184,6 +1245,7 @@
         state.activeJobId = null;
         state.isStagePaused = false;
         setRunnerControls(false, false);
+        removeRunnerCaret(getEl('runner_typewriter_content'));
         const runnerView = getEl('stage_runner_view');
         if (runnerView) runnerView.style.display = 'none';
         if (window.toast) window.toast('已取消本卷写作任务');
@@ -1203,12 +1265,19 @@
     const runnerView = getEl('stage_runner_view');
     const runnerContent = getEl('runner_typewriter_content');
     const runnerTitle = getEl('runner_current_title');
+    const chkBox = getEl('box_checkpoint');
+    let runnerChars = 0;
+    let runnerChapterLabel = '正在写作';
 
+    if (chkBox) chkBox.style.display = 'none';
     if (runnerView) runnerView.style.display = 'block';
     if (runnerTitle) runnerTitle.textContent = `准备第 ${stIdx} 卷写作…`;
     setRunnerControls(true, false);
     setRunnerProgress(5, '连接中…');
-    if (runnerContent) runnerContent.innerHTML = `<p class="og-note">正在同步设定集并准备第 ${stIdx} 卷首章连接…</p>`;
+    if (runnerContent) {
+      runnerContent.innerHTML = `<p class="og-note">正在同步设定集并准备第 ${stIdx} 卷首章连接…</p>`;
+      ensureRunnerCaret(runnerContent);
+    }
 
     try {
       const novelId = await ensureSpecSynced();
@@ -1237,16 +1306,25 @@
         const chOff = Number(d.chapter_offset || d.global_chapter_idx || 1);
         const total = state.runnerTotalChapters || Math.max(chOff, 1);
         const pct = Math.min(95, Math.round((chOff - 0.5) / total * 100));
+        runnerChars = 0;
+        runnerChapterLabel = `第 ${chOff}/${total} 章`;
         if (runnerTitle) runnerTitle.textContent = `正在生成：第 ${d.global_chapter_idx} 章《${d.title}》`;
-        setRunnerProgress(pct, `第 ${chOff}/${total} 章`);
-        if (runnerContent) runnerContent.innerHTML += `<h3>第 ${d.global_chapter_idx} 章：${esc(d.title)}</h3>`;
+        setRunnerProgress(pct, runnerChapterLabel);
+        if (runnerContent) {
+          removeRunnerCaret(runnerContent);
+          runnerContent.insertAdjacentHTML('beforeend', `<h3>第 ${d.global_chapter_idx} 章：${esc(d.title)}</h3><p></p>`);
+          ensureRunnerCaret(runnerContent);
+        }
       });
 
       es.addEventListener('token', (e) => {
         const d = unwrapSseData(e);
         if (runnerContent && d.token !== undefined) {
-          runnerContent.innerHTML += esc(d.token).replace(/\n/g, '<br>');
+          const tokStr = String(d.token);
+          runnerChars += tokStr.replace(/\s+/g, '').length;
+          appendRunnerTokenHtml(runnerContent, tokStr);
           runnerContent.scrollTop = runnerContent.scrollHeight;
+          setRunnerProgress(null, `${runnerChapterLabel} · 已写 ${runnerChars} 字`);
         }
       });
 
@@ -1256,10 +1334,12 @@
           state.isStagePaused = true;
           setRunnerControls(true, true);
           setRunnerProgress(null, '已暂停');
+          setRunnerCaretPaused(runnerContent, true);
         } else if (d.status === 'writing') {
           state.isStagePaused = false;
           setRunnerControls(true, false);
           setRunnerProgress(null, '写作中…');
+          setRunnerCaretPaused(runnerContent, false);
         }
       });
 
@@ -1269,6 +1349,7 @@
         state.activeJobId = null;
         state.isStagePaused = false;
         setRunnerControls(false, false);
+        removeRunnerCaret(runnerContent);
         if (runnerView) runnerView.style.display = 'none';
       });
 
@@ -1277,9 +1358,10 @@
         state.eventSource = null;
         state.activeJobId = null;
         setRunnerControls(false, false);
+        removeRunnerCaret(runnerContent);
         setRunnerProgress(100, '本卷完成');
-        const chkBox = getEl('box_checkpoint');
-        if (chkBox) chkBox.style.display = 'block';
+        const box = getEl('box_checkpoint');
+        if (box) box.style.display = 'block';
         if (window.toast) window.toast(`第 ${stIdx} 卷全部章节已生成，正在打开阶段复盘`);
         setTimeout(() => window.openCheckpointModal(stIdx), 600);
       });
@@ -1287,6 +1369,7 @@
       es.addEventListener('error', () => {
         es.close();
         state.eventSource = null;
+        removeRunnerCaret(runnerContent);
         if (!state.activeJobId) return;
         setRunnerProgress(null, '连接已断开（可继续控停）');
         if (window.toast) window.toast('实时流连接已断开，或任务已结束');
@@ -1294,6 +1377,7 @@
 
     } catch (err) {
       setRunnerControls(false, false);
+      removeRunnerCaret(runnerContent);
       setRunnerProgress(0, '启动失败');
       if (runnerContent) runnerContent.innerHTML = `<p class="og-note" style="color:var(--og-seal)">启动失败：${esc(err.message)}</p>`;
       if (window.toast) window.toast(`启动失败: ${err.message}`);
@@ -1371,7 +1455,7 @@
   };
 
   window.enterStudioReader = function() {
-    const novelId = state.novelId || safeVal('val_title').trim();
+    const novelId = safeVal('val_title').trim() || state.novelId;
     if (!novelId) {
       if (window.toast) window.toast('请先命名并创建作品后再进入阅读器');
       return;
@@ -1384,9 +1468,46 @@
   };
 
   // =========================================================================
-  // 11. 演示预设切换
+  // 11. 演示预设切换与本地草稿自动保存/恢复
   // =========================================================================
-  window.loadDemo = function(presetKey) {
+  function saveOgDraft() {
+    if (state.isRestoring) return;
+    try {
+      const draft = {
+        novelId: state.novelId,
+        activeStation: state.activeStation,
+        currentStageIndex: state.currentStageIndex,
+        spec: collectSpecFromForm(),
+        updatedAt: Date.now(),
+      };
+      localStorage.setItem(OG_DRAFT_KEY, JSON.stringify(draft));
+    } catch (e) { /* 忽略浏览器存储配额或无痕模式限制 */ }
+  }
+
+  window.restoreOgDraft = function() {
+    if (state.draftRestored) return true;
+    try {
+      const raw = localStorage.getItem(OG_DRAFT_KEY);
+      if (!raw) return false;
+      const draft = JSON.parse(raw);
+      if (!draft || typeof draft !== 'object' || !draft.spec) return false;
+      state.isRestoring = true;
+      fillFormWithSpec(draft.spec);
+      state.novelId = safeVal('val_title').trim() || (draft.spec.meta && draft.spec.meta.title) || draft.novelId || '';
+      window.selectStage(draft.currentStageIndex || 1);
+      window.goToStep(draft.activeStation || 1);
+      autosize(document);
+      state.isRestoring = false;
+      state.draftRestored = true;
+      return true;
+    } catch (e) {
+      state.isRestoring = false;
+      try { localStorage.removeItem(OG_DRAFT_KEY); } catch (e2) { /* 忽略 */ }
+      return false;
+    }
+  };
+
+  window.loadDemo = function(presetKey, silent) {
     const preset = PRESETS[presetKey];
     if (!preset) return;
     fillFormWithSpec(preset);
@@ -1397,7 +1518,10 @@
     if (bRomance) bRomance.classList.toggle('is-on', presetKey === 'romance');
     if (bFantasy) bFantasy.classList.toggle('is-on', presetKey === 'fantasy');
     autosize(document);
-    if (window.toast) window.toast(`已载入 [${preset.meta.genre}] 预设数据`);
+    if (!silent) {
+      saveOgDraft();
+      if (window.toast) window.toast(`已载入 [${preset.meta.genre}] 预设数据`);
+    }
   };
 
   // =========================================================================
@@ -1491,17 +1615,17 @@
       case 'accept': window.acceptProposal(f); break;
       case 'reject': window.rejectProposal(f); break;
       case 'refresh-tropes': window.refreshTropes(); break;
-      case 'add-char': window.addCharacterCard(); break;
+      case 'add-char': window.addCharacterCard(); saveOgDraft(); break;
       case 'remove-char': {
         const c = el.closest('.og-char');
-        if (c) { c.remove(); if (window.toast) window.toast('已移除角色卡片'); }
+        if (c) { c.remove(); saveOgDraft(); if (window.toast) window.toast('已移除角色卡片'); }
         break;
       }
       case 'refine-char': window.refineCharacterCard(f, el.dataset.mode || 'polish'); break;
-      case 'add-vol': window.addVolumeStage(); break;
+      case 'add-vol': window.addVolumeStage(); saveOgDraft(); break;
       case 'remove-vol': {
         const v = el.closest('.og-vol');
-        if (v) { v.remove(); syncStageSelector(); if (window.toast) window.toast('已移除新增分卷'); }
+        if (v) { v.remove(); syncStageSelector(); saveOgDraft(); if (window.toast) window.toast('已移除新增分卷'); }
         break;
       }
       case 'rewrite-vol': window.rewriteStageAnchors(parseInt(el.dataset.stage || '1', 10)); break;
@@ -1530,7 +1654,9 @@
   document.addEventListener('input', (e) => {
     if (!e.target.closest || !e.target.closest('#view-original')) return;
     if (e.target.id === 'st4_stage_sel') return;
-    if (e.target.id === 'c1_name_badge') {
+    if (e.target.id === 'val_title') {
+      state.novelId = e.target.value.trim();
+    } else if (e.target.id === 'c1_name_badge') {
       const txt = e.target.textContent.trim();
       setElText('c1_mono', (txt || '主')[0]);
     } else if (e.target.id === 'c2_name_badge') {
@@ -1539,14 +1665,18 @@
     }
     if (e.target.tagName === 'TEXTAREA') autosize(e.target.parentElement);
     updateSummaryBar();
+    saveOgDraft();
   });
 
   // =========================================================================
   // 12. 模块初始化入口
   // =========================================================================
   function initOriginalStudio() {
-    window.loadDemo('romance');
-    window.goToStep(1);
+    if (!window.restoreOgDraft()) {
+      window.loadDemo('romance', true);
+      window.goToStep(1);
+      state.draftRestored = true;
+    }
     autosize(document);
   }
 

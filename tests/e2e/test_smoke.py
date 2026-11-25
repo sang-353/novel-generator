@@ -111,9 +111,8 @@ def test_smoke_visible_buttons_click_response(page, live_server):
 
         # 为各视图预置基础表单测试数据，确保业务提交按钮在有效上下文下执行
         if view_hash == "#original":
-            page.fill("#og_title", "冒烟原创书")
-            page.fill("#og_genre", "奇幻")
-            page.fill("#og_setting", "灵气复苏时代的测试背景。")
+            page.fill("#val_title", "冒烟原创书")
+            page.fill("#val_logline", "灵气复苏时代的测试背景与主角核心目标。")
         elif view_hash == "#continuation":
             page.fill("#ct_source_title", "冒烟续写书")
             page.fill("#ct_source_text", "长夜难明，残月当空。青衣剑客仗剑行于荒野之上，寒风呼啸。")
@@ -140,6 +139,7 @@ def test_smoke_visible_buttons_click_response(page, live_server):
             req_count_before = len(network_requests)
             url_before = page.url
             class_before = btn.get_attribute("class") or ""
+            og_shell_before = page.locator("#og_shell").get_attribute("class") or "" if view_hash == "#original" else ""
 
             # 点击按钮
             try:
@@ -167,9 +167,13 @@ def test_smoke_visible_buttons_click_response(page, live_server):
                 # 元素在点击后从 DOM 中销毁或重新渲染（如删除/切换），属于明确的可观察变化
                 class_after = "detached"
                 btn_disabled = False
+            og_shell_after = page.locator("#og_shell").get_attribute("class") or "" if view_hash == "#original" else ""
 
             toast_count = page.locator(".toast:visible, #toast:visible").count()
-            modals_count = page.locator(".modal-mask:visible, .modal-box:visible, .rd-sheet:visible, .card:visible").count()
+            modals_count = page.locator(
+                ".modal-mask:visible, .modal-box:visible, .rd-sheet:visible, .card:visible, "
+                ".og-modal:visible, .og-drawer:visible, .og-directive:visible, .og-review:visible"
+            ).count()
 
             has_observable_change = (
                 url_after != url_before
@@ -177,18 +181,27 @@ def test_smoke_visible_buttons_click_response(page, live_server):
                 or toast_count > 0
                 or modals_count > 0
                 or class_after != class_before
+                or og_shell_after != og_shell_before
                 or btn_disabled
             )
             assert has_observable_change, f"视图 {view_hash} 点击按钮 [{btn_text}] (#{btn_id}) 后界面毫无响应（无弹窗/无视图切换/无请求/无Toast）"
 
             # 3. 状态还原：关闭可能打开的弹窗或抽屉
             page.evaluate("""() => {
-                document.querySelectorAll('.modal-mask, .modal, .rd-sheet').forEach(m => {
+                if (typeof closeChainedModal === 'function') closeChainedModal();
+                document.querySelectorAll('.modal-mask, .modal, .rd-sheet, .og-modal, .og-drawer, .og-drawer-mask, .og-directive').forEach(m => {
                     if (window.getComputedStyle(m).display !== 'none') {
                         m.style.display = 'none';
                         m.classList.remove('show', 'open');
                     }
                 });
+                ['stage_runner_view', 'box_checkpoint'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.style.display = 'none';
+                });
+                if (typeof goToStep === 'function' && window.location.hash === '#original') goToStep(1);
+                const shell = document.getElementById('og_shell');
+                if (shell) shell.classList.remove('aside-off', 'aside-open');
                 const mask = document.getElementById('rd_mask');
                 if (mask) mask.classList.remove('open');
             }""")

@@ -92,8 +92,12 @@ def test_env_setup(fake_llm):
     os.environ["NOVEL_NOVELS_DIR"] = str(novels_dir)
 
     import app as app_module
+    import original_studio.models as _os_models
+    import original_studio.engine as _os_engine
     app_module.DATA_DIR = Path(tmp_data_dir).resolve()
     app_module.NOVELS_DIR = novels_dir.resolve()
+    _os_models.NOVELS_DIR = app_module.NOVELS_DIR
+    _os_engine.NOVELS_DIR = app_module.NOVELS_DIR
     app_module.CONFIG_FILE = config_file.resolve()
     app_module.TRASH_DIR = trash_dir.resolve()
     app_module.CHAPTER_BACKUP_DIR = (trash_dir / "chapters").resolve()

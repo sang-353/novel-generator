@@ -55,23 +55,22 @@ def test_llm_abnormal_malformed_json_resilience(page, live_server):
     FakeLLMState.set_mode("malformed_json")
 
     page.goto(f"{live_server}/#original")
-    page.wait_for_load_state("networkidle")
+    page.wait_for_selector("#view-original.active")
 
-    page.fill("#og_title", "异常容错测试")
-    page.fill("#og_genre", "都市言情")
-    page.fill("#og_setting", "测试设定背景。")
-    page.locator("#btn_step1_next").click()
-    page.wait_for_timeout(200)
+    page.fill("#val_title", "异常容错测试")
+    page.locator("#station_1 .og-chip", has_text="都市言情").click()
+    page.fill("#val_logline", "测试设定背景与故事线。")
 
-    # 触发大纲推演（此时假 LLM 返回畸形非 JSON）
-    outline_btn = page.locator("#btn_outline")
-    assert outline_btn.is_visible(), "未找到生成大纲按钮 #btn_outline"
-    outline_btn.click()
+    # 触发新版 SpecField 局部重写（此时假 LLM 返回畸形非 JSON）
+    rewrite_btn = page.locator("#station_1 [data-act='rewrite'][data-field='logline']")
+    assert rewrite_btn.is_visible(), "未找到一句话创意重写按钮"
+    rewrite_btn.click()
     page.wait_for_timeout(1000)
 
     body_text = page.locator("body").inner_text()
     assert "undefined" not in body_text
     assert "[object Object]" not in body_text
+    assert rewrite_btn.is_enabled(), "异常响应后重写按钮被锁死"
 
     # 关键断言：绝对不能有未捕获的 JS 异常导致全站瘫痪
     assert len(monitor.page_errors) == 0, f"大模型畸形响应导致未捕获 JS 异常: {monitor.page_errors}"
@@ -105,10 +104,10 @@ def test_llm_abnormal_matrix(page, live_server, feature, mode):
 
             # 验证按钮仍然可用可点击
             assert btn.is_enabled(), f"[{feature}][{mode}] 按钮被锁死"
-            # 友好提示验证：脑洞药丸被降级或正常渲染，或容器有内容
-            tropes_count = page.locator("#og_trope_pills .trope-pill").count()
-            pills_text = page.locator("#og_trope_pills").inner_text()
-            assert tropes_count > 0 or len(pills_text.strip()) > 0, f"[{feature}][{mode}] 未展示任何提示或脑洞药丸"
+            # 友好提示验证：新版 3 卡脑洞被降级或正常渲染，或容器有内容
+            tropes_count = page.locator("#trope_cards_container .og-trope").count()
+            pills_text = page.locator("#trope_cards_container").inner_text()
+            assert tropes_count > 0 or len(pills_text.strip()) > 0, f"[{feature}][{mode}] 未展示任何提示或脑洞卡片"
 
         elif feature == "generate-variants":
             title = f"小样容错测试_{mode}"

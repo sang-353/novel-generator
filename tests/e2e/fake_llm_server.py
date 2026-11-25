@@ -197,10 +197,124 @@ class FakeLLMHandler(BaseHTTPRequestHandler):
             elif mode == "missing_fields":
                 return '{"tropes": [{"unknown_key": "缺少核心字段"}]}'
 
-        # 正常模式：根据提示词特征智能返回结构
+        # 正常模式：根据提示词特征智能返回结构（先匹配 Original Studio v2 精确提示词，避免被旧关键词劫持）
         full_prompt = " ".join([m.get("content", "") for m in messages])
 
-        if "世界观与角色设定集" in full_prompt or "generate-bible" in full_prompt:
+        if "核心创意与故事立意" in full_prompt:
+            return json.dumps({
+                "logline": "平凡却敏锐的主角被卷入命运漩涡，在倒计时危机中破局重生。",
+                "hook": "强反差搭档 + 命运倒计时，步步紧逼的高能张力。",
+                "reader_expectation": "环环相扣的解密快感与克制细腻的情感共振。",
+                "theme": "真正的勇气不是毫无畏惧，而是在看清代价后依然选择守护所爱。",
+                "tone": "第三人称双视角，明快节奏中兼顾细腻心理白描。",
+            }, ensure_ascii=False)
+
+        elif "构建核心世界观法则以及主要人物" in full_prompt:
+            return json.dumps({
+                "worldview": {
+                    "background": "霓虹与废土并存的近未来都会，旧秩序正被地下暗网瓦解。",
+                    "special_rules": "高敏感知者需要定期校准神经阈值，否则会陷入记忆过载。",
+                    "taboos": "严禁私自篡改中央档案馆的核心历史记录。",
+                },
+                "protagonist": {
+                    "name": "陆凛",
+                    "role": "档案修复师",
+                    "want": "找回失踪兄长的真实调查档案",
+                    "need": "学会信任同伴并放下独自背负一切的执念",
+                    "flaw": "过度理智、习惯性推开关心自己的人",
+                    "arc": "从冷漠旁观者成长为带领团队破局的关键枢纽",
+                },
+                "characters": [
+                    {
+                        "name": "苏棠",
+                        "relation_type": "ally_friend",
+                        "role_desc": "独立记者，行动力极强",
+                        "bond_or_conflict": "各取所需的调查搭档，在危机中建立生死信任",
+                    }
+                ],
+            }, ensure_ascii=False)
+
+        elif "四大终局锚点" in full_prompt:
+            return json.dumps({
+                "climax_vision": "在穹顶信号塔崩溃前夕，主角当众公布真相并切断旧系统的控制密钥。",
+                "core_dilemma": "毁掉中枢将抹去兄长留存的数字残影，保留则让全城陷入永久监控。",
+                "ultimate_cost": "主角放弃个人过往记忆备份，以彻底自由的代价换取秩序重构。",
+                "resolution_tone": "微酸而开阔，在废墟清晨中迎来新生希望。",
+            }, ensure_ascii=False)
+
+        elif "结构紧密的阶段分卷" in full_prompt:
+            return json.dumps({
+                "stages": [
+                    {
+                        "stage_index": 1,
+                        "title": "第一卷：雾夜线索",
+                        "expected_chapters": 2,
+                        "anchors": {
+                            "stage_goal": "锁定兄长失踪前的最后通讯源",
+                            "main_obstacle": "城防情报科的全面封锁与追查",
+                            "climax_hook": "档案室深夜突袭，夺回关键加密磁带",
+                            "transition_springboard": "磁带坐标指向早已废弃的地下实验室",
+                        },
+                    },
+                    {
+                        "stage_index": 2,
+                        "title": "第二卷：深层回响",
+                        "expected_chapters": 2,
+                        "anchors": {
+                            "stage_goal": "潜入地下实验室破译主系统漏洞",
+                            "main_obstacle": "幕后操纵者的舆论反扑与内鬼背叛",
+                            "climax_hook": "双线合围破解终极密钥",
+                            "transition_springboard": "真相揭晓，迎来最终秩序抉择",
+                        },
+                    },
+                ]
+            }, ensure_ascii=False)
+
+        elif "章节节拍表" in full_prompt:
+            return json.dumps({
+                "beats": [
+                    {
+                        "chapter_offset": 1,
+                        "title": "雨夜异常信号",
+                        "beat_type": "setup",
+                        "summary": "主角收到加密异常信号，首次发现危机端倪。",
+                        "planted_clues": ["残缺的旧工牌编号"],
+                    },
+                    {
+                        "chapter_offset": 2,
+                        "title": "暗巷突围",
+                        "beat_type": "climax",
+                        "summary": "调查途中遭遇拦截，主角与搭档默契脱险并拿到线索。",
+                        "planted_clues": ["神秘芯片密钥"],
+                    },
+                ]
+            }, ensure_ascii=False)
+
+        elif "微型增量抽取" in full_prompt:
+            return json.dumps({
+                "summary_delta": "主角顺着信号线索调查并成功突破围堵，获得关键加密芯片。",
+                "character_updates": [
+                    {"name": "陆凛", "current_status": "安全脱身并掌握新线索", "relationship": "信任加深"}
+                ],
+                "new_clues": ["加密芯片指向旧城区"],
+                "resolved_clues": [],
+            }, ensure_ascii=False)
+
+        elif "阶段复盘偏差评估" in full_prompt:
+            return json.dumps({
+                "goal_achievement_pct": 95,
+                "deviation_summary": "本阶段主线严格承接开局与高潮锚点，人物动机连贯。",
+                "character_growth_notes": "主角从孤立试探转向与搭档协力破局。",
+                "suggested_next_stage_adjustments": {
+                    "stage_index": 2,
+                    "recommended_stage_goal": "深入旧城区实验室追踪源头",
+                    "recommended_main_obstacle": "敌对势力联合封锁情报通道",
+                    "recommended_climax_hook": "现场对峙揭露核心秘密",
+                    "recommended_transition": "引出全书终极抉择",
+                },
+            }, ensure_ascii=False)
+
+        elif "世界观与角色设定集" in full_prompt or "generate-bible" in full_prompt:
             return json.dumps({
                 "suggested_title": "星渊法则",
                 "candidate_titles": ["星渊法则", "深空遗落", "机械神谕", "归零纪元"],

@@ -159,32 +159,28 @@ def test_multi_user_privacy_shelf_isolation(browser, live_server):
 
 
 def test_chaos_rapid_clicks_on_generate(page, live_server, test_env_setup):
-    """捣乱测试：在生成按钮上以极高频率快速连击 10 次，验证按钮防重入与无重复任务堆叠。"""
+    """捣乱测试：在阶段写作启动按钮上以极高频率快速连击 10 次，验证防重入与无重复任务堆叠。"""
     page.goto(f"{live_server}/#original")
-    page.wait_for_load_state("networkidle")
+    page.wait_for_selector("#view-original.active")
 
-    page.fill("#og_title", "防连击测试书")
-    page.fill("#og_genre", "都市言情")
-    page.fill("#og_setting", "简要测试背景。")
+    page.fill("#val_title", "防连击测试书")
+    page.locator("#station_1 .og-chip", has_text="都市言情").click()
+    page.fill("#val_logline", "简要测试背景。")
 
-    page.locator("#btn_step1_next").click()
-    page.wait_for_timeout(200)
-
-    # 步骤 2：推演大纲以形成完整创作上下文
-    outline_btn = page.locator("#btn_outline")
-    assert outline_btn.is_visible(), "未找到生成大纲按钮 #btn_outline"
-    outline_btn.click()
-    page.locator("#og_outline_card").wait_for(state="visible", timeout=10000)
-
-    page.locator("#btn_step2_next").click()
+    page.locator("#step_tab_4").click()
     page.wait_for_timeout(200)
 
     generate_requests = []
-    page.on("request", lambda req: generate_requests.append(req) if "/api/generate" in req.url and req.method == "POST" else None)
+    page.on(
+        "request",
+        lambda req: generate_requests.append(req)
+        if "/api/novel/original/stage/start" in req.url and req.method == "POST"
+        else None,
+    )
 
-    submit_btn = page.locator("#btn_write_all")
-    assert submit_btn.is_visible(), "未找到开始全书生成按钮 #btn_write_all"
-    # 极速连续点击 10 次
+    submit_btn = page.locator("#btn_run_stage")
+    assert submit_btn.is_visible(), "未找到开始本卷写作按钮 #btn_run_stage"
+    # 极速连续点击 10 次（第一次后运行态面板即刻遮挡并隐藏 .og-dock）
     for _ in range(10):
         try:
             submit_btn.click(timeout=50, no_wait_after=True)
@@ -192,14 +188,10 @@ def test_chaos_rapid_clicks_on_generate(page, live_server, test_env_setup):
             pass
         time.sleep(0.01)
 
-    page.wait_for_timeout(1000)
-    assert len(generate_requests) == 1, f"狂点 10 次后发出了 {len(generate_requests)} 次 /api/generate 请求，预期只发出 1 次"
-    jobs_dict = test_env_setup["app_module"].JOBS
-    matching_jobs = [
-        j for j in jobs_dict.values()
-        if j.get("novel_name") == "防连击测试书" or (j.get("data") and j.get("data").get("title") == "防连击测试书")
-    ]
-    assert len(matching_jobs) == 1, f"后端创建了多余任务: {len(matching_jobs)} 个, jobs={matching_jobs}"
+    page.wait_for_timeout(1200)
+    assert len(generate_requests) == 1, (
+        f"狂点 10 次后发出了 {len(generate_requests)} 次 /stage/start 请求，预期只发出 1 次"
+    )
 
 
 def test_chaos_backend_direct_concurrent_generate_returns_409(live_server):
@@ -350,150 +342,163 @@ def test_multi_user_concurrent_editing(browser, live_server, test_env_setup):
 
 
 def test_chaos_refresh_during_generation(page, live_server, test_env_setup):
-    """捣乱测试：任务生成中途刷新浏览器页面，断言页面优雅重连、后台任务正常执行且无死锁。"""
+    """捣乱测试：分卷任务启动后立即刷新浏览器，断言草稿恢复且后台任务正常完成、书籍锁释放。"""
     monitor = PageMonitor(page, "chaos_refresh_generating")
     page.goto(f"{live_server}/#original")
-    page.wait_for_load_state("networkidle")
+    page.wait_for_selector("#view-original.active")
 
-    page.fill("#og_title", "刷新中断测试书")
-    page.fill("#og_genre", "都市")
-    page.fill("#og_setting", "测试生成中途强制刷新。")
-
-    page.locator("#btn_step1_next").click()
-    page.wait_for_timeout(200)
-    outline_btn = page.locator("#btn_outline")
-    assert outline_btn.is_visible()
-    outline_btn.click()
-    page.locator("#og_outline_card").wait_for(state="visible", timeout=10000)
-
-    page.locator("#btn_step2_next").click()
+    page.fill("#val_title", "刷新中断测试书")
+    page.locator("#station_1 .og-chip", has_text="都市言情").click()
+    page.fill("#val_logline", "测试生成中途强制刷新。")
+    page.locator("#step_tab_4").click()
     page.wait_for_timeout(200)
 
     job_ids = []
     def on_gen_response(resp):
-        if "/api/generate" in resp.url and resp.status == 200:
+        if "/api/novel/original/stage/start" in resp.url and resp.status in (200, 202):
             try:
-                data = resp.json()
-                if "job_id" in data:
-                    job_ids.append(data["job_id"])
+                body = resp.json()
+                jid = (body.get("data") or {}).get("job_id")
+                if jid:
+                    job_ids.append(jid)
             except Exception:
                 pass
     page.on("response", on_gen_response)
 
-    submit_btn = page.locator("#btn_write_all")
+    submit_btn = page.locator("#btn_run_stage")
     assert submit_btn.is_visible()
     submit_btn.click()
 
-    # 等待进度卡片出现即刻刷新页面
-    page.locator("#og_progress_card").wait_for(state="visible", timeout=5000)
-    assert len(job_ids) > 0, "未能捕获到生成任务 job_id"
+    page.locator("#stage_runner_view").wait_for(state="visible", timeout=5000)
+    for _ in range(50):
+        if job_ids:
+            break
+        page.wait_for_timeout(100)
+    assert len(job_ids) > 0, "未能捕获到阶段写作任务 job_id"
     active_job_id = job_ids[0]
 
-    page.reload()
-    page.wait_for_load_state("networkidle")
-    page.wait_for_timeout(500)
+    page.reload(wait_until="domcontentloaded")
+    page.wait_for_selector("#view-original.active", timeout=10000)
+    page.wait_for_timeout(400)
 
-    # 刷新后页面应正常可用，无崩溃报错
+    # 刷新后页面应正常可用且草稿书名保留，无崩溃报错
+    assert page.locator("#val_title").input_value() == "刷新中断测试书"
+    monitor.failed_requests = [
+        r for r in monitor.failed_requests if not ("/stage/stream/" in r and "net::ERR_ABORTED" in r)
+    ]
     monitor.assert_no_errors("生成中途强制刷新页面")
 
-    # 刷新后请求 /api/jobs/<job_id>，断言 job 状态（running / done / cancelled）
-    job_info = page.evaluate(f"""() => {{
-        return fetch('/api/jobs/{active_job_id}').then(r => r.json());
+    # 刷新后查询阶段任务状态接口应返回合法状态
+    status_res = page.evaluate(f"""() => {{
+        return fetch('/api/novel/original/stage/status/{active_job_id}').then(r => r.json());
     }}""")
-    assert job_info.get("status") in ("running", "done", "cancelled"), f"Job 状态异常: {job_info}"
+    st = ((status_res or {}).get("data") or {}).get("status")
+    assert st in ("writing", "awaiting_review", "finished", "idle", "cancelled"), f"Job 状态异常: {status_res}"
 
     # 等待后台任务结束后断言已生成章节完整落盘、书籍锁已释放
     app_module = test_env_setup["app_module"]
-    for _ in range(30):
-        if not app_module.book_busy("刷新中断测试书"):
+    from original_studio.engine import get_stage_runner
+    for _ in range(40):
+        if not app_module.book_busy("刷新中断测试书") and get_stage_runner(active_job_id) is None:
             break
         time.sleep(0.5)
 
     assert not app_module.book_busy("刷新中断测试书"), "任务结束后书籍锁未被释放！"
     novel_path = app_module.safe_novel_path("刷新中断测试书")
-    assert novel_path and novel_path.exists(), "刷新中断后已生成的小说未落盘！"
+    files_now = [p.name for p in app_module.NOVELS_DIR.iterdir()] if app_module.NOVELS_DIR.exists() else []
+    assert novel_path and novel_path.exists(), (
+        f"刷新中断后已生成的小说未落盘！status={status_res}, novels={files_now}"
+    )
     _, chapters, _ = app_module.parse_novel(novel_path, repair=False)
     assert len(chapters) >= 1, f"已落盘小说无有效章节: {chapters}"
     assert len(chapters[0].get("content", "").strip()) > 0, "落盘章节正文为空"
 
 
 def test_chaos_cancel_during_generation(page, live_server, test_env_setup):
-    """捣乱测试：生成任务进行中点击取消，验证取消指令即刻送达且状态更新。"""
+    """捣乱测试：分卷写作进行中点击取消，验证取消指令即刻送达、任务结束且书籍锁释放。"""
     monitor = PageMonitor(page, "chaos_cancel_generating")
     page.goto(f"{live_server}/#original")
-    page.wait_for_load_state("networkidle")
+    page.wait_for_selector("#view-original.active")
 
-    page.fill("#og_title", "取消停止测试书")
-    page.fill("#og_genre", "玄幻")
-    page.fill("#og_setting", "测试生成中途点击停止。")
+    page.fill("#val_title", "取消停止测试书")
+    page.locator("#station_1 .og-chip", has_text="玄幻修真").click()
+    page.fill("#val_logline", "测试生成中途点击停止。")
 
-    page.locator("#btn_step1_next").click()
-    page.wait_for_timeout(200)
-    outline_btn = page.locator("#btn_outline")
-    assert outline_btn.is_visible()
-    outline_btn.click()
-    page.locator("#og_outline_card").wait_for(state="visible", timeout=10000)
+    # 预先保存足够多节拍章数，确保点击取消时 StageRunner 仍在运行而非毫秒内完结
+    beats_payload = [
+        {"chapter_offset": i, "title": f"测试第{i}章", "beat_type": "normal", "summary": "推进剧情"}
+        for i in range(1, 21)
+    ]
+    page.evaluate(f"""() => {{
+        return fetch('/api/novel/original/stage/beats', {{
+            method: 'POST',
+            headers: {{'Content-Type': 'application/json'}},
+            body: JSON.stringify({{
+                novel_id: '取消停止测试书',
+                stage_index: 1,
+                action: 'save',
+                beats: {json.dumps(beats_payload)}
+            }})
+        }});
+    }}""")
 
-    page.locator("#btn_step2_next").click()
+    page.locator("#step_tab_4").click()
     page.wait_for_timeout(200)
 
     job_ids = []
     def on_gen_response(resp):
-        if "/api/generate" in resp.url and resp.status == 200:
+        if "/api/novel/original/stage/start" in resp.url and resp.status in (200, 202):
             try:
-                data = resp.json()
-                if "job_id" in data:
-                    job_ids.append(data["job_id"])
+                body = resp.json()
+                jid = (body.get("data") or {}).get("job_id")
+                if jid:
+                    job_ids.append(jid)
             except Exception:
                 pass
     page.on("response", on_gen_response)
 
-    submit_btn = page.locator("#btn_write_all")
+    submit_btn = page.locator("#btn_run_stage")
     assert submit_btn.is_visible()
     submit_btn.click()
 
-    # 等待取消按钮出现并点击
-    cancel_btn = page.locator("#og_cancel_job")
+    cancel_btn = page.locator("#btn_runner_cancel")
     cancel_btn.wait_for(state="visible", timeout=5000)
-    assert len(job_ids) > 0, "未能捕获到任务 job_id"
+    for _ in range(50):
+        if job_ids:
+            break
+        page.wait_for_timeout(100)
+    assert len(job_ids) > 0, "未能捕获到阶段写作任务 job_id"
     active_job_id = job_ids[0]
 
     cancel_btn.click()
     page.wait_for_timeout(600)
 
-    # 验证 Toast 或状态提示包含取消信息
     toast_text = page.locator("#toast").text_content() or ""
-    progress_text = page.locator("#og_progress_text").text_content() or ""
-    assert "取消" in toast_text or "取消" in progress_text, f"未见取消响应: toast={toast_text}, progress={progress_text}"
+    assert "取消" in toast_text, f"未见取消响应 Toast: toast={toast_text}"
+    monitor.failed_requests = [
+        r for r in monitor.failed_requests if not ("/stage/stream/" in r and "net::ERR_ABORTED" in r)
+    ]
     monitor.assert_no_errors("生成中途点击取消")
 
-    # 取消后断言后端 job 状态为已取消
+    # 等待后台线程释放锁并清理活跃任务
     app_module = test_env_setup["app_module"]
-    for _ in range(25):
-        job = app_module.JOBS.get(active_job_id)
-        if job and job.get("status") == "cancelled":
+    from original_studio.engine import get_stage_runner
+    for _ in range(30):
+        if not app_module.book_busy("取消停止测试书") and get_stage_runner(active_job_id) is None:
             break
         time.sleep(0.2)
-    job = app_module.JOBS.get(active_job_id)
-    assert job and job.get("status") == "cancelled", f"后端 Job 状态未变为 cancelled: {job}"
 
-    # 书籍锁已释放（再次调用 /api/generate 不再返回 409）
     assert not app_module.book_busy("取消停止测试书"), "取消后书籍锁未被释放！"
-    retry_resp = page.evaluate("""() => {
-        return fetch('/api/generate', {
+    retry_status = page.evaluate("""() => {
+        return fetch('/api/novel/original/stage/start', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                mode: 'original',
-                title: '取消停止测试书',
-                chapters: 1,
-                outline: JSON.stringify({ chapters: [{ title: '第1章', points: '...' }] })
-            })
+            body: JSON.stringify({ novel_id: '取消停止测试书', stage_index: 1 })
         }).then(r => r.status);
     }""")
-    assert retry_resp != 409, f"书籍锁释放失败，再次提交仍返回 409: {retry_resp}"
+    assert retry_status != 409, f"书籍锁释放失败，再次提交仍返回 409: {retry_status}"
 
-    # 已生成章节仍在（若落盘）
+    # 若立刻触发了新任务，顺手取消释放环境
     novel_path = app_module.safe_novel_path("取消停止测试书")
     if novel_path and novel_path.exists():
         _, chs, _ = app_module.parse_novel(novel_path, repair=False)

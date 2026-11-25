@@ -19,55 +19,49 @@ from tests.e2e.conftest import PageMonitor, ARTIFACTS_DIR
 
 
 def test_core_flow_original_novel_generation(page, live_server):
-    """原创生成全流程：选灵感 -> 细纲生成 -> 开始写书(流式) -> 书架落盘展示。"""
+    """原创生成全流程：新版稿纸工坊设定 -> 启动分卷写作(真实后端 + FakeLLM) -> 复盘闭环 -> 书架呈现。"""
     monitor = PageMonitor(page, "flow_original_gen")
     page.goto(f"{live_server}/#original")
-    page.wait_for_load_state("networkidle")
+    page.wait_for_selector("#view-original.active")
 
-    # 1. 填写设定
-    page.fill("#og_title", "深空守望者")
-    page.fill("#og_genre", "科幻未来")
-    page.fill("#og_setting", "人类移居地下的未来时代。")
+    # 1. 填写书名、题材与一句话创意
+    page.fill("#val_title", "深空守望者")
+    page.locator("#station_1 .og-chip", has_text="科幻未来").click()
+    page.fill("#val_logline", "人类移居地下的未来时代，巡逻警员破解供能塔阴谋。")
 
-    # 2. 进入步骤 2 并生成大纲
-    page.locator("#btn_step1_next").click()
-    page.wait_for_timeout(300)
-
-    gen_outline_btn = page.locator("#btn_outline")
-    assert gen_outline_btn.is_visible(), "未找到生成大纲按钮 #btn_outline"
-    gen_outline_btn.click()
-    page.locator("#og_outline_card").wait_for(state="visible", timeout=10000)
-
-    # 3. 进入步骤 3 并启动全书生成 (Mock 流式)
-    page.locator("#btn_step2_next").click()
-    page.wait_for_timeout(300)
-    page.fill("#og_chapters", "1")
-
-    submit_btn = page.locator("#btn_write_all")
-    assert submit_btn.is_visible(), "未找到开始全书生成按钮"
+    # 2. 进入第 4 站阶段写作台并启动本卷写作
+    page.locator("#step_tab_4").click()
+    submit_btn = page.locator("#btn_run_stage")
+    assert submit_btn.is_visible(), "未找到开始本卷写作按钮 #btn_run_stage"
     submit_btn.click()
 
-    # 4. 验证进度卡片完成与流式文本更新
-    page.locator("#og_open_reader").wait_for(state="visible", timeout=15000)
+    # 3. 等待运行区开启并完成阶段复盘（关闭模态框即可检查书架落盘）
+    page.locator("#stage_runner_view").wait_for(state="visible", timeout=10000)
+    page.locator("#box_checkpoint").wait_for(state="visible", timeout=30000)
+    monitor.failed_requests = [
+        r for r in monitor.failed_requests if not ("/stage/stream/" in r and "net::ERR_ABORTED" in r)
+    ]
     monitor.assert_no_errors("原创生成完成")
 
-    # 5. 导航至书架，验证新书呈现
+    # 4. 导航至书架，验证新书呈现
     page.goto(f"{live_server}/#library")
     page.wait_for_load_state("networkidle")
-    page.locator(".book-card, tr.novel").first.wait_for(state="visible", timeout=5000)
+    page.locator(".book-card, tr.novel").first.wait_for(state="visible", timeout=10000)
     book_titles = page.locator(".book-card-title, .novel td").all_text_contents()
     assert any("深空守望者" in t for t in book_titles), f"书架未找到新生成的书籍: 深空守望者，现有: {book_titles}"
 
 
 def test_trope_refresh_replaces_entire_batch_without_retaining_old(page, live_server):
-    """灵感脑洞换一批验证：点击换一批后整批替换，旧脑洞完全不保留，由 AI 当场生成。"""
+    """灵感脑洞换一批验证：点击换一批后整批替换新版 3 张灵感卡，旧脑洞完全不保留。"""
     page.goto(f"{live_server}/#original")
-    page.wait_for_load_state("networkidle")
-    page.wait_for_selector("#og_trope_pills .trope-pill", state="visible")
+    page.wait_for_selector("#view-original.active")
+    page.wait_for_selector("#trope_cards_container .og-trope", state="visible")
 
-    # 1. 记录换一批之前的初始脑洞卡片集合
-    initial_pills = [p.strip() for p in page.locator("#og_trope_pills .trope-pill").all_text_contents() if p.strip()]
-    assert len(initial_pills) > 0, "初始灵感药丸列表不应为空"
+    # 1. 记录换一批之前的初始脑洞卡片标题集合
+    initial_cards = [
+        t.strip() for t in page.locator("#trope_cards_container .og-trope h4").all_text_contents() if t.strip()
+    ]
+    assert len(initial_cards) == 3, f"初始灵感卡片数量应为 3，实际为: {len(initial_cards)}"
 
     # 2. 点击换一批按钮
     refresh_btn = page.locator("#btn_refresh_tropes")
@@ -75,14 +69,16 @@ def test_trope_refresh_replaces_entire_batch_without_retaining_old(page, live_se
     with page.expect_response(lambda r: "/api/suggest-tropes" in r.url and r.status == 200, timeout=10000):
         refresh_btn.click()
 
-    page.wait_for_timeout(500)
+    page.wait_for_timeout(400)
 
-    # 3. 换一批之后，获取新展示的脑洞卡片
-    new_pills = [p.strip() for p in page.locator("#og_trope_pills .trope-pill").all_text_contents() if p.strip()]
-    assert len(new_pills) >= 8, f"换一批生成的脑洞数量不足8个，当前为: {len(new_pills)}"
+    # 3. 换一批之后，获取新展示的 3 张脑洞卡片
+    new_cards = [
+        t.strip() for t in page.locator("#trope_cards_container .og-trope h4").all_text_contents() if t.strip()
+    ]
+    assert len(new_cards) == 3, f"换一批生成的灵感卡片数量应为 3，实际为: {len(new_cards)}"
 
-    # 4. 关键断言：旧脑洞卡片项完全不保留在当前列表中
-    retained = [p for p in initial_pills if p in new_pills]
+    # 4. 关键断言：旧脑洞卡片标题完全不保留在当前列表中
+    retained = [p for p in initial_cards if p in new_cards]
     assert len(retained) == 0, f"换一批未彻底清除旧脑洞，仍残留了旧卡片: {retained}"
 
 
@@ -253,31 +249,25 @@ def test_core_flow_txt_import(page, live_server):
 
 
 def test_skip_outline_direct_generate(page, live_server):
-    """跳过大纲直接点击生成全书：验证界面是否给出友好的 Toast 提示'请先生成大纲'。"""
+    """新版必填/空内容校验拦截：清空一句话创意时点击润色，界面给出友好引导提示且不发无效请求。"""
     page.goto(f"{live_server}/#original")
-    page.wait_for_load_state("networkidle")
+    page.wait_for_selector("#view-original.active")
 
-    # 1. 填写设定
-    page.fill("#og_title", "跳过大纲测试书")
-    page.fill("#og_genre", "科幻")
-    page.fill("#og_setting", "测试跳过大纲直接写书。")
+    # 清空必填核心创意与未命名的阅读器入口检验
+    page.fill("#val_logline", "")
+    page.locator("#station_1 [data-act='polish'][data-field='logline']").click()
+    page.wait_for_timeout(400)
 
-    # 2. 进入步骤 2 (不点击生成大纲)，直接进入步骤 3
-    page.locator("#btn_step1_next").click()
-    page.wait_for_timeout(300)
-    page.locator("#btn_step2_next").click()
-    page.wait_for_timeout(300)
-
-    # 3. 点击开始全书生成
-    submit_btn = page.locator("#btn_write_all")
-    submit_btn.click()
-    page.wait_for_timeout(600)
-
-    # 4. 检查 Toast 提示
     toast_text = page.locator("#toast").text_content() or ""
-    print(f"用户在界面看到的提示为: {toast_text}")
-    assert "请先生成大纲" in toast_text, f"未出现友好的'请先生成大纲'提示，实际为: {toast_text}"
-    assert "生成失败：" not in toast_text, f"界面出现原始报错前缀: {toast_text}"
+    assert "请先填写" in toast_text, f"空内容触发润色时未给出友好提示，实际为: {toast_text}"
+
+    # 清空书名并直接通过第 4 站进入阅读器入口时应阻止空书名跳转并提示命名
+    page.fill("#val_title", "")
+    page.locator("#step_tab_4").click()
+    page.evaluate("window.enterStudioReader()")
+    page.wait_for_timeout(400)
+    toast_text2 = page.locator("#toast").text_content() or ""
+    assert "请先命名" in toast_text2, f"空书名进入阅读器未提示命名，实际为: {toast_text2}"
 
 
 def test_core_flow_studio_chapter_reorder(page, live_server):

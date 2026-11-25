@@ -463,3 +463,253 @@ def test_stage_runner_pause_resume_cancel_and_sse_payload(page, live_server):
         ("mock_ctrl_job_1", "cancel"),
     ], f"实际控制调用与预期不符: {control_actions}"
     assert len(errors) == 0, f"发现前端控制台或脚本错误: {errors}"
+
+
+def test_og_draft_persistence_across_reload(page, live_server):
+    """P2-1: 验证原创工作台草稿写入 localStorage 并在刷新后完整恢复，且切换示例时重置动态卡片"""
+    errors = []
+    page.on("pageerror", lambda err: errors.append(f"PAGEERROR: {err}"))
+    page.on(
+        "console",
+        lambda msg: errors.append(f"CONSOLE_ERR: {msg.text}")
+        if msg.type == "error"
+        else None,
+    )
+
+    page.goto(f"{live_server}/", wait_until="domcontentloaded")
+    page.wait_for_selector("#view-original.active", timeout=10000)
+
+    # Step 1: 修改书名与题材
+    page.fill("#val_title", "星际回响草稿")
+    page.locator("#station_1 .og-chips .og-chip", has_text="科幻未来").click()
+
+    # Step 2: 修改主角徽章并新增角色卡
+    page.locator("#step_tab_2").click()
+    c1_badge = page.locator("#c1_name_badge")
+    c1_badge.click()
+    c1_badge.fill("顾青崖")
+    page.fill("#c1_want", "在真空中倾听时间余烬的声呐技师")
+    page.locator("#btn_add_og_char").click()
+    expect(page.locator(".og-extra-char")).to_have_count(1)
+
+    # Step 3: 新增分卷卡片（停留在第 3 站）
+    page.locator("#step_tab_3").click()
+    page.locator("#btn_add_og_vol").click()
+    expect(page.locator(".og-extra-vol")).to_have_count(1)
+    page.wait_for_timeout(120)
+
+    # 刷新页面并验证草稿完整恢复
+    page.reload(wait_until="domcontentloaded")
+    page.wait_for_selector("#view-original.active", timeout=10000)
+
+    expect(page.locator("#step_tab_3")).to_have_class(re.compile(r"\bactive\b"))
+    expect(page.locator("#station_3")).to_be_visible()
+    expect(page.locator("#val_title")).to_have_value("星际回响草稿")
+    expect(page.locator("#val_genre")).to_have_value("科幻未来")
+    expect(page.locator("#c1_name_badge")).to_have_text("顾青崖")
+    expect(page.locator("#c1_mono")).to_have_text("顾")
+    expect(page.locator("#c1_want")).to_have_value("在真空中倾听时间余烬的声呐技师")
+    expect(page.locator(".og-extra-char")).to_have_count(1)
+    expect(page.locator(".og-extra-vol")).to_have_count(1)
+
+    # 切换预设示例应清理扩展卡片并覆写草稿
+    page.locator("#step_tab_1").click()
+    page.locator("#btn_demo_romance").click()
+    expect(page.locator(".og-extra-char")).to_have_count(0)
+    expect(page.locator(".og-extra-vol")).to_have_count(0)
+    expect(page.locator("#val_title")).to_have_value("微醺心跳定律")
+
+    assert len(errors) == 0, f"发现前端控制台或脚本错误: {errors}"
+
+
+def test_og_manual_title_updates_novel_id(page, live_server):
+    """P2-2: 验证手动修改 #val_title 后，refine/spec/stage/start 均携带新书名作为 novel_id"""
+    errors = []
+    page.on("pageerror", lambda err: errors.append(f"PAGEERROR: {err}"))
+    page.on(
+        "console",
+        lambda msg: errors.append(f"CONSOLE_ERR: {msg.text}")
+        if msg.type == "error"
+        else None,
+    )
+
+    captured = {"refine": [], "spec": [], "start": []}
+
+    def handle_refine(route):
+        body = route.request.post_data_json or {}
+        captured["refine"].append(body.get("novel_id"))
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps({"code": 200, "data": {"candidates": ["新卖点润色方案"]}}),
+        )
+
+    def handle_spec(route):
+        if route.request.method == "PUT":
+            body = route.request.post_data_json or {}
+            captured["spec"].append(body.get("novel_id"))
+        route.continue_()
+
+    def handle_stage_start(route):
+        body = route.request.post_data_json or {}
+        captured["start"].append(body.get("novel_id"))
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps(
+                {
+                    "code": 200,
+                    "data": {
+                        "job_id": "mock_title_job",
+                        "stream_url": f"{live_server}/api/novel/original/stage/stream/mock_title_job",
+                    },
+                }
+            ),
+        )
+
+    def handle_stream(route):
+        sse_body = 'event: done\ndata: {"job_id": "mock_title_job"}\n\n'
+        route.fulfill(
+            status=200,
+            headers={"Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache"},
+            body=sse_body,
+        )
+
+    page.route("**/api/novel/original/refine-field", handle_refine)
+    page.route("**/api/novel/original/spec", handle_spec)
+    page.route("**/api/novel/original/stage/start", handle_stage_start)
+    page.route("**/api/novel/original/stage/stream/**", handle_stream)
+
+    page.goto(f"{live_server}/", wait_until="domcontentloaded")
+    page.wait_for_selector("#view-original.active", timeout=10000)
+
+    # 先处于默认预设（微醺心跳定律），再手工修改书名
+    expect(page.locator("#val_title")).to_have_value("微醺心跳定律")
+    page.fill("#val_title", "月光实验室")
+
+    # 1) 触发局部 AI 润色，验证 novel_id 已切换为新书名
+    page.locator(".og-field[data-field='hook'] button[data-act='polish']").click()
+    expect(page.locator("#review_hook")).to_be_visible()
+
+    # 2) 切换到第 4 站启动写作，验证 PUT /spec 与 POST /stage/start 的 novel_id
+    page.locator("#step_tab_4").click()
+    page.locator("#btn_run_stage").click()
+    for _ in range(50):
+        if captured["start"]:
+            break
+        page.wait_for_timeout(100)
+
+    assert captured["refine"] == ["月光实验室"], f"refine novel_id 未更新: {captured}"
+    assert captured["spec"] == ["月光实验室"], f"spec novel_id 未更新: {captured}"
+    assert captured["start"] == ["月光实验室"], f"stage/start novel_id 未更新: {captured}"
+    assert len(errors) == 0, f"发现前端控制台或脚本错误: {errors}"
+
+
+def test_stage_runner_caret_and_live_metrics(page, live_server):
+    """P2-3: 验证阶段写作流式期间 .og-caret 跟随与实时字数刷新、暂停冻结、完成清理与再次启动重置复盘卡"""
+    errors = _attach_error_listeners(page)
+
+    # 注入受控 EventSource 桩以便在流持续开启期间逐帧检验光标与实时字数
+    page.add_init_script("""
+      window.__mockSseSources = [];
+      window.EventSource = function(url) {
+        const listeners = {};
+        const es = {
+          url,
+          addEventListener(type, cb) { (listeners[type] = listeners[type] || []).push(cb); },
+          close() { es.closed = true; },
+          _emit(type, payload) {
+            (listeners[type] || []).forEach(cb => cb({ data: JSON.stringify(payload) }));
+          }
+        };
+        window.__mockSseSources.push(es);
+        return es;
+      };
+    """)
+
+    page.route("**/api/novel/original/stage/start", lambda route: route.fulfill(
+        status=202,
+        content_type="application/json",
+        body=json.dumps({
+            "code": 202,
+            "data": {"job_id": "mock_caret_job", "stream_url": "/api/novel/original/stage/stream/mock_caret_job"},
+        }),
+    ))
+    page.route("**/api/novel/original/stage/control", lambda route: route.fulfill(
+        status=200,
+        content_type="application/json",
+        body=json.dumps({"code": 200, "msg": "ok"}),
+    ))
+    page.route("**/api/novel/original/stage/checkpoint", lambda route: route.fulfill(
+        status=200,
+        content_type="application/json",
+        body=json.dumps({"code": 200, "data": {"goal_achievement_pct": 95, "deviation_summary": "按计划推进", "character_growth_notes": "羁绊加深", "suggested_next_stage_adjustments": "保持节奏"}}),
+    ))
+
+    page.goto(live_server)
+    page.wait_for_selector("#view-original.active")
+    page.locator("#step_tab_4").click()
+    page.locator("#btn_run_stage").click()
+
+    expect(page.locator("#stage_runner_view")).to_be_visible()
+    page.wait_for_function("() => window.__mockSseSources.length === 1")
+
+    # 1) 推送 init -> chapter_start -> 分片 token，验证单个 .og-caret 跟随末尾且字数实时递增
+    page.evaluate("""() => {
+      const es = window.__mockSseSources[0];
+      es._emit('init', { data: { total_chapters: 2 } });
+      es._emit('chapter_start', { data: { chapter_offset: 1, global_chapter_idx: 1, title: '雨夜序曲' } });
+      es._emit('token', { data: { token: '雨滴敲打着窗棂。' } });
+    }""")
+    expect(page.locator("#runner_typewriter_content .og-caret")).to_have_count(1)
+    expect(page.locator("#runner_progress_text")).to_have_text("第 1/2 章 · 已写 8 字")
+
+    page.evaluate("""() => {
+      window.__mockSseSources[0]._emit('token', { data: { token: '\\n她推开了门。' } });
+    }""")
+    expect(page.locator("#runner_typewriter_content .og-caret")).to_have_count(1)
+    expect(page.locator("#runner_typewriter_content")).to_contain_text("雨滴敲打着窗棂。")
+    expect(page.locator("#runner_typewriter_content")).to_contain_text("她推开了门。")
+    expect(page.locator("#runner_progress_text")).to_have_text("第 1/2 章 · 已写 14 字")
+
+    # 2) 暂停 -> 光标进入 is-paused；恢复 -> 移除 is-paused
+    page.locator("#btn_runner_pause").click()
+    expect(page.locator("#runner_typewriter_content .og-caret")).to_have_class(re.compile(r"\bis-paused\b"))
+    page.locator("#btn_runner_pause").click()
+    expect(page.locator("#runner_typewriter_content .og-caret")).not_to_have_class(re.compile(r"\bis-paused\b"))
+
+    # 3) 本卷完成后，.og-caret 被清理，复盘卡显示
+    page.evaluate("""() => {
+      window.__mockSseSources[0]._emit('stage_complete', { data: {} });
+    }""")
+    expect(page.locator("#runner_typewriter_content .og-caret")).to_have_count(0)
+    expect(page.locator("#runner_progress_text")).to_have_text("本卷完成")
+    expect(page.locator("#box_checkpoint")).to_be_visible()
+
+    # 4) 重启新一次写作时，旧复盘卡 #box_checkpoint 应先隐藏；触发取消后，运行区与光标均清理
+    page.locator("#checkpoint_modal button:has-text('稍后处理')").click()
+    page.evaluate("""() => { window.startStageExecution(1); }""")
+    expect(page.locator("#box_checkpoint")).to_be_hidden()
+    page.wait_for_function("() => window.__mockSseSources.length === 2")
+    page.locator("#btn_runner_cancel").click()
+    expect(page.locator("#stage_runner_view")).to_be_hidden()
+    expect(page.locator("#runner_typewriter_content .og-caret")).to_have_count(0)
+
+    assert len(errors) == 0, f"发现前端控制台或脚本错误: {errors}"
+
+
+def test_og_zero_emoji_in_view_original(page, live_server):
+    """扫描新版 #view-original 4 个工位及运行态文本，断言无 emoji 残留"""
+    emoji_pattern = re.compile(r"[\U00010000-\U0010ffff]|[\u2600-\u27bf]")
+    page.goto(live_server)
+    page.wait_for_selector("#view-original.active")
+
+    for step in (1, 2, 3, 4):
+        page.locator(f"#step_tab_{step}").click()
+        text = page.locator("#view-original").inner_text()
+        found = emoji_pattern.findall(text)
+        assert len(found) == 0, f"工位 {step} 下 #view-original 发现 emoji 残留: {found}"
+
+
+
+
