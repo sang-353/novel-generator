@@ -524,6 +524,10 @@ def test_original_studio_all_endpoints(client):
         r_cancel = client.post("/api/novel/original/stage/control", json={"job_id": job_id, "action": "cancel"})
         assert r_cancel.status_code == 200
         step_event.set()
+        from original_studio.engine import get_stage_runner
+        runner = get_stage_runner(job_id)
+        if runner and getattr(runner, "_thread", None):
+            runner._thread.join(timeout=3.0)
 
     # 6. POST /api/novel/original/stage/checkpoint (Evaluate & Writeback)
     fake_eval = json.dumps({

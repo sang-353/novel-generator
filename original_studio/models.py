@@ -237,15 +237,42 @@ def default_runtime() -> Dict[str, Any]:
     }
 
 
-def load_novel_spec(novel_id: str) -> Optional[Dict[str, Any]]:
-    p = get_spec_path(novel_id)
-    if not p.exists():
-        return None
+def _atomic_write_json(p: Path, payload: Dict[str, Any]) -> None:
+    """Write JSON atomically with a brief Windows PermissionError retry loop."""
+    dir_name = p.parent
+    dir_name.mkdir(parents=True, exist_ok=True)
+    tmp_p = dir_name / f".tmp_{p.stem}_{os.getpid()}_{time.time_ns()}.tmp"
     try:
-        with open(p, "r", encoding="utf-8") as f:
-            return json.load(f)
+        with open(tmp_p, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+        for attempt in range(5):
+            try:
+                os.replace(str(tmp_p), str(p))
+                break
+            except PermissionError:
+                if attempt == 4:
+                    raise
+                time.sleep(0.02 * (attempt + 1))
     except Exception:
-        return None
+        try:
+            if tmp_p.exists():
+                tmp_p.unlink()
+        except Exception:
+            pass
+        raise
+
+
+def load_novel_spec(novel_id: str) -> Optional[Dict[str, Any]]:
+    stem = sanitize_filename(novel_id)
+    p = get_spec_path(stem)
+    with lock_novel(stem):
+        if not p.exists():
+            return None
+        try:
+            with open(p, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return None
 
 
 def save_novel_spec(novel_id: str, spec_dict: Dict[str, Any]) -> bool:
@@ -253,32 +280,21 @@ def save_novel_spec(novel_id: str, spec_dict: Dict[str, Any]) -> bool:
     stem = sanitize_filename(novel_id)
     p = get_spec_path(stem)
     with lock_novel(stem):
-        dir_name = p.parent
-        dir_name.mkdir(parents=True, exist_ok=True)
-        tmp_p = dir_name / f".tmp_{p.stem}_{os.getpid()}_{time.time_ns()}.tmp"
-        try:
-            with open(tmp_p, "w", encoding="utf-8") as f:
-                json.dump(clean_spec, f, ensure_ascii=False, indent=2)
-            os.replace(str(tmp_p), str(p))
-        except Exception:
-            try:
-                if tmp_p.exists():
-                    tmp_p.unlink()
-            except Exception:
-                pass
-            raise
+        _atomic_write_json(p, clean_spec)
     return True
 
 
 def load_novel_runtime(novel_id: str) -> Dict[str, Any]:
-    p = get_runtime_path(novel_id)
-    if not p.exists():
-        return default_runtime()
-    try:
-        with open(p, "r", encoding="utf-8") as f:
-            return validate_runtime(json.load(f))
-    except Exception:
-        return default_runtime()
+    stem = sanitize_filename(novel_id)
+    p = get_runtime_path(stem)
+    with lock_novel(stem):
+        if not p.exists():
+            return default_runtime()
+        try:
+            with open(p, "r", encoding="utf-8") as f:
+                return validate_runtime(json.load(f))
+        except Exception:
+            return default_runtime()
 
 
 def save_novel_runtime(novel_id: str, runtime_dict: Dict[str, Any]) -> bool:
@@ -286,20 +302,7 @@ def save_novel_runtime(novel_id: str, runtime_dict: Dict[str, Any]) -> bool:
     stem = sanitize_filename(novel_id)
     p = get_runtime_path(stem)
     with lock_novel(stem):
-        dir_name = p.parent
-        dir_name.mkdir(parents=True, exist_ok=True)
-        tmp_p = dir_name / f".tmp_{p.stem}_{os.getpid()}_{time.time_ns()}.tmp"
-        try:
-            with open(tmp_p, "w", encoding="utf-8") as f:
-                json.dump(clean_runtime, f, ensure_ascii=False, indent=2)
-            os.replace(str(tmp_p), str(p))
-        except Exception:
-            try:
-                if tmp_p.exists():
-                    tmp_p.unlink()
-            except Exception:
-                pass
-            raise
+        _atomic_write_json(p, clean_runtime)
     return True
 
 

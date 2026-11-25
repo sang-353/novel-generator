@@ -43,7 +43,8 @@ on('btn_manage_ct', () => { location.hash = 'settings'; });
 
 // ==================== 初始化 ====================
 function restoreProfileFromStorage() {
-  const srcTitle = $('ct_source_title').value.trim();
+  const titleEl = $('ct_source_title');
+  const srcTitle = titleEl ? titleEl.value.trim() : '';
   if (!srcTitle) return;
   try {
     const saved = localStorage.getItem('novel_profile_' + srcTitle);
@@ -61,7 +62,7 @@ function restoreProfileFromStorage() {
 // 输入书名时尝试恢复已保存的档案
 on('ct_source_title', 'input', restoreProfileFromStorage);
 restoreProfileFromStorage();
-restoreOgDraft();
+if (typeof restoreOgDraft === 'function') restoreOgDraft();
 applyTheme();
 // 表单控件补 name / autocomplete（防密码管理器误触发）
 document.querySelectorAll('input, select, textarea').forEach(el => {
