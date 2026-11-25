@@ -157,7 +157,7 @@
   <div class="og-mono" id="c1_mono" aria-hidden="true">陆</div>
   <div>
     <div class="og-char-head">
-      <div><div class="og-char-name"><span id="c1_name_badge">陆承舟</span><em>Lu Chengzhou</em></div><div class="og-char-role"><span class="og-pill">第一主角</span><span class="og-req">必填</span></div></div>
+      <div><div class="og-char-name"><span id="c1_name_badge" class="og-editable-name" contenteditable="true" role="textbox" aria-label="第一主角姓名" title="点击可直接改名">陆承舟</span><em>Lu Chengzhou</em></div><div class="og-char-role"><span class="og-pill">第一主角</span><span class="og-req">必填</span></div></div>
       <div class="og-tools" role="group" aria-label="AI 辅助"><button type="button" class="og-tool is-ai" data-act="refine-char" data-mode="rewrite" data-field="char1"><svg class="ic " aria-hidden="true"><use href="#i-refresh"/></svg><span class="lbl">重写人物</span></button><button type="button" class="og-tool is-ai" data-act="refine-char" data-mode="polish" data-field="char1"><svg class="ic " aria-hidden="true"><use href="#i-sparkle"/></svg><span class="lbl">润色</span></button></div>
     </div>
     <div class="og-kv"><div><div class="og-k" style="--c:#B7791F"><i></i>外在目标<small>Want · 开局迫切想要的</small></div><textarea id="c1_want" class="og-input" rows="2">研发出失传的‘第七号白夜’香水，保住独立工作室经营权</textarea></div><div><div class="og-k" style="--c:#0B7A55"><i></i>内在缺失<small>Need · 心灵成长点</small></div><textarea id="c1_need" class="og-input" rows="2">打破冰冷理性防线，学会向信任的人表达真实情感</textarea></div><div><div class="og-k" style="--c:#7A8296"><i></i>创伤成因<small>Wound</small></div><textarea id="c1_wound" class="og-input" rows="2">童年被家族视作没有感情的调香机器，害怕被抛弃</textarea></div><div><div class="og-k" style="--c:#2563EB"><i></i>行事底线<small>Principle</small></div><textarea id="c1_principle" class="og-input" rows="2">绝不用廉价工业香精伪造手作香，尊重每一个生命的嗅觉记忆</textarea></div></div>
@@ -167,7 +167,7 @@
   <div class="og-mono" id="c2_mono" aria-hidden="true">姜</div>
   <div>
     <div class="og-char-head">
-      <div><div class="og-char-name"><span id="c2_name_badge">姜幼柠</span><em>Jiang Youning</em></div><div class="og-char-role"><select class="og-select-inline" id="c2_relation_sel" aria-label="角色定位"><option selected value="cp_love">恋爱 / CP 对象</option><option value="frenemy">欢喜冤家</option><option value="rival_antagonist">竞争对手 / 宿敌</option><option value="ally_friend">好友 / 闺蜜</option><option value="mentor">导师 / 长辈</option></select></div></div>
+      <div><div class="og-char-name"><span id="c2_name_badge" class="og-editable-name" contenteditable="true" role="textbox" aria-label="关键角色姓名" title="点击可直接改名">姜幼柠</span><em>Jiang Youning</em></div><div class="og-char-role"><select class="og-select-inline" id="c2_relation_sel" aria-label="角色定位"><option selected value="cp_love">恋爱 / CP 对象</option><option value="frenemy">欢喜冤家</option><option value="rival_antagonist">竞争对手 / 宿敌</option><option value="ally_friend">好友 / 闺蜜</option><option value="mentor">导师 / 长辈</option></select></div></div>
       <div class="og-tools" role="group" aria-label="AI 辅助"><button type="button" class="og-tool is-ai" data-act="refine-char" data-mode="rewrite" data-field="char2"><svg class="ic " aria-hidden="true"><use href="#i-refresh"/></svg><span class="lbl">重写人物</span></button><button type="button" class="og-tool is-ai" data-act="refine-char" data-mode="polish" data-field="char2"><svg class="ic " aria-hidden="true"><use href="#i-sparkle"/></svg><span class="lbl">润色</span></button></div>
     </div>
     <div class="og-kv"><div><div class="og-k" style="--c:#7A8296"><i></i>核心性格与驱动力<small>Motivation</small></div><textarea id="c2_mot" class="og-input" rows="2">乐天随性却坚韧，急需完成个人首部绘本出版以证明自己的创作价值</textarea></div><div><div class="og-k" style="--c:#7A8296"><i></i>与主角的互动焦点<small>Relation</small></div><textarea id="c2_rel" class="og-input" rows="2">作息黑白颠倒、生活习惯大碰撞，但能精准捕捉男主隐藏的脆弱</textarea></div></div>
@@ -190,13 +190,13 @@
     <div class="og-section-head"><h4 class="og-section-title">分卷大纲<small>1 阶段 = 1 分卷 · 第 1 卷必填</small></h4>
       <div class="og-actions"><button type="button" class="og-btn sm" id="btn_add_og_vol" data-act="add-vol"><svg class="ic " aria-hidden="true"><use href="#i-plus"/></svg>增加一卷</button></div></div>
     <div class="og-route" id="og_route_list">
-      <div class="og-vol is-current">
+      <div class="og-vol is-current" data-stage="1">
         <span class="og-vol-node"></span>
         <div class="og-vol-head">
           <div><div class="og-vol-title" id="st1_title">第一卷：试探同居与薄荷微风</div>
             <div class="og-vol-meta"><span class="og-pill is-now">当前攻坚卷</span><span>预估 10 章 · 约 2 万字</span></div></div>
           <div class="og-actions"><button type="button" class="og-tool is-ai" data-act="rewrite-vol" data-stage="1"><svg class="ic " aria-hidden="true"><use href="#i-refresh"/></svg><span class="lbl">重写锚点</span></button>
-          <button type="button" class="og-btn is-primary sm" onclick="goToStep(4)">去写作台<svg class="ic " aria-hidden="true"><use href="#i-right"/></svg></button></div>
+          <button type="button" class="og-btn is-primary sm" onclick="goToStep(4, 1)">去写作台<svg class="ic " aria-hidden="true"><use href="#i-right"/></svg></button></div>
         </div>
         <div class="og-anchors">
           <div class="og-anchor" style="--c:#3B5BDB"><b>阶段核心目标</b><p id="st1_a1">两人被迫开启同居生活，在生活习惯的剧烈碰撞中订立三条‘互不越界’的合租契约。</p></div>
@@ -205,12 +205,12 @@
           <div class="og-anchor" style="--c:#6A55C9"><b>破局跳板</b><p id="st1_a4">男主母亲突然登门拜访，为了应对危机，男主主动提议签署为期三个月的‘假扮情侣’协议。</p></div>
         </div>
       </div>
-      <div class="og-vol is-pending">
+      <div class="og-vol is-pending" data-stage="2">
         <span class="og-vol-node"></span>
         <div class="og-vol-head">
           <div><div class="og-vol-title" id="st2_title">第二卷：契约情侣与香调升温</div>
             <div class="og-vol-meta"><span class="og-pill">待前卷完成</span><span>预估 12 章 · 约 2.5 万字</span></div></div>
-          <button type="button" class="og-btn sm" data-act="edit-vol" data-stage="2">编辑锚点</button>
+          <div class="og-actions"><button type="button" class="og-btn sm" data-act="edit-vol" data-stage="2">编辑锚点</button><button type="button" class="og-btn is-primary sm" onclick="goToStep(4, 2)">去写作台<svg class="ic " aria-hidden="true"><use href="#i-right"/></svg></button></div>
         </div>
         <div class="og-anchors">
           <div class="og-anchor" style="--c:#3B5BDB"><b>核心目标</b><p id="st2_a1">以情侣身份出席艺术展，在公开场合高甜互动逐渐弄假成真</p></div>
@@ -224,11 +224,11 @@
 <div id="station_4" class="og-panel station-panel" style="display:none;">
   <h3 class="og-title">阶段写作台</h3>
   <p class="og-lede">先确认本卷的章节节拍，再按节拍逐章写作。写完高潮与跳板后会暂停，等你复盘再进入下一卷。</p>
-  <div class="og-volbar"><div class="og-volbar-title" id="st4_cur_title">第一卷 · 试探同居与薄荷微风</div><span class="og-pill is-now" id="st4_status_tag">节拍就绪，待攻坚</span></div>
+  <div class="og-volbar"><div class="og-volbar-title" id="st4_cur_title">第一卷 · 试探同居与薄荷微风</div><div class="og-actions"><select id="st4_stage_sel" class="og-select-inline" aria-label="切换当前攻坚分卷"></select><span class="og-pill is-now" id="st4_status_tag">节拍就绪，待攻坚</span></div></div>
 
   <div class="og-section" style="margin-top:34px">
     <div class="og-section-head"><h4 class="og-section-title">章节节拍表<small id="st4_beats_count">共 6 章</small></h4>
-      <div class="og-actions"><button type="button" class="og-btn is-ghost sm" onclick="openBeatDrawer(1)"><svg class="ic " aria-hidden="true"><use href="#i-list"/></svg>在抽屉中编辑</button><button type="button" class="og-btn is-ghost sm" id="btn_regen_beats" data-act="regen-beats"><svg class="ic " aria-hidden="true"><use href="#i-refresh"/></svg>重新推演</button></div></div>
+      <div class="og-actions"><button type="button" class="og-btn is-ghost sm" onclick="openBeatDrawer()"><svg class="ic " aria-hidden="true"><use href="#i-list"/></svg>在抽屉中编辑</button><button type="button" class="og-btn is-ghost sm" id="btn_regen_beats" data-act="regen-beats"><svg class="ic " aria-hidden="true"><use href="#i-refresh"/></svg>重新推演</button></div></div>
     <ol class="og-beats" id="beats_list">
       <li class="og-beat "><div class="og-beat-top"><span class="og-beat-no">第 1 章</span><span class="og-beat-name" id="b1_t">暴雨合租夜</span></div><p id="b1_d">中介携款潜逃，两人因同一套房源在雨夜对峙，最终各退一步合租</p></li>
       <li class="og-beat "><div class="og-beat-top"><span class="og-beat-no">第 2 章</span><span class="og-beat-name" id="b2_t">界线分明的三条家规</span></div><p id="b2_d">男主画地为界，女主外卖气味引发嗅觉警报，笑料百出</p></li>
@@ -240,8 +240,8 @@
 
   <div id="stage_runner_view" class="og-run">
     <div class="og-run-head">
-      <div class="og-run-top"><b id="runner_current_title">正在攻坚：第 5 章 · 台风停电夜的拥抱</b><span>42 tokens/s · 进度 85%</span></div>
-      <div class="og-progress"><i style="width:85%"></i></div>
+      <div class="og-run-top"><b id="runner_current_title">正在攻坚：第 5 章 · 台风停电夜的拥抱</b><div class="og-actions"><span id="runner_progress_text">准备中</span><button type="button" class="og-btn sm" id="btn_runner_pause" data-act="pause-stage">暂停</button><button type="button" class="og-btn sm" id="btn_runner_cancel" data-act="cancel-stage">取消</button></div></div>
+      <div class="og-progress"><i id="runner_progress_bar" style="width:10%"></i></div>
     </div>
     <div class="og-stream" id="runner_typewriter_content">
       <p class="og-note">已注入：姜幼柠怕黑怕火的心结 · 两人已合租三周</p>
@@ -265,7 +265,7 @@
 
   <div class="og-dock">
     <span class="og-dock-msg"><svg class="ic " aria-hidden="true"><use href="#i-check"/></svg>预检通过，故事状态记忆层已加载</span>
-    <button type="button" class="og-btn is-primary lg" id="btn_run_stage" onclick="startStageExecution(1)"><svg class="ic " aria-hidden="true"><use href="#i-play"/></svg>开始本卷写作</button>
+    <button type="button" class="og-btn is-primary lg" id="btn_run_stage" onclick="startStageExecution()"><svg class="ic " aria-hidden="true"><use href="#i-play"/></svg>开始本卷写作</button>
   </div>
   <div class="og-nav"><button type="button" class="og-btn" onclick="goToStep(3)"><svg class="ic " aria-hidden="true"><use href="#i-left"/></svg>航线路标</button><span>第一卷写完后即可启动第二卷</span></div>
 </div>
@@ -995,7 +995,7 @@
 <div id="beat_drawer" class="og og-drawer" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="beat_drawer_title">
   <div class="og-drawer-head"><div><h3 id="beat_drawer_title">本卷章节节拍表</h3><p>写作将严格按节拍逐章推进</p></div><button type="button" class="og-tool icon" onclick="closeBeatDrawer()" aria-label="关闭"><svg class="ic " aria-hidden="true"><use href="#i-x"/></svg></button></div>
   <div id="beat_items_list" class="og-drawer-list"></div>
-  <div class="og-drawer-foot"><button type="button" class="og-btn sm" onclick="openBeatDrawer(1)"><svg class="ic " aria-hidden="true"><use href="#i-refresh"/></svg>重新推演节拍</button><button type="button" class="og-btn is-primary sm" onclick="confirmBeatDrawer()"><svg class="ic " aria-hidden="true"><use href="#i-check"/></svg>确认节拍</button></div>
+  <div class="og-drawer-foot"><button type="button" class="og-btn sm" onclick="openBeatDrawer()"><svg class="ic " aria-hidden="true"><use href="#i-refresh"/></svg>重新推演节拍</button><button type="button" class="og-btn is-primary sm" onclick="confirmBeatDrawer()"><svg class="ic " aria-hidden="true"><use href="#i-check"/></svg>确认节拍</button></div>
 </div>
 
 <div id="checkpoint_modal" class="og og-mask" style="display:none;">

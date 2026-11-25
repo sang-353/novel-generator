@@ -500,3 +500,6 @@ main:has(> #view-original.active) { max-width: 1380px; padding-top: 22px; }
 
 /* 写作进行中或待复盘时，隐藏底部的「开始写作」操作条 */
 .og-run[style*="display: block"] ~ .og-dock, .og-check[style*="display: block"] ~ .og-dock { display: none; }
+.og .og-editable-name { cursor: text; border-bottom: 1px dashed transparent; border-radius: 4px; padding: 0 3px; transition: border-color .15s, background-color .15s; }
+.og .og-editable-name:hover { border-bottom-color: #B9C0CE; background: rgba(21,25,34,.03); }
+.og .og-editable-name:focus { outline: none; border-bottom-color: var(--accent); background: var(--accent-soft); }

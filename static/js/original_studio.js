@@ -18,6 +18,11 @@
     chainedCancelled: false,
     extraCharCounter: 2,
     extraVolCounter: 2,
+    currentStageIndex: 1,
+    drawerStageIndex: 1,
+    checkpointStageIndex: 1,
+    isStagePaused: false,
+    runnerTotalChapters: 0,
   };
 
   // 预设样例库（供创作者快速对比体验言情与科幻等全题材中立能力）
@@ -179,9 +184,84 @@
   }
 
   // =========================================================================
-  // 3. 工位导航与分步切换
+  // 3. 工位导航、分步切换与当前攻坚卷状态管理
   // =========================================================================
-  window.goToStep = function(stepNum) {
+  function getFormStages() {
+    const stages = [];
+    const st1Title = safeText('st1_title').trim();
+    if (st1Title) stages.push({ stage_index: 1, title: st1Title });
+    const st2Title = safeText('st2_title').trim();
+    if (st2Title) stages.push({ stage_index: 2, title: st2Title });
+    document.querySelectorAll('#og_route_list .og-extra-vol').forEach((volEl) => {
+      const idx = parseInt(volEl.dataset.stage || '0', 10);
+      const tEl = volEl.querySelector('.og-vol-title');
+      if (idx > 2) stages.push({ stage_index: idx, title: tEl ? tEl.textContent.trim() : `第 ${idx} 卷` });
+    });
+    return stages.length ? stages : [{ stage_index: 1, title: '第一卷：开篇启程' }];
+  }
+
+  function syncStageSelector() {
+    const sel = getEl('st4_stage_sel');
+    if (!sel) return;
+    const stages = getFormStages();
+    const valid = stages.some(s => s.stage_index === state.currentStageIndex);
+    if (!valid) state.currentStageIndex = stages[0].stage_index;
+    const html = stages.map(s =>
+      `<option value="${s.stage_index}">第 ${s.stage_index} 卷：${esc(s.title)}</option>`
+    ).join('');
+    if (sel._lastOptionsHtml !== html) {
+      sel._lastOptionsHtml = html;
+      sel.innerHTML = html;
+    }
+    sel.value = String(state.currentStageIndex);
+    if (!sel._stageBound) {
+      sel._stageBound = true;
+      sel.addEventListener('change', () => {
+        window.selectStage(parseInt(sel.value || '1', 10));
+      });
+    }
+  }
+
+  window.selectStage = function(stageIdx) {
+    const idx = parseInt(stageIdx, 10) || 1;
+    const changed = idx !== state.currentStageIndex;
+    state.currentStageIndex = idx;
+    if (changed) {
+      if (state.eventSource) {
+        try { state.eventSource.close(); } catch (e) { /* 忽略 */ }
+        state.eventSource = null;
+      }
+      state.activeJobId = null;
+      state.isStagePaused = false;
+      const runnerView = getEl('stage_runner_view');
+      const chkBox = getEl('box_checkpoint');
+      if (runnerView) runnerView.style.display = 'none';
+      if (chkBox) chkBox.style.display = 'none';
+    }
+    const stages = getFormStages();
+    const cur = stages.find(s => s.stage_index === idx) || stages[0];
+    if (cur) setElText('st4_cur_title', cur.title.replace('：', ' · '));
+    setElText('st4_status_tag', `第 ${idx} 卷 · 节拍就绪`);
+
+    document.querySelectorAll('#og_route_list .og-vol[data-stage]').forEach((volEl) => {
+      const vIdx = parseInt(volEl.dataset.stage || '0', 10);
+      const isCur = vIdx === idx;
+      volEl.classList.toggle('is-current', isCur);
+      volEl.classList.toggle('is-pending', !isCur);
+      const pill = volEl.querySelector('.og-vol-meta .og-pill');
+      if (pill) {
+        pill.classList.toggle('is-now', isCur);
+        pill.textContent = isCur ? '当前攻坚卷' : '待前卷完成';
+      }
+    });
+    syncStageSelector();
+    refreshOverview();
+  };
+
+  window.goToStep = function(stepNum, stageIdx) {
+    if (stageIdx !== undefined && stageIdx !== null) {
+      window.selectStage(stageIdx);
+    }
     state.activeStation = stepNum;
     for (let i = 1; i <= 4; i++) {
       const tab = getEl(`step_tab_${i}`);
@@ -196,6 +276,7 @@
         if (i === stepNum) autosize(panel);
       }
     }
+    if (stepNum === 4) syncStageSelector();
     updateSummaryBar();
     const sheet = getEl('og_sheet');
     if (sheet && sheet.getBoundingClientRect().top < 0) window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -206,8 +287,9 @@
     const genre = safeVal('val_genre') || (state.spec && state.spec.meta ? state.spec.meta.genre : '未选题材');
     setElText('sum_title', `《${title}》`);
     setElText('sum_genre', genre);
-    const st1Title = safeText('st1_title');
-    if (st1Title) setElText('st4_cur_title', st1Title.replace('：', ' · '));
+    const curTitle = safeText(`st${state.currentStageIndex}_title`) || safeText('st1_title');
+    if (curTitle) setElText('st4_cur_title', curTitle.replace('：', ' · '));
+    syncStageSelector();
     updateCounts();
     refreshOverview();
   }
@@ -435,27 +517,32 @@
   // =========================================================================
   // 5.5 人物卡与分卷卡扩展操作
   // =========================================================================
-  window.addCharacterCard = function() {
+  window.addCharacterCard = function(charData, silent) {
     const btn = getEl('btn_add_og_char');
     const sec = btn ? btn.closest('.og-section') : null;
     if (!sec) return;
     state.extraCharCounter += 1;
     const idx = state.extraCharCounter;
+    const cName = (charData && charData.name) ? charData.name : `新登场角色 ${idx}`;
+    const cRelType = (charData && charData.relation_type) ? charData.relation_type : 'ally_friend';
+    const cMot = (charData && charData.role_desc) ? charData.role_desc : '';
+    const cRel = (charData && charData.bond_or_conflict) ? charData.bond_or_conflict : '';
+
     const card = document.createElement('div');
     card.className = 'og-char is-support og-extra-char';
     card.dataset.charIdx = String(idx);
     card.innerHTML = `
-      <div class="og-mono" aria-hidden="true">配</div>
+      <div class="og-mono" aria-hidden="true">${esc((cName.trim() || '配')[0])}</div>
       <div>
         <div class="og-char-head">
           <div>
-            <div class="og-char-name"><input type="text" class="og-input og-char-name-inp" value="新登场角色 ${idx}" style="font-size:18px;font-weight:700;padding:4px 8px;width:auto;"></div>
+            <div class="og-char-name"><input type="text" class="og-input og-char-name-inp" value="${esc(cName)}" style="font-size:18px;font-weight:700;padding:4px 8px;width:auto;"></div>
             <div class="og-char-role">
               <select class="og-select-inline" aria-label="角色定位">
-                <option value="ally_friend" selected>好友 / 搭档</option>
-                <option value="cp_love">恋爱 / CP 对象</option>
-                <option value="rival_antagonist">竞争对手 / 宿敌</option>
-                <option value="mentor">导师 / 长辈</option>
+                <option value="ally_friend" ${cRelType === 'ally_friend' ? 'selected' : ''}>好友 / 搭档</option>
+                <option value="cp_love" ${cRelType === 'cp_love' ? 'selected' : ''}>恋爱 / CP 对象</option>
+                <option value="rival_antagonist" ${cRelType === 'rival_antagonist' ? 'selected' : ''}>竞争对手 / 宿敌</option>
+                <option value="mentor" ${cRelType === 'mentor' ? 'selected' : ''}>导师 / 长辈</option>
               </select>
             </div>
           </div>
@@ -464,8 +551,8 @@
           </div>
         </div>
         <div class="og-kv">
-          <div><div class="og-k" style="--c:#7A8296"><i></i>核心性格与驱动力<small>Motivation</small></div><textarea class="og-input og-char-mot" rows="2" placeholder="描述角色性格与行动目标…"></textarea></div>
-          <div><div class="og-k" style="--c:#7A8296"><i></i>与主角的互动焦点<small>Relation</small></div><textarea class="og-input og-char-rel" rows="2" placeholder="描述与主角的羁绊或冲突点…"></textarea></div>
+          <div><div class="og-k" style="--c:#7A8296"><i></i>核心性格与驱动力<small>Motivation</small></div><textarea class="og-input og-char-mot" rows="2" placeholder="描述角色性格与行动目标…">${esc(cMot)}</textarea></div>
+          <div><div class="og-k" style="--c:#7A8296"><i></i>与主角的互动焦点<small>Relation</small></div><textarea class="og-input og-char-rel" rows="2" placeholder="描述与主角的羁绊或冲突点…">${esc(cRel)}</textarea></div>
         </div>
       </div>`;
     sec.appendChild(card);
@@ -476,9 +563,9 @@
         const mono = card.querySelector('.og-mono');
         if (mono) mono.textContent = (nameInp.value.trim() || '配')[0];
       });
-      nameInp.focus();
+      if (!silent) nameInp.focus();
     }
-    if (window.toast) window.toast('已新增一张角色卡片');
+    if (!silent && window.toast) window.toast('已新增一张角色卡片');
   };
 
   window.refineCharacterCard = async function(charKey, mode) {
@@ -512,11 +599,18 @@
     }
   };
 
-  window.addVolumeStage = function() {
+  window.addVolumeStage = function(stageData, silent) {
     const route = getEl('og_route_list');
     if (!route) return;
     state.extraVolCounter += 1;
-    const idx = state.extraVolCounter;
+    const idx = (stageData && stageData.stage_index) ? parseInt(stageData.stage_index, 10) : state.extraVolCounter;
+    if (idx > state.extraVolCounter) state.extraVolCounter = idx;
+    const vTitle = (stageData && stageData.title) ? stageData.title : `第${idx}卷：待规划新篇章`;
+    const vCh = (stageData && stageData.expected_chapters) ? stageData.expected_chapters : 10;
+    const anchors = (stageData && stageData.anchors) ? stageData.anchors : {};
+    const vGoal = anchors.stage_goal || '推进主线矛盾升级，开启全新剧情舞台。';
+    const vClimax = anchors.climax_hook || '卷末揭示核心秘密，完成阶段性局势反转。';
+
     const vol = document.createElement('div');
     vol.className = 'og-vol is-pending og-extra-vol';
     vol.dataset.stage = String(idx);
@@ -524,20 +618,22 @@
       <span class="og-vol-node"></span>
       <div class="og-vol-head">
         <div>
-          <div class="og-vol-title" id="st${idx}_title">第${idx}卷：待规划新篇章</div>
-          <div class="og-vol-meta"><span class="og-pill">待前卷完成</span><span>预估 10 章 · 约 2 万字</span></div>
+          <div class="og-vol-title" id="st${idx}_title">${esc(vTitle)}</div>
+          <div class="og-vol-meta"><span class="og-pill">待前卷完成</span><span>预估 ${esc(vCh)} 章 · 约 ${Math.round(vCh * 2.5) / 10} 万字</span></div>
         </div>
         <div class="og-actions">
           <button type="button" class="og-btn sm" data-act="edit-vol" data-stage="${idx}">编辑锚点</button>
+          <button type="button" class="og-btn is-primary sm" onclick="goToStep(4, ${idx})">去写作台</button>
           <button type="button" class="og-tool" data-act="remove-vol">移除</button>
         </div>
       </div>
       <div class="og-anchors">
-        <div class="og-anchor" style="--c:#3B5BDB"><b>核心目标</b><p id="st${idx}_a1">推进主线矛盾升级，开启全新剧情舞台。</p></div>
-        <div class="og-anchor" style="--c:#A86A0C"><b>高潮引爆点</b><p id="st${idx}_a3">卷末揭示核心秘密，完成阶段性局势反转。</p></div>
+        <div class="og-anchor" style="--c:#3B5BDB"><b>核心目标</b><p id="st${idx}_a1">${esc(vGoal)}</p></div>
+        <div class="og-anchor" style="--c:#A86A0C"><b>高潮引爆点</b><p id="st${idx}_a3">${esc(vClimax)}</p></div>
       </div>`;
     route.appendChild(vol);
-    if (window.toast) window.toast(`已新增第 ${idx} 卷阶段`);
+    syncStageSelector();
+    if (!silent && window.toast) window.toast(`已新增第 ${idx} 卷阶段`);
   };
 
   window.rewriteStageAnchors = async function(stageIdx) {
@@ -719,9 +815,22 @@
     };
   }
 
+  function syncCharSubLabel(badgeId, text) {
+    const badge = getEl(badgeId);
+    if (badge && badge.nextElementSibling && badge.nextElementSibling.tagName === 'EM') {
+      badge.nextElementSibling.textContent = text || '';
+    }
+  }
+
   function fillFormWithSpec(spec) {
     if (!spec) return;
     state.spec = spec;
+
+    // 清理既有动态扩展的人物与分卷卡片，防止切换预设或再次推演时残留串台
+    document.querySelectorAll('#station_2 .og-extra-char').forEach(el => el.remove());
+    document.querySelectorAll('#og_route_list .og-extra-vol').forEach(el => el.remove());
+    state.extraCharCounter = 2;
+    state.extraVolCounter = 2;
 
     if (spec.meta) {
       setElVal('val_title', spec.meta.title || '');
@@ -747,6 +856,7 @@
       const pName = spec.protagonist.name || '主角';
       setElText('c1_name_badge', pName);
       setElText('c1_mono', pName[0] || '主');
+      syncCharSubLabel('c1_name_badge', (spec.protagonist.role && spec.protagonist.role !== '主角') ? spec.protagonist.role : '');
       setElVal('c1_want', spec.protagonist.want || '');
       setElVal('c1_need', spec.protagonist.need || '');
       setElVal('c1_wound', spec.protagonist.flaw || '');
@@ -757,12 +867,17 @@
       const cName = c1.name || '重要角色';
       setElText('c2_name_badge', cName);
       setElText('c2_mono', cName[0] || '角');
+      syncCharSubLabel('c2_name_badge', c1.en_name || '');
       const relSel = getEl('c2_relation_sel');
       if (relSel && c1.relation_type) {
         relSel.value = c1.relation_type;
       }
       setElVal('c2_mot', c1.role_desc || '');
       setElVal('c2_rel', c1.bond_or_conflict || '');
+
+      spec.characters.slice(1).forEach(extraChar => {
+        window.addCharacterCard(extraChar, true);
+      });
     }
     if (spec.ending) {
       const endText = [
@@ -789,6 +904,9 @@
           setElText('st2_a3', st2.anchors.climax_hook || '');
         }
       }
+      spec.stages.slice(2).forEach(extraStage => {
+        window.addVolumeStage(extraStage, true);
+      });
     }
     updateSummaryBar();
   }
@@ -896,19 +1014,21 @@
   // 8. 章节节拍表 (Beat List) 抽屉与工位 4 节拍同步
   // =========================================================================
   window.openBeatDrawer = async function(stageIndex) {
+    const stIdx = parseInt(stageIndex || state.currentStageIndex || '1', 10) || 1;
+    state.drawerStageIndex = stIdx;
     const drawer = getEl('beat_drawer');
     const mask = getEl('beat_drawer_mask');
     if (drawer) drawer.style.display = 'flex';
     if (mask) mask.style.display = 'block';
 
     const listEl = getEl('beat_items_list');
-    if (listEl) listEl.innerHTML = '<div class="og-empty">正在推导本卷章节节拍…</div>';
+    if (listEl) listEl.innerHTML = `<div class="og-empty">正在推导第 ${stIdx} 卷章节节拍…</div>`;
 
     try {
       const novelId = await ensureSpecSynced();
       const res = await window.api('/api/novel/original/stage/beats', 'POST', {
         novel_id: novelId,
-        stage_index: stageIndex || 1,
+        stage_index: stIdx,
         action: 'generate',
         provider_id: currentProviderId(),
       });
@@ -929,17 +1049,18 @@
   };
 
   window.confirmBeatDrawer = async function() {
+    const stIdx = parseInt(state.drawerStageIndex || state.currentStageIndex || '1', 10) || 1;
     if (state.lastBeats && state.lastBeats.length) {
       try {
         const novelId = await ensureSpecSynced();
         await window.api('/api/novel/original/stage/beats', 'POST', {
           novel_id: novelId,
-          stage_index: 1,
+          stage_index: stIdx,
           action: 'save',
           beats: state.lastBeats,
         });
         renderStationBeats(state.lastBeats);
-        if (window.toast) window.toast('已确认并保存本卷章节节拍表');
+        if (window.toast) window.toast(`已确认并保存第 ${stIdx} 卷章节节拍表`);
       } catch (err) {
         if (window.toast) window.toast(`保存节拍失败: ${err.message}`);
       }
@@ -947,20 +1068,21 @@
     window.closeBeatDrawer();
   };
 
-  window.regenerateStageBeats = async function() {
-    if (window.toast) window.toast('正在重新规划本卷节拍表…');
+  window.regenerateStageBeats = async function(stageIndex) {
+    const stIdx = parseInt(stageIndex || state.currentStageIndex || '1', 10) || 1;
+    if (window.toast) window.toast(`正在重新规划第 ${stIdx} 卷节拍表…`);
     try {
       const novelId = await ensureSpecSynced();
       const res = await window.api('/api/novel/original/stage/beats', 'POST', {
         novel_id: novelId,
-        stage_index: 1,
+        stage_index: stIdx,
         action: 'generate',
         provider_id: currentProviderId(),
       });
       const beats = (res.data && res.data.beats) ? res.data.beats : [];
       state.lastBeats = beats;
       renderStationBeats(beats);
-      if (window.toast) window.toast(`已生成 ${beats.length} 章最新节拍表`);
+      if (window.toast) window.toast(`已生成第 ${stIdx} 卷 ${beats.length} 章最新节拍表`);
     } catch (err) {
       if (window.toast) window.toast(`节拍推演失败: ${err.message}`);
     }
@@ -1001,19 +1123,98 @@
   // =========================================================================
   // 9. 分卷两段式写作长任务与 SSE 实时打字机
   // =========================================================================
+  function unwrapSseData(e) {
+    const raw = JSON.parse(e.data);
+    return (raw && raw.data && typeof raw.data === 'object') ? raw.data : raw;
+  }
+
+  function setRunnerControls(running, paused) {
+    const pauseBtn = getEl('btn_runner_pause');
+    const cancelBtn = getEl('btn_runner_cancel');
+    if (pauseBtn) {
+      pauseBtn.style.display = running ? 'inline-flex' : 'none';
+      pauseBtn.disabled = !running;
+      pauseBtn.textContent = paused ? '继续写作' : '暂停';
+    }
+    if (cancelBtn) {
+      cancelBtn.style.display = running ? 'inline-flex' : 'none';
+      cancelBtn.disabled = !running;
+    }
+  }
+
+  function setRunnerProgress(pct, label) {
+    const bar = getEl('runner_progress_bar');
+    if (bar && pct !== null && pct !== undefined) bar.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+    if (label !== undefined) setElText('runner_progress_text', label);
+  }
+
+  window.handleStageControl = async function(action) {
+    const jobId = state.activeJobId;
+    if (!jobId) {
+      if (action === 'cancel') {
+        const runnerView = getEl('stage_runner_view');
+        if (runnerView) runnerView.style.display = 'none';
+      }
+      return;
+    }
+
+    const act = action === 'toggle-pause' ? (state.isStagePaused ? 'resume' : 'pause') : action;
+    const pauseBtn = getEl('btn_runner_pause');
+    const cancelBtn = getEl('btn_runner_cancel');
+    if (pauseBtn) pauseBtn.disabled = true;
+    if (cancelBtn) cancelBtn.disabled = true;
+
+    try {
+      await window.api('/api/novel/original/stage/control', 'POST', { job_id: jobId, action: act });
+      if (act === 'pause') {
+        state.isStagePaused = true;
+        setRunnerControls(true, true);
+        setRunnerProgress(null, '已暂停');
+        if (window.toast) window.toast('已暂停本卷写作，可随时点击继续');
+      } else if (act === 'resume') {
+        state.isStagePaused = false;
+        setRunnerControls(true, false);
+        setRunnerProgress(null, '继续写作中…');
+        if (window.toast) window.toast('已恢复本卷写作');
+      } else if (act === 'cancel') {
+        if (state.eventSource) {
+          state.eventSource.close();
+          state.eventSource = null;
+        }
+        state.activeJobId = null;
+        state.isStagePaused = false;
+        setRunnerControls(false, false);
+        const runnerView = getEl('stage_runner_view');
+        if (runnerView) runnerView.style.display = 'none';
+        if (window.toast) window.toast('已取消本卷写作任务');
+      }
+    } catch (err) {
+      setRunnerControls(true, state.isStagePaused);
+      if (window.toast) window.toast(`任务控制失败: ${err.message}`);
+    }
+  };
+
   window.startStageExecution = async function(stageIndex) {
+    const stIdx = parseInt(stageIndex || state.currentStageIndex || '1', 10) || 1;
+    state.currentStageIndex = stIdx;
+    state.isStagePaused = false;
+    state.runnerTotalChapters = 0;
+
     const runnerView = getEl('stage_runner_view');
     const runnerContent = getEl('runner_typewriter_content');
     const runnerTitle = getEl('runner_current_title');
 
     if (runnerView) runnerView.style.display = 'block';
-    if (runnerContent) runnerContent.innerHTML = '<p class="og-note">正在同步设定集并建立实时连接，准备首章…</p>';
+    if (runnerTitle) runnerTitle.textContent = `准备第 ${stIdx} 卷写作…`;
+    setRunnerControls(true, false);
+    setRunnerProgress(5, '连接中…');
+    if (runnerContent) runnerContent.innerHTML = `<p class="og-note">正在同步设定集并准备第 ${stIdx} 卷首章连接…</p>`;
 
     try {
       const novelId = await ensureSpecSynced();
       const res = await window.api('/api/novel/original/stage/start', 'POST', {
         novel_id: novelId,
-        stage_index: stageIndex || 1,
+        stage_index: stIdx,
         provider_id: currentProviderId(),
       });
 
@@ -1025,34 +1226,75 @@
       const es = new EventSource(streamUrl);
       state.eventSource = es;
 
+      es.addEventListener('init', (e) => {
+        const d = unwrapSseData(e);
+        if (d && d.total_chapters) state.runnerTotalChapters = Number(d.total_chapters) || 0;
+        setRunnerProgress(10, '节拍就绪');
+      });
+
       es.addEventListener('chapter_start', (e) => {
-        const d = JSON.parse(e.data);
+        const d = unwrapSseData(e);
+        const chOff = Number(d.chapter_offset || d.global_chapter_idx || 1);
+        const total = state.runnerTotalChapters || Math.max(chOff, 1);
+        const pct = Math.min(95, Math.round((chOff - 0.5) / total * 100));
         if (runnerTitle) runnerTitle.textContent = `正在生成：第 ${d.global_chapter_idx} 章《${d.title}》`;
+        setRunnerProgress(pct, `第 ${chOff}/${total} 章`);
         if (runnerContent) runnerContent.innerHTML += `<h3>第 ${d.global_chapter_idx} 章：${esc(d.title)}</h3>`;
       });
 
       es.addEventListener('token', (e) => {
-        const d = JSON.parse(e.data);
-        if (runnerContent) {
+        const d = unwrapSseData(e);
+        if (runnerContent && d.token !== undefined) {
           runnerContent.innerHTML += esc(d.token).replace(/\n/g, '<br>');
           runnerContent.scrollTop = runnerContent.scrollHeight;
         }
       });
 
+      es.addEventListener('status_change', (e) => {
+        const d = unwrapSseData(e);
+        if (d.status === 'paused') {
+          state.isStagePaused = true;
+          setRunnerControls(true, true);
+          setRunnerProgress(null, '已暂停');
+        } else if (d.status === 'writing') {
+          state.isStagePaused = false;
+          setRunnerControls(true, false);
+          setRunnerProgress(null, '写作中…');
+        }
+      });
+
+      es.addEventListener('cancelled', () => {
+        es.close();
+        state.eventSource = null;
+        state.activeJobId = null;
+        state.isStagePaused = false;
+        setRunnerControls(false, false);
+        if (runnerView) runnerView.style.display = 'none';
+      });
+
       es.addEventListener('stage_complete', () => {
         es.close();
+        state.eventSource = null;
+        state.activeJobId = null;
+        setRunnerControls(false, false);
+        setRunnerProgress(100, '本卷完成');
         const chkBox = getEl('box_checkpoint');
         if (chkBox) chkBox.style.display = 'block';
-        if (window.toast) window.toast('本卷全部章节已生成，正在打开阶段复盘');
-        setTimeout(() => window.openCheckpointModal(stageIndex || 1), 600);
+        if (window.toast) window.toast(`第 ${stIdx} 卷全部章节已生成，正在打开阶段复盘`);
+        setTimeout(() => window.openCheckpointModal(stIdx), 600);
       });
 
       es.addEventListener('error', () => {
         es.close();
-        if (window.toast) window.toast('连接已断开，或任务已完成');
+        state.eventSource = null;
+        if (!state.activeJobId) return;
+        setRunnerProgress(null, '连接已断开（可继续控停）');
+        if (window.toast) window.toast('实时流连接已断开，或任务已结束');
       });
 
     } catch (err) {
+      setRunnerControls(false, false);
+      setRunnerProgress(0, '启动失败');
       if (runnerContent) runnerContent.innerHTML = `<p class="og-note" style="color:var(--og-seal)">启动失败：${esc(err.message)}</p>`;
       if (window.toast) window.toast(`启动失败: ${err.message}`);
     }
@@ -1062,17 +1304,19 @@
   // 10. 阶段检查点偏差评估与大纲自适应回写
   // =========================================================================
   window.openCheckpointModal = async function(stageIndex) {
+    const stIdx = parseInt(stageIndex || state.currentStageIndex || '1', 10) || 1;
+    state.checkpointStageIndex = stIdx;
     const modal = getEl('checkpoint_modal');
     if (modal) modal.style.display = 'flex';
 
     const reportEl = getEl('checkpoint_report_body');
-    if (reportEl) reportEl.innerHTML = '<div class="og-empty">正在对照原定锚点复盘本卷正文…</div>';
+    if (reportEl) reportEl.innerHTML = `<div class="og-empty">正在对照原定锚点复盘第 ${stIdx} 卷正文…</div>`;
 
     try {
       const novelId = await ensureSpecSynced();
       const res = await window.api('/api/novel/original/stage/checkpoint', 'POST', {
         novel_id: novelId,
-        stage_index: stageIndex || 1,
+        stage_index: stIdx,
         action: 'evaluate',
         provider_id: currentProviderId(),
       });
@@ -1103,17 +1347,23 @@
     if (modal) modal.style.display = 'none';
   };
 
-  window.acceptCheckpointWriteback = async function() {
+  window.acceptCheckpointWriteback = async function(stageIndex) {
+    const stIdx = parseInt(stageIndex || state.checkpointStageIndex || state.currentStageIndex || '1', 10) || 1;
     try {
       const novelId = await ensureSpecSynced();
-      await window.api('/api/novel/original/stage/checkpoint', 'POST', {
+      const res = await window.api('/api/novel/original/stage/checkpoint', 'POST', {
         novel_id: novelId,
-        stage_index: 1,
+        stage_index: stIdx,
         action: 'accept_and_writeback',
         spec_modifications: {},
       });
       window.closeCheckpointModal();
-      if (window.toast) window.toast('已采纳建议并回写设定集');
+      const nextIdx = (res.data && res.data.next_stage_index) ? parseInt(res.data.next_stage_index, 10) : (stIdx + 1);
+      const stages = getFormStages();
+      if (stages.some(s => s.stage_index === nextIdx)) {
+        window.selectStage(nextIdx);
+      }
+      if (window.toast) window.toast(`已采纳第 ${stIdx} 卷建议并切换至第 ${nextIdx} 卷`);
       window.goToStep(4);
     } catch (err) {
       if (window.toast) window.toast(`回写失败: ${err.message}`);
@@ -1141,6 +1391,7 @@
     if (!preset) return;
     fillFormWithSpec(preset);
     state.novelId = preset.meta.title;
+    window.selectStage(1);
     const bRomance = getEl('btn_demo_romance');
     const bFantasy = getEl('btn_demo_fantasy');
     if (bRomance) bRomance.classList.toggle('is-on', presetKey === 'romance');
@@ -1250,12 +1501,14 @@
       case 'add-vol': window.addVolumeStage(); break;
       case 'remove-vol': {
         const v = el.closest('.og-vol');
-        if (v) { v.remove(); if (window.toast) window.toast('已移除新增分卷'); }
+        if (v) { v.remove(); syncStageSelector(); if (window.toast) window.toast('已移除新增分卷'); }
         break;
       }
       case 'rewrite-vol': window.rewriteStageAnchors(parseInt(el.dataset.stage || '1', 10)); break;
       case 'edit-vol': window.editStageAnchors(parseInt(el.dataset.stage || '1', 10), el); break;
       case 'regen-beats': window.regenerateStageBeats(); break;
+      case 'pause-stage': window.handleStageControl('toggle-pause'); break;
+      case 'cancel-stage': window.handleStageControl('cancel'); break;
       case 'writeback': window.acceptCheckpointWriteback(); break;
       case 'enter-reader': window.enterStudioReader(); break;
       case 'toast': if (window.toast) window.toast(el.dataset.msg || ''); break;
@@ -1276,6 +1529,14 @@
 
   document.addEventListener('input', (e) => {
     if (!e.target.closest || !e.target.closest('#view-original')) return;
+    if (e.target.id === 'st4_stage_sel') return;
+    if (e.target.id === 'c1_name_badge') {
+      const txt = e.target.textContent.trim();
+      setElText('c1_mono', (txt || '主')[0]);
+    } else if (e.target.id === 'c2_name_badge') {
+      const txt = e.target.textContent.trim();
+      setElText('c2_mono', (txt || '角')[0]);
+    }
     if (e.target.tagName === 'TEXTAREA') autosize(e.target.parentElement);
     updateSummaryBar();
   });

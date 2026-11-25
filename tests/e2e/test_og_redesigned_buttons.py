@@ -65,6 +65,13 @@ def test_redesigned_original_studio_every_button(page, live_server):
                             "relation_type": "ally_friend",
                             "role_desc": "机械师，寻回失踪哥哥",
                             "bond_or_conflict": "掌握引擎核心钥匙",
+                        },
+                        {
+                            "id": "char_key_2",
+                            "name": "雷欧",
+                            "relation_type": "rival_antagonist",
+                            "role_desc": "星盗首领",
+                            "bond_or_conflict": "追杀主角团夺取星图",
                         }
                     ],
                     "ending": {"climax_vision": "舰队冲破引力锁跃迁至新星域。"},
@@ -89,13 +96,26 @@ def test_redesigned_original_studio_every_button(page, live_server):
                                 "climax_hook": "空间站叛变爆发",
                             },
                         },
+                        {
+                            "stage_index": 3,
+                            "title": "第三卷：星海终章",
+                            "expected_chapters": 10,
+                            "anchors": {
+                                "stage_goal": "摧毁黑洞跃迁干扰塔",
+                                "climax_hook": "星舰群齐射破封锁",
+                            },
+                        },
                     ],
                 },
             }),
         )
 
+    captured_stage_requests = {"beats": [], "start": [], "checkpoint": []}
+
     def handle_beats(route):
         req_data = route.request.post_data_json or {}
+        st_idx = req_data.get("stage_index", 1)
+        captured_stage_requests["beats"].append((req_data.get("action"), st_idx))
         if req_data.get("action") == "save":
             route.continue_()
             return
@@ -105,23 +125,26 @@ def test_redesigned_original_studio_every_button(page, live_server):
             body=json.dumps({
                 "code": 200,
                 "data": {
-                    "stage_index": 1,
+                    "stage_index": st_idx,
                     "beats": [
-                        {"chapter_offset": 1, "title": "废墟拾荒夜", "beat_type": "setup", "summary": "发现古老星图芯片"},
-                        {"chapter_offset": 2, "title": "引擎点火爆发", "beat_type": "climax", "summary": "击退追兵突破封锁"},
-                        {"chapter_offset": 3, "title": "深空坐标显影", "beat_type": "transition", "summary": "指向未知星域"},
+                        {"chapter_offset": 1, "title": f"第{st_idx}卷-废墟拾荒夜", "beat_type": "setup", "summary": "发现古老星图芯片"},
+                        {"chapter_offset": 2, "title": f"第{st_idx}卷-引擎点火爆发", "beat_type": "climax", "summary": "击退追兵突破封锁"},
+                        {"chapter_offset": 3, "title": f"第{st_idx}卷-深空坐标显影", "beat_type": "transition", "summary": "指向未知星域"},
                     ],
                 },
             }),
         )
 
     def handle_stage_start(route):
+        req_data = route.request.post_data_json or {}
+        st_idx = req_data.get("stage_index", 1)
+        captured_stage_requests["start"].append(st_idx)
         route.fulfill(
             status=202,
             content_type="application/json",
             body=json.dumps({
                 "code": 202,
-                "data": {"job_id": "mock_stage_job_1", "stream_url": "/api/novel/original/stage/stream/mock_stage_job_1"},
+                "data": {"job_id": f"mock_stage_job_{st_idx}", "stream_url": f"/api/novel/original/stage/stream/mock_stage_job_{st_idx}"},
             }),
         )
 
@@ -135,6 +158,8 @@ def test_redesigned_original_studio_every_button(page, live_server):
 
     def handle_checkpoint(route):
         req_data = route.request.post_data_json or {}
+        st_idx = req_data.get("stage_index", 1)
+        captured_stage_requests["checkpoint"].append((req_data.get("action"), st_idx))
         if req_data.get("action") == "evaluate":
             route.fulfill(
                 status=200,
@@ -153,7 +178,7 @@ def test_redesigned_original_studio_every_button(page, live_server):
             route.fulfill(
                 status=200,
                 content_type="application/json",
-                body=json.dumps({"code": 200, "data": {"next_stage_index": 2}}),
+                body=json.dumps({"code": 200, "data": {"next_stage_index": st_idx + 1}}),
             )
 
     page.route("**/api/novel/original/deduce", handle_deduce)
@@ -292,7 +317,7 @@ def test_redesigned_original_studio_every_button(page, live_server):
     expect(edit_btn).to_have_text("编辑锚点")
 
     # 去写作台（工位 4）
-    page.locator("#station_3 button:has-text('去写作台')").click()
+    page.locator("#station_3 [data-stage='1'] button:has-text('去写作台')").click()
     expect(page.locator("#station_4")).to_be_visible()
 
     # =========================================================================
@@ -310,11 +335,22 @@ def test_redesigned_original_studio_every_button(page, live_server):
     page.locator("#btn_regen_beats").click()
     expect(page.locator("#beats_list li")).to_have_count(3, timeout=10000)
 
-    # 一键推演全案弹窗
+    # 一键推演全案弹窗（同时验证 3 个角色 + 3 卷大纲完整回显）
     page.locator("button:has-text('一键推演全案')").click()
     expect(page.locator("#chained_modal")).to_be_visible()
     expect(page.locator("#chained_modal")).to_be_hidden(timeout=10000)
     expect(page.locator("#val_title")).to_have_value("推演星海契约")
+    expect(page.locator("#station_2 .og-extra-char")).to_have_count(1)
+    expect(page.locator("#og_route_list .og-extra-vol")).to_have_count(1)
+    expect(page.locator("#st4_stage_sel option")).to_have_count(3)
+
+    # 验证主角名称可直接改写，联动首字徽章与设定速览
+    page.locator("#step_tab_2").click()
+    c1_badge = page.locator("#c1_name_badge")
+    c1_badge.click()
+    c1_badge.fill("顾青崖")
+    expect(page.locator("#c1_mono")).to_have_text("顾")
+    expect(page.locator("#ov_protagonist")).to_contain_text("顾青崖")
 
     # 切回工位 4 并启动本卷写作
     page.locator("#step_tab_4").click()
@@ -323,13 +359,107 @@ def test_redesigned_original_studio_every_button(page, live_server):
     expect(page.locator("#box_checkpoint")).to_be_visible(timeout=10000)
     expect(page.locator("#checkpoint_modal")).to_be_visible(timeout=10000)
 
-    # 检查点弹窗关闭 & 回写
+    # 检查点弹窗关闭 & 回写（第 1 卷回写后应自动切换至第 2 卷）
     page.locator("#checkpoint_modal button:has-text('稍后处理')").click()
     expect(page.locator("#checkpoint_modal")).to_be_hidden()
     page.locator("#box_checkpoint [data-act='writeback']").click()
+    expect(page.locator("#st4_stage_sel")).to_have_value("2", timeout=5000)
+    expect(page.locator("#st4_cur_title")).to_contain_text("第二卷")
+
+    # 多卷切换验证：在工位 4 触发第 2 卷节拍重新推演与启动写作，验证 stage_index == 2 传递正确
+    page.locator("#btn_regen_beats").click()
+    expect(page.locator("#beats_list li").first).to_contain_text("第2卷-废墟拾荒夜", timeout=10000)
+    page.locator("#btn_run_stage").click()
+    expect(page.locator("#checkpoint_modal")).to_be_visible(timeout=10000)
+    page.locator("#checkpoint_modal button:has-text('稍后处理')").click()
+
+    # 下拉框切回第 1 卷再切到第 2 卷
+    page.select_option("#st4_stage_sel", "1")
+    expect(page.locator("#st4_cur_title")).to_contain_text("第一卷")
+    page.select_option("#st4_stage_sel", "2")
+    expect(page.locator("#st4_cur_title")).to_contain_text("第二卷")
+
+    assert ("generate", 2) in captured_stage_requests["beats"], f"未记录第2卷节拍生成请求: {captured_stage_requests}"
+    assert 2 in captured_stage_requests["start"], f"未记录第2卷启动写作请求: {captured_stage_requests}"
+    assert ("evaluate", 2) in captured_stage_requests["checkpoint"], f"未记录第2卷检查点评估请求: {captured_stage_requests}"
+
+    # 切回演示预设，确认之前动态生成的多余人物/分卷卡片被彻底清理
+    page.locator("#btn_demo_romance").click()
+    expect(page.locator("#station_2 .og-extra-char")).to_have_count(0)
+    expect(page.locator("#og_route_list .og-extra-vol")).to_have_count(0)
+    expect(page.locator("#st4_stage_sel option")).to_have_count(2)
 
     # 管理模型跳转按钮
     page.locator("#btn_manage_og").click()
     expect(page.locator("#view-settings")).to_be_visible()
 
+    assert len(errors) == 0, f"发现前端控制台或脚本错误: {errors}"
+
+
+def test_stage_runner_pause_resume_cancel_and_sse_payload(page, live_server):
+    """验证运行中暂停、继续写作、取消按钮及真实后端 SSE payload.data 解包。"""
+    errors = _attach_error_listeners(page)
+    control_actions = []
+
+    page.route("**/api/novel/original/stage/start", lambda route: route.fulfill(
+        status=202,
+        content_type="application/json",
+        body=json.dumps({
+            "code": 202,
+            "data": {"job_id": "mock_ctrl_job_1", "stream_url": "/api/novel/original/stage/stream/mock_ctrl_job_1"},
+        }),
+    ))
+
+    def handle_stream(route):
+        # 使用真实后端格式：{"job_id": "...", "data": {...}}，只推送 init/chapter_start/token 不立刻完结以便测试暂停取消
+        sse_body = (
+            'event: init\ndata: {"job_id":"mock_ctrl_job_1","data":{"total_chapters":4}}\n\n'
+            'event: chapter_start\ndata: {"job_id":"mock_ctrl_job_1","data":{"chapter_offset":1,"global_chapter_idx":1,"title":"初试风波"}}\n\n'
+            'event: token\ndata: {"job_id":"mock_ctrl_job_1","data":{"token":"细雨落在青石巷口。"}}\n\n'
+        )
+        route.fulfill(status=200, content_type="text/event-stream", body=sse_body)
+
+    def handle_control(route):
+        req_data = route.request.post_data_json or {}
+        control_actions.append((req_data.get("job_id"), req_data.get("action")))
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps({"code": 200, "msg": "ok"}),
+        )
+
+    page.route("**/api/novel/original/stage/stream/**", handle_stream)
+    page.route("**/api/novel/original/stage/control", handle_control)
+
+    page.goto(live_server)
+    page.wait_for_selector("#view-original.active")
+    page.locator("#step_tab_4").click()
+
+    page.locator("#btn_run_stage").click()
+    expect(page.locator("#stage_runner_view")).to_be_visible()
+    expect(page.locator("#runner_current_title")).to_contain_text("第 1 章《初试风波》", timeout=5000)
+    expect(page.locator("#runner_typewriter_content")).to_contain_text("细雨落在青石巷口。")
+
+    # 暂停 -> 继续 -> 取消
+    pause_btn = page.locator("#btn_runner_pause")
+    cancel_btn = page.locator("#btn_runner_cancel")
+    expect(pause_btn).to_be_visible()
+    expect(pause_btn).to_have_text("暂停")
+    pause_btn.click()
+    expect(pause_btn).to_have_text("继续写作")
+    expect(page.locator("#runner_progress_text")).to_have_text("已暂停")
+
+    pause_btn.click()
+    expect(pause_btn).to_have_text("暂停")
+    expect(page.locator("#runner_progress_text")).to_have_text("继续写作中…")
+
+    cancel_btn.click()
+    expect(page.locator("#stage_runner_view")).to_be_hidden()
+    expect(page.locator("#btn_run_stage")).to_be_visible()
+
+    assert control_actions == [
+        ("mock_ctrl_job_1", "pause"),
+        ("mock_ctrl_job_1", "resume"),
+        ("mock_ctrl_job_1", "cancel"),
+    ], f"实际控制调用与预期不符: {control_actions}"
     assert len(errors) == 0, f"发现前端控制台或脚本错误: {errors}"
