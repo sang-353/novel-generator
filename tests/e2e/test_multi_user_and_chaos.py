@@ -204,8 +204,12 @@ def test_chaos_backend_direct_concurrent_generate_returns_409(live_server):
         "title": "并发接口冲突测试书",
         "genre": "科幻",
         "setting": "测试直连并发",
-        "chapters": 1,
-        "outline": json.dumps({"chapters": [{"title": "第1章 序", "points": "要点"}]})
+        "chapters": 5,
+        "outline": json.dumps({
+            "chapters": [
+                {"title": f"第{i}章 序", "points": "要点"} for i in range(1, 6)
+            ]
+        })
     }
 
     url = f"{live_server}/api/generate"
@@ -350,6 +354,22 @@ def test_chaos_refresh_during_generation(page, live_server, test_env_setup):
     page.fill("#val_title", "刷新中断测试书")
     page.locator("#station_1 .og-chip", has_text="都市言情").click()
     page.fill("#val_logline", "测试生成中途强制刷新。")
+    beats_payload = [
+        {"chapter_offset": i, "title": f"刷新第{i}章", "beat_type": "normal", "summary": "推进剧情"}
+        for i in range(1, 11)
+    ]
+    page.evaluate(f"""() => {{
+        return fetch('/api/novel/original/stage/beats', {{
+            method: 'POST',
+            headers: {{'Content-Type': 'application/json'}},
+            body: JSON.stringify({{
+                novel_id: '刷新中断测试书',
+                stage_index: 1,
+                action: 'save',
+                beats: {json.dumps(beats_payload)}
+            }})
+        }});
+    }}""")
     page.locator("#step_tab_4").click()
     page.wait_for_timeout(200)
 

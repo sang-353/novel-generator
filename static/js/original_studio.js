@@ -329,7 +329,7 @@
     }
   }
 
-  window.chooseTrope = function(card) {
+  window.chooseTrope = function(card, silent) {
     if (!card) return;
     const parent = card.parentElement;
     if (parent) {
@@ -338,10 +338,39 @@
     card.classList.add('active');
     const titleEl = card.querySelector('h4');
     const descEl = card.querySelector('p');
-    if (titleEl && descEl) {
-      setElVal('selected_trope_val', `${titleEl.textContent.trim()}: ${descEl.textContent.trim()}`);
+    const cardLabel = titleEl ? titleEl.textContent.trim() : '';
+    const cardDesc = (card.dataset && card.dataset.logline) ? card.dataset.logline.trim() : (descEl ? descEl.textContent.trim() : '');
+    if (cardLabel && cardDesc) {
+      setElVal('selected_trope_val', `${cardLabel}: ${cardDesc}`);
     }
+
+    const dataTitle = (card.dataset && card.dataset.title) ? card.dataset.title.trim() : '';
+    const dataGenre = (card.dataset && card.dataset.genre) ? card.dataset.genre.trim() : '';
+    let derivedTitle = dataTitle;
+    if (!derivedTitle && cardLabel) {
+      const colonIdx = cardLabel.indexOf('：');
+      derivedTitle = colonIdx > -1 ? cardLabel.slice(colonIdx + 1).trim() : cardLabel;
+      if (titleEl && titleEl.id === 'trope_t1' && safeVal('val_title').trim() === PRESETS.romance.meta.title) {
+        derivedTitle = PRESETS.romance.meta.title;
+      }
+    }
+    if (derivedTitle && !state.lockedFields.has('title')) {
+      setElVal('val_title', derivedTitle);
+      state.novelId = derivedTitle;
+    }
+    if (cardDesc && !state.lockedFields.has('logline')) {
+      setElVal('val_logline', cardDesc);
+    }
+    if (dataGenre) {
+      setElVal('val_genre', dataGenre);
+      syncGenreChips(dataGenre);
+    }
+    autosize(document);
+    updateSummaryBar();
     saveOgDraft();
+    if (!silent && window.toast && derivedTitle) {
+      window.toast(`已套用灵感《${derivedTitle}》，可微调或点击「一键推演全案」补全设定`);
+    }
   };
 
   window.clearTropeSelection = function() {
@@ -377,12 +406,14 @@
       if (!tropes.length) throw new Error('未返回灵感列表');
       container.innerHTML = tropes.slice(0, 3).map((tp, idx) => {
         const title = tp.label || tp.title || `新灵感 ${idx + 1}`;
+        const bookTitle = tp.title || '';
+        const genreVal = tp.genre || '';
         const desc = tp.storyline || tp.setting || '点击采用此脑洞继续创作';
-        return `<div class="og-trope${idx === 0 ? ' active' : ''}" role="button" tabindex="0" onclick="chooseTrope(this)">
+        return `<div class="og-trope${idx === 0 ? ' active' : ''}" role="button" tabindex="0" data-title="${esc(bookTitle)}" data-genre="${esc(genreVal)}" data-logline="${esc(desc)}" onclick="chooseTrope(this)">
           <h4>${esc(title)}</h4><p>${esc(desc)}</p></div>`;
       }).join('');
       const firstCard = container.querySelector('.og-trope');
-      if (firstCard) window.chooseTrope(firstCard);
+      if (firstCard) window.chooseTrope(firstCard, true);
       if (window.toast) window.toast('已为您刷新一批新灵感脑洞');
     } catch (err) {
       if (window.toast) window.toast(`刷新灵感失败: ${err.message}`);
@@ -1244,6 +1275,7 @@
         }
         state.activeJobId = null;
         state.isStagePaused = false;
+        saveOgDraft();
         setRunnerControls(false, false);
         removeRunnerCaret(getEl('runner_typewriter_content'));
         const runnerView = getEl('stage_runner_view');
@@ -1256,6 +1288,141 @@
     }
   };
 
+  function bindRunnerEventSource(streamUrl, stIdx) {
+    const runnerView = getEl('stage_runner_view');
+    const runnerContent = getEl('runner_typewriter_content');
+    const runnerTitle = getEl('runner_current_title');
+    let runnerChars = 0;
+    let runnerChapterLabel = '正在写作';
+
+    if (state.eventSource) state.eventSource.close();
+    const es = new EventSource(streamUrl);
+    state.eventSource = es;
+
+    es.addEventListener('init', (e) => {
+      const d = unwrapSseData(e);
+      if (d && d.total_chapters) state.runnerTotalChapters = Number(d.total_chapters) || 0;
+      setRunnerProgress(10, '节拍就绪');
+    });
+
+    es.addEventListener('chapter_start', (e) => {
+      const d = unwrapSseData(e);
+      const chOff = Number(d.chapter_offset || d.global_chapter_idx || 1);
+      const total = state.runnerTotalChapters || Math.max(chOff, 1);
+      const pct = Math.min(95, Math.round((chOff - 0.5) / total * 100));
+      runnerChars = 0;
+      runnerChapterLabel = `第 ${chOff}/${total} 章`;
+      if (runnerTitle) runnerTitle.textContent = `正在生成：第 ${d.global_chapter_idx} 章《${d.title}》`;
+      setRunnerProgress(pct, runnerChapterLabel);
+      if (runnerContent) {
+        removeRunnerCaret(runnerContent);
+        runnerContent.insertAdjacentHTML('beforeend', `<h3>第 ${d.global_chapter_idx} 章：${esc(d.title)}</h3><p></p>`);
+        ensureRunnerCaret(runnerContent);
+      }
+    });
+
+    es.addEventListener('token', (e) => {
+      const d = unwrapSseData(e);
+      if (runnerContent && d.token !== undefined) {
+        const tokStr = String(d.token);
+        runnerChars += tokStr.replace(/\s+/g, '').length;
+        appendRunnerTokenHtml(runnerContent, tokStr);
+        runnerContent.scrollTop = runnerContent.scrollHeight;
+        setRunnerProgress(null, `${runnerChapterLabel} · 已写 ${runnerChars} 字`);
+      }
+    });
+
+    es.addEventListener('status_change', (e) => {
+      const d = unwrapSseData(e);
+      if (d.status === 'paused') {
+        state.isStagePaused = true;
+        setRunnerControls(true, true);
+        setRunnerProgress(null, '已暂停');
+        setRunnerCaretPaused(runnerContent, true);
+      } else if (d.status === 'writing') {
+        state.isStagePaused = false;
+        setRunnerControls(true, false);
+        setRunnerProgress(null, '写作中…');
+        setRunnerCaretPaused(runnerContent, false);
+      }
+    });
+
+    es.addEventListener('cancelled', () => {
+      es.close();
+      state.eventSource = null;
+      state.activeJobId = null;
+      state.isStagePaused = false;
+      saveOgDraft();
+      setRunnerControls(false, false);
+      removeRunnerCaret(runnerContent);
+      if (runnerView) runnerView.style.display = 'none';
+    });
+
+    es.addEventListener('stage_complete', () => {
+      es.close();
+      state.eventSource = null;
+      state.activeJobId = null;
+      saveOgDraft();
+      setRunnerControls(false, false);
+      removeRunnerCaret(runnerContent);
+      setRunnerProgress(100, '本卷完成');
+      const box = getEl('box_checkpoint');
+      if (box) box.style.display = 'block';
+      if (window.toast) window.toast(`第 ${stIdx} 卷全部章节已生成，正在打开阶段复盘`);
+      setTimeout(() => window.openCheckpointModal(stIdx), 600);
+    });
+
+    es.addEventListener('error', () => {
+      es.close();
+      state.eventSource = null;
+      removeRunnerCaret(runnerContent);
+      if (!state.activeJobId) return;
+      setRunnerProgress(null, '连接已断开（可继续控停）');
+      if (window.toast) window.toast('实时流连接已断开，或任务已结束');
+    });
+  }
+
+  async function resumeStageStreamIfActive(jobId, fallbackStage) {
+    if (!jobId) return;
+    try {
+      const res = await window.api(`/api/novel/original/stage/status/${encodeURIComponent(jobId)}`);
+      const info = res && res.data;
+      if (!info || !info.is_active) {
+        if (state.activeJobId === jobId) {
+          state.activeJobId = null;
+          saveOgDraft();
+        }
+        return;
+      }
+      const stIdx = parseInt(info.stage_index || fallbackStage || state.currentStageIndex || '1', 10) || 1;
+      state.activeJobId = jobId;
+      state.currentStageIndex = stIdx;
+      state.isStagePaused = (info.status === 'paused');
+      window.goToStep(4, stIdx);
+
+      const runnerView = getEl('stage_runner_view');
+      const runnerContent = getEl('runner_typewriter_content');
+      const runnerTitle = getEl('runner_current_title');
+      const chkBox = getEl('box_checkpoint');
+      if (chkBox) chkBox.style.display = 'none';
+      if (runnerView) runnerView.style.display = 'block';
+      if (runnerTitle) runnerTitle.textContent = `已重连第 ${stIdx} 卷写作任务…`;
+      setRunnerControls(true, state.isStagePaused);
+      setRunnerProgress(15, state.isStagePaused ? '已暂停' : '已重连实况流…');
+      if (runnerContent) {
+        runnerContent.innerHTML = `<p class="og-note">页面刷新后已自动重连第 ${stIdx} 卷写作实况流，等待后续章节推送…</p>`;
+        ensureRunnerCaret(runnerContent);
+        setRunnerCaretPaused(runnerContent, state.isStagePaused);
+      }
+      bindRunnerEventSource(`/api/novel/original/stage/stream/${encodeURIComponent(jobId)}`, stIdx);
+    } catch (err) {
+      if (state.activeJobId === jobId) {
+        state.activeJobId = null;
+        saveOgDraft();
+      }
+    }
+  }
+
   window.startStageExecution = async function(stageIndex) {
     const stIdx = parseInt(stageIndex || state.currentStageIndex || '1', 10) || 1;
     state.currentStageIndex = stIdx;
@@ -1266,8 +1433,6 @@
     const runnerContent = getEl('runner_typewriter_content');
     const runnerTitle = getEl('runner_current_title');
     const chkBox = getEl('box_checkpoint');
-    let runnerChars = 0;
-    let runnerChapterLabel = '正在写作';
 
     if (chkBox) chkBox.style.display = 'none';
     if (runnerView) runnerView.style.display = 'block';
@@ -1290,90 +1455,8 @@
       const jobId = res.data.job_id;
       const streamUrl = res.data.stream_url;
       state.activeJobId = jobId;
-
-      if (state.eventSource) state.eventSource.close();
-      const es = new EventSource(streamUrl);
-      state.eventSource = es;
-
-      es.addEventListener('init', (e) => {
-        const d = unwrapSseData(e);
-        if (d && d.total_chapters) state.runnerTotalChapters = Number(d.total_chapters) || 0;
-        setRunnerProgress(10, '节拍就绪');
-      });
-
-      es.addEventListener('chapter_start', (e) => {
-        const d = unwrapSseData(e);
-        const chOff = Number(d.chapter_offset || d.global_chapter_idx || 1);
-        const total = state.runnerTotalChapters || Math.max(chOff, 1);
-        const pct = Math.min(95, Math.round((chOff - 0.5) / total * 100));
-        runnerChars = 0;
-        runnerChapterLabel = `第 ${chOff}/${total} 章`;
-        if (runnerTitle) runnerTitle.textContent = `正在生成：第 ${d.global_chapter_idx} 章《${d.title}》`;
-        setRunnerProgress(pct, runnerChapterLabel);
-        if (runnerContent) {
-          removeRunnerCaret(runnerContent);
-          runnerContent.insertAdjacentHTML('beforeend', `<h3>第 ${d.global_chapter_idx} 章：${esc(d.title)}</h3><p></p>`);
-          ensureRunnerCaret(runnerContent);
-        }
-      });
-
-      es.addEventListener('token', (e) => {
-        const d = unwrapSseData(e);
-        if (runnerContent && d.token !== undefined) {
-          const tokStr = String(d.token);
-          runnerChars += tokStr.replace(/\s+/g, '').length;
-          appendRunnerTokenHtml(runnerContent, tokStr);
-          runnerContent.scrollTop = runnerContent.scrollHeight;
-          setRunnerProgress(null, `${runnerChapterLabel} · 已写 ${runnerChars} 字`);
-        }
-      });
-
-      es.addEventListener('status_change', (e) => {
-        const d = unwrapSseData(e);
-        if (d.status === 'paused') {
-          state.isStagePaused = true;
-          setRunnerControls(true, true);
-          setRunnerProgress(null, '已暂停');
-          setRunnerCaretPaused(runnerContent, true);
-        } else if (d.status === 'writing') {
-          state.isStagePaused = false;
-          setRunnerControls(true, false);
-          setRunnerProgress(null, '写作中…');
-          setRunnerCaretPaused(runnerContent, false);
-        }
-      });
-
-      es.addEventListener('cancelled', () => {
-        es.close();
-        state.eventSource = null;
-        state.activeJobId = null;
-        state.isStagePaused = false;
-        setRunnerControls(false, false);
-        removeRunnerCaret(runnerContent);
-        if (runnerView) runnerView.style.display = 'none';
-      });
-
-      es.addEventListener('stage_complete', () => {
-        es.close();
-        state.eventSource = null;
-        state.activeJobId = null;
-        setRunnerControls(false, false);
-        removeRunnerCaret(runnerContent);
-        setRunnerProgress(100, '本卷完成');
-        const box = getEl('box_checkpoint');
-        if (box) box.style.display = 'block';
-        if (window.toast) window.toast(`第 ${stIdx} 卷全部章节已生成，正在打开阶段复盘`);
-        setTimeout(() => window.openCheckpointModal(stIdx), 600);
-      });
-
-      es.addEventListener('error', () => {
-        es.close();
-        state.eventSource = null;
-        removeRunnerCaret(runnerContent);
-        if (!state.activeJobId) return;
-        setRunnerProgress(null, '连接已断开（可继续控停）');
-        if (window.toast) window.toast('实时流连接已断开，或任务已结束');
-      });
+      saveOgDraft();
+      bindRunnerEventSource(streamUrl, stIdx);
 
     } catch (err) {
       setRunnerControls(false, false);
@@ -1454,12 +1537,21 @@
     }
   };
 
-  window.enterStudioReader = function() {
+  window.enterStudioReader = async function() {
     const novelId = safeVal('val_title').trim() || state.novelId;
     if (!novelId) {
       if (window.toast) window.toast('请先命名并创建作品后再进入阅读器');
       return;
     }
+    try {
+      const res = await window.api('/api/novels');
+      const list = Array.isArray(res) ? res : ((res && Array.isArray(res.novels)) ? res.novels : []);
+      const exists = list.some(n => n && (n.name === novelId || n.title === novelId));
+      if (!exists) {
+        if (window.toast) window.toast('尚未生成正文，请先开始本卷写作');
+        return;
+      }
+    } catch (e) { /* 查询异常时交由阅读器自身兜底提示 */ }
     if (typeof window.openReader === 'function') {
       window.openReader(novelId);
     } else {
@@ -1477,6 +1569,7 @@
         novelId: state.novelId,
         activeStation: state.activeStation,
         currentStageIndex: state.currentStageIndex,
+        activeJobId: state.activeJobId || null,
         spec: collectSpecFromForm(),
         updatedAt: Date.now(),
       };
@@ -1499,6 +1592,10 @@
       autosize(document);
       state.isRestoring = false;
       state.draftRestored = true;
+      if (draft.activeJobId) {
+        state.activeJobId = draft.activeJobId;
+        resumeStageStreamIfActive(draft.activeJobId, draft.currentStageIndex || 1);
+      }
       return true;
     } catch (e) {
       state.isRestoring = false;

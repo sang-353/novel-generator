@@ -567,7 +567,10 @@ class StageRunner:
             beats = runtime.get("current_stage_beats") or []
             if not beats:
                 beats = generate_stage_beats(self.novel_id, self.stage_index, self.provider_id)
+                runtime = load_novel_runtime(self.novel_id)
 
+            runtime["current_stage_index"] = self.stage_index
+            runtime["current_stage_beats"] = beats
             runtime["status"] = "writing"
             runtime["active_job"] = {
                 "job_id": self.job_id,
@@ -656,10 +659,12 @@ class StageRunner:
 
                 # 更新故事状态与节拍标记
                 beat["is_generated"] = True
+                runtime["current_stage_beats"] = beats
                 save_novel_runtime(self.novel_id, runtime)
                 new_story_state = update_story_state_after_chapter(
                     self.novel_id, ch_title, body, global_idx, self.provider_id
                 )
+                runtime["story_state"] = new_story_state
 
                 self.emit("chapter_end", {
                     "global_chapter_idx": global_idx,
@@ -669,6 +674,7 @@ class StageRunner:
                 self.emit("story_state_sync", new_story_state)
 
             # 本阶段全部完成，进入检查点评审态
+            runtime["current_stage_beats"] = beats
             runtime["status"] = "awaiting_review"
             runtime["active_job"] = None
             save_novel_runtime(self.novel_id, runtime)

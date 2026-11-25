@@ -97,10 +97,6 @@ class FakeLLMHandler(BaseHTTPRequestHandler):
         if target_feature:
             if target_feature == "suggest-tropes":
                 feature_matches = any(k in full_prompt for k in ["灵感开局", "策划", "suggest-tropes"])
-            elif target_feature == "generate-bible":
-                feature_matches = any(k in full_prompt for k in ["世界观与角色设定集", "World & Character Bible", "generate-bible"])
-            elif target_feature == "outline":
-                feature_matches = any(k in full_prompt for k in ["章节大纲", "outline"]) and not any(k in full_prompt for k in ["世界观与角色设定集", "World & Character Bible"])
             elif target_feature == "generate-variants":
                 feature_matches = any(k in full_prompt for k in ["剧情小样", "variants"])
             elif target_feature == "refine-field":
@@ -173,10 +169,6 @@ class FakeLLMHandler(BaseHTTPRequestHandler):
         if target_feature:
             if target_feature == "suggest-tropes":
                 feature_matches = any(k in full_prompt for k in ["灵感开局", "策划", "suggest-tropes"])
-            elif target_feature == "generate-bible":
-                feature_matches = any(k in full_prompt for k in ["世界观与角色设定集", "World & Character Bible", "generate-bible"])
-            elif target_feature == "outline":
-                feature_matches = any(k in full_prompt for k in ["章节大纲", "outline"]) and not any(k in full_prompt for k in ["世界观与角色设定集", "World & Character Bible"])
             elif target_feature == "generate-variants":
                 feature_matches = any(k in full_prompt for k in ["剧情小样", "variants"])
             elif target_feature == "refine-field":
@@ -312,29 +304,6 @@ class FakeLLMHandler(BaseHTTPRequestHandler):
                     "recommended_climax_hook": "现场对峙揭露核心秘密",
                     "recommended_transition": "引出全书终极抉择",
                 },
-            }, ensure_ascii=False)
-
-        elif "世界观与角色设定集" in full_prompt or "generate-bible" in full_prompt:
-            return json.dumps({
-                "suggested_title": "星渊法则",
-                "candidate_titles": ["星渊法则", "深空遗落", "机械神谕", "归零纪元"],
-                "setting": "未来赛博与太空文明碰撞的时代，人类在太阳系边缘发现了远古遗迹。",
-                "characters": [
-                    {"name": "林越", "role": "拾荒者/破译官", "desc": "机警沉稳，擅长机械改造", "goal": "探寻父亲失踪真相"},
-                    {"name": "零", "role": "仿生人向导", "desc": "外表冷漠，逻辑核心藏有秘密", "goal": "寻找自我意识起源"}
-                ],
-                "conflict": "旧人类势力与超级智脑的最终对决",
-                "tone": "冷硬科幻，克制细腻，硬派悬疑"
-            }, ensure_ascii=False)
-
-        elif "章节大纲" in full_prompt or "outline" in full_prompt:
-            return json.dumps({
-                "logline": "一个拾荒者在边缘星系挖出史前遗迹，卷入星际阴谋的故事。",
-                "chapters": [
-                    {"title": "第1章 废墟拾荒", "points": "林越在废弃矿井遭遇磁暴，意外挖出一枚发光的古老金属核。"},
-                    {"title": "第2章 隐秘追杀", "points": "赏金猎人追踪而至，林越被迫启动金属核，唤醒了沉睡的仿生人零。"},
-                    {"title": "第3章 破晓逃亡", "points": "两人搭乘货船逃离空间站，智脑监控网全面收紧。"}
-                ]
             }, ensure_ascii=False)
 
         elif "灵感开局" in full_prompt or "策划" in full_prompt or "suggest-tropes" in full_prompt:

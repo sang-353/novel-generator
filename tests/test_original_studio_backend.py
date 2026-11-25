@@ -326,3 +326,48 @@ def test_api_stage_checkpoint_evaluate_and_writeback(client):
         rt = load_novel_runtime(novel_id)
         assert rt["current_stage_index"] == 2
         assert rt["status"] == "idle"
+
+
+def test_stage_runner_preserves_generated_beats_and_story_state(client):
+    """P1: StageRunner 自动生成节拍并写作时，不得用旧 runtime 副本把节拍或滚动状态覆盖写空。"""
+    from original_studio.engine import StageRunner
+
+    novel_id = "节拍状态保留测试"
+    spec = _sample_valid_spec()
+    spec["meta"]["title"] = novel_id
+    save_novel_spec(novel_id, spec)
+    save_novel_runtime(novel_id, default_runtime())
+
+    fake_beats = json.dumps({
+        "beats": [
+            {"chapter_offset": 1, "title": "初遇风波", "beat_type": "setup", "summary": "合租开端", "planted_clues": ["旧怀表"]},
+            {"chapter_offset": 2, "title": "暗流涌动", "beat_type": "climax", "summary": "身份初露", "planted_clues": ["密码本"]},
+        ]
+    }, ensure_ascii=False)
+    fake_delta_1 = json.dumps({
+        "summary_delta": "第一章完成：两人达成合租协议。",
+        "character_updates": [{"name": "陆承舟", "current_status": "书房调香", "relationship": "初识"}],
+        "new_clues": ["旧怀表刻字"],
+        "resolved_clues": [],
+    }, ensure_ascii=False)
+    fake_delta_2 = json.dumps({
+        "summary_delta": "第二章完成：发现密码本线索。",
+        "character_updates": [{"name": "姜幼柠", "current_status": "画室写生", "relationship": "升温"}],
+        "new_clues": ["密码本编号"],
+        "resolved_clues": [],
+    }, ensure_ascii=False)
+
+    runner = StageRunner(novel_id, stage_index=1)
+    with patch("original_studio.engine.chat", side_effect=[(fake_beats, "stop"), (fake_delta_1, "stop"), (fake_delta_2, "stop")]), \
+         patch("original_studio.engine.generate_text", side_effect=["第一章正文内容。", "第二章正文内容。"]):
+        runner._run()
+
+    rt = load_novel_runtime(novel_id)
+    assert rt["status"] == "awaiting_review"
+    assert rt["active_job"] is None
+    assert len(rt["current_stage_beats"]) == 2
+    assert all(b.get("is_generated") is True for b in rt["current_stage_beats"])
+    assert "第一章完成" in rt["story_state"]["rolling_summary"]
+    assert "第二章完成" in rt["story_state"]["rolling_summary"]
+    assert "陆承舟" in rt["story_state"]["characters_ledger"]
+    assert len(rt["story_state"]["clues_ledger"]) == 2

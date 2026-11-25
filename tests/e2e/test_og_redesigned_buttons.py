@@ -711,5 +711,166 @@ def test_og_zero_emoji_in_view_original(page, live_server):
         assert len(found) == 0, f"工位 {step} 下 #view-original 发现 emoji 残留: {found}"
 
 
+def test_og_refresh_reconnects_active_stage_runner(page, live_server):
+    """P2/P3-1: 验证阶段写作中途刷新页面后自动查询任务状态、恢复运行面板并重连 SSE 流。"""
+    errors = _attach_error_listeners(page)
+    stream_hits = []
+
+    page.route("**/api/novel/original/stage/start", lambda route: route.fulfill(
+        status=202,
+        content_type="application/json",
+        body=json.dumps({
+            "code": 202,
+            "data": {"job_id": "mock_reconn_job", "stream_url": "/api/novel/original/stage/stream/mock_reconn_job"},
+        }),
+    ))
+    page.route("**/api/novel/original/stage/status/mock_reconn_job", lambda route: route.fulfill(
+        status=200,
+        content_type="application/json",
+        body=json.dumps({
+            "code": 200,
+            "data": {"job_id": "mock_reconn_job", "stage_index": 1, "status": "writing", "is_active": True},
+        }),
+    ))
+
+    def handle_stream(route):
+        stream_hits.append(route.request.url)
+        if len(stream_hits) == 1:
+            # 首次启动推送第 1 章片段，未发 stage_complete
+            sse_body = (
+                'event: init\ndata: {"job_id":"mock_reconn_job","data":{"total_chapters":2}}\n\n'
+                'event: chapter_start\ndata: {"job_id":"mock_reconn_job","data":{"chapter_offset":1,"global_chapter_idx":1,"title":"初章"}}\n\n'
+                'event: token\ndata: {"job_id":"mock_reconn_job","data":{"token":"第一段内容。"}}\n\n'
+            )
+        else:
+            # 刷新重连后推送第 2 章与 stage_complete
+            sse_body = (
+                'event: chapter_start\ndata: {"job_id":"mock_reconn_job","data":{"chapter_offset":2,"global_chapter_idx":2,"title":"重连续章"}}\n\n'
+                'event: token\ndata: {"job_id":"mock_reconn_job","data":{"token":"重连后继续写入的正文。"}}\n\n'
+                'event: stage_complete\ndata: {"job_id":"mock_reconn_job","data":{"stage_index":1}}\n\n'
+            )
+        route.fulfill(status=200, content_type="text/event-stream", body=sse_body)
+
+    page.route("**/api/novel/original/stage/stream/**", handle_stream)
+    page.route("**/api/novel/original/stage/checkpoint", lambda route: route.fulfill(
+        status=200,
+        content_type="application/json",
+        body=json.dumps({"code": 200, "data": {"goal_achievement_pct": 92, "deviation_summary": "正常", "character_growth_notes": "稳定", "suggested_next_stage_adjustments": "无"}}),
+    ))
+
+    page.goto(live_server)
+    page.wait_for_selector("#view-original.active")
+    page.locator("#step_tab_4").click()
+    page.locator("#btn_run_stage").click()
+    expect(page.locator("#stage_runner_view")).to_be_visible()
+    expect(page.locator("#runner_typewriter_content")).to_contain_text("第一段内容。")
+
+    # 刷新页面 -> 应自动切回第 4 站、打开运行区并重连 SSE 完成第 2 章与检查点
+    page.reload(wait_until="domcontentloaded")
+    page.wait_for_selector("#view-original.active", timeout=10000)
+    expect(page.locator("#stage_runner_view")).to_be_visible(timeout=5000)
+    expect(page.locator("#runner_typewriter_content")).to_contain_text("重连后继续写入的正文。", timeout=5000)
+    expect(page.locator("#box_checkpoint")).to_be_visible(timeout=5000)
+    assert len(stream_hits) >= 2, f"刷新后未发起 SSE 重连请求: {stream_hits}"
+    assert len(errors) == 0, f"发现前端控制台或脚本错误: {errors}"
+
+
+def test_og_enter_reader_guards_unsaved_novel(page, live_server):
+    """P2/P3-2: 验证尚未生成正文的书名点击「进入 Studio 精修」弹出友好提示且无 404 报错。"""
+    errors = _attach_error_listeners(page)
+    page.goto(live_server)
+    page.wait_for_selector("#view-original.active")
+
+    page.fill("#val_title", "尚未落盘的新书名")
+    page.evaluate("window.enterStudioReader()")
+    page.wait_for_timeout(400)
+
+    expect(page.locator("#toast")).to_contain_text("尚未生成正文")
+    expect(page.locator("#view-original")).to_be_visible()
+    assert len(errors) == 0, f"未生成正文拦截进入阅读器不应引发 404/脚本报错: {errors}"
+
+
+def test_og_localstorage_quota_degradation(page, live_server):
+    """P2/P3-3a: 验证 localStorage 写入抛 QuotaExceededError 时工坊核心交互无报错且正常可用。"""
+    errors = _attach_error_listeners(page)
+    page.add_init_script("""
+      const _origSetItem = Storage.prototype.setItem;
+      Storage.prototype.setItem = function(k, v) {
+        if (k === 'novel_og_studio_draft_v2') {
+          const err = new Error('QuotaExceededError');
+          err.name = 'QuotaExceededError';
+          throw err;
+        }
+        return _origSetItem.apply(this, arguments);
+      };
+    """)
+
+    page.goto(live_server)
+    page.wait_for_selector("#view-original.active")
+
+    page.fill("#val_title", "存储受限测试书")
+    page.locator("#station_1 .og-chip", has_text="科幻未来").click()
+    page.locator("#step_tab_2").click()
+    expect(page.locator("#station_2")).to_be_visible()
+    page.locator("#btn_add_og_char").click()
+    expect(page.locator(".og-extra-char")).to_have_count(1)
+    assert len(errors) == 0, f"localStorage 配额受限降级出现错误: {errors}"
+
+
+def test_og_manual_title_persist_and_enter_reader(page, live_server):
+    """P2/P3-3b: 验证手工改书名后真实写作落盘并点击「进入 Studio 精修」成功跳转阅读器展示正文。"""
+    errors = _attach_error_listeners(page)
+    page.goto(live_server)
+    page.wait_for_selector("#view-original.active")
+
+    page.fill("#val_title", "星海手札")
+    page.locator("#station_1 .og-chip", has_text="科幻未来").click()
+    page.fill("#val_logline", "跨越星海寻找远古信号源的旅程。")
+
+    page.locator("#step_tab_4").click()
+    page.locator("#btn_run_stage").click()
+    expect(page.locator("#box_checkpoint")).to_be_visible(timeout=30000)
+    page.locator("#checkpoint_modal button:has-text('稍后处理')").click()
+
+    page.locator("#box_checkpoint [data-act='enter-reader']").click()
+    expect(page.locator("#rd_main")).to_be_visible(timeout=10000)
+    expect(page.locator("#rd_content")).not_to_be_empty()
+    # 过滤正常 SSE 结束的 ERR_ABORTED
+    non_sse_errors = [e for e in errors if not ("/stage/stream/" in e and "ERR_ABORTED" in e)]
+    assert len(non_sse_errors) == 0, f"改名落盘跳转阅读器出现错误: {non_sse_errors}"
+
+
+def test_og_choose_trope_updates_story_core(page, live_server):
+    """验证切换灵感脑洞卡片及换一批后，同步更新书名、一句话创意、题材与设定速览，且尊重字段锁定。"""
+    errors = _attach_error_listeners(page)
+    page.goto(live_server)
+    page.wait_for_selector("#view-original.active")
+
+    expect(page.locator("#val_title")).to_have_value("微醺心跳定律")
+
+    # 1. 选择第 2 张静态脑洞卡，书名、一句话创意与设定速览应立即切换
+    page.locator("#trope_cards_container .og-trope").nth(1).click()
+    expect(page.locator("#val_title")).to_have_value("年少暗恋者的逆袭重逢")
+    expect(page.locator("#val_logline")).to_have_value(re.compile("学生时代默默守护的小透明"))
+    expect(page.locator("#ov_logline")).to_contain_text("学生时代默默守护的小透明")
+
+    # 2. 锁定一句话创意后点击换一批，书名与题材切换但已锁定创意保留
+    page.locator("#lock_logline").click()
+    page.locator("#btn_refresh_tropes").click()
+    expect(page.locator("#val_title")).to_have_value("深空守望者", timeout=10000)
+    expect(page.locator("#val_genre")).to_have_value("科幻未来")
+    expect(page.locator("#val_logline")).to_have_value(re.compile("学生时代默默守护的小透明"))
+
+    # 3. 解锁后点击换一批后的第 2 张卡，创意随之更新
+    page.locator("#lock_logline").click()
+    page.locator("#trope_cards_container .og-trope").nth(1).click()
+    expect(page.locator("#val_title")).to_have_value("错位温度")
+    expect(page.locator("#val_logline")).to_have_value(re.compile("因家族联姻协议同住屋檐下"))
+    assert len(errors) == 0, f"切换灵感脑洞出现错误: {errors}"
+
+
+
+
+
 
 
