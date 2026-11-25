@@ -19,10 +19,14 @@ from original_studio.engine import (
     start_stage_generation,
 )
 from original_studio.models import (
+    delete_studio_draft,
+    list_studio_drafts,
     load_novel_runtime,
     load_novel_spec,
+    load_studio_draft,
     save_novel_runtime,
     save_novel_spec,
+    save_studio_draft,
     validate_spec,
 )
 
@@ -330,3 +334,42 @@ def api_stage_checkpoint():
 
     else:
         return jsonify({"code": 400, "error": f"未知 action: {action}"}), 400
+
+
+# =========================================================================
+# 8. 原创草稿箱管理 (Drafts Box)
+# =========================================================================
+
+@original_studio_bp.get("/drafts")
+def api_list_drafts():
+    items = list_studio_drafts()
+    return jsonify({"code": 200, "msg": "success", "data": {"drafts": items}})
+
+
+@original_studio_bp.get("/drafts/<draft_id>")
+def api_get_draft(draft_id: str):
+    draft = load_studio_draft(draft_id)
+    if not draft:
+        return jsonify({"code": 404, "error": f"未找到草稿: {draft_id}"}), 404
+    return jsonify({"code": 200, "msg": "success", "data": draft})
+
+
+@original_studio_bp.post("/drafts")
+def api_save_draft():
+    data = request.get_json(force=True) or {}
+    draft_id = data.get("draft_id")
+    try:
+        saved = save_studio_draft(data, draft_id=draft_id)
+        return jsonify({"code": 200, "msg": "draft saved", "data": saved})
+    except ValueError as e:
+        return jsonify({"code": 400, "error": f"草稿参数无效: {str(e)}"}), 400
+    except Exception as e:
+        return jsonify({"code": 500, "error": f"保存草稿失败: {str(e)}"}), 500
+
+
+@original_studio_bp.delete("/drafts/<draft_id>")
+def api_delete_draft(draft_id: str):
+    ok = delete_studio_draft(draft_id)
+    if not ok:
+        return jsonify({"code": 404, "error": f"未找到草稿: {draft_id}"}), 404
+    return jsonify({"code": 200, "msg": "draft deleted", "data": {"draft_id": draft_id}})

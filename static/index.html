@@ -73,6 +73,11 @@
         </nav>
         <div class="og-rail-foot">
           <button type="button" class="og-btn is-primary lg block" onclick="openChainedModal()"><svg class="ic " aria-hidden="true"><use href="#i-bolt"/></svg>一键推演全案</button>
+          <div class="og-draft-bar">
+            <button type="button" class="og-btn sm" id="btn_og_save_draft">保存草稿</button>
+            <button type="button" class="og-btn is-ghost sm" id="btn_og_draft_box">草稿箱</button>
+          </div>
+          <div class="og-draft-status" id="og_draft_status" aria-live="polite"></div>
           <div><label class="og-mini-label" for="og_provider">创作模型</label><div class="og-select-row"><select id="og_provider" class="og-select"></select><button type="button" class="og-btn is-ghost sm" id="btn_manage_og" title="管理模型配置" aria-label="管理模型配置" style="padding:0 9px"><svg class="ic " aria-hidden="true"><use href="#i-sliders"/></svg></button></div></div>
           <div><span class="og-mini-label">演示预设</span><div class="og-seg"><button type="button" id="btn_demo_romance" class="is-on" onclick="loadDemo('romance')">都市言情</button><button type="button" id="btn_demo_fantasy" onclick="loadDemo('fantasy')">赛博修真</button></div></div>
         </div>
@@ -195,8 +200,12 @@
         <div class="og-vol-head">
           <div><div class="og-vol-title" id="st1_title">第一卷：试探同居与薄荷微风</div>
             <div class="og-vol-meta"><span class="og-pill is-now">当前攻坚卷</span><span>预估 10 章 · 约 2 万字</span></div></div>
-          <div class="og-actions"><button type="button" class="og-tool is-ai" data-act="rewrite-vol" data-stage="1"><svg class="ic " aria-hidden="true"><use href="#i-refresh"/></svg><span class="lbl">重写锚点</span></button>
-          <button type="button" class="og-btn is-primary sm" onclick="goToStep(4, 1)">去写作台<svg class="ic " aria-hidden="true"><use href="#i-right"/></svg></button></div>
+          <div class="og-actions">
+            <button type="button" class="og-tool is-ai" data-act="rewrite-vol" data-stage="1"><svg class="ic " aria-hidden="true"><use href="#i-refresh"/></svg><span class="lbl">重写锚点</span></button>
+            <button type="button" class="og-btn sm" data-act="edit-vol" data-stage="1">编辑锚点</button>
+            <button type="button" class="og-btn is-primary sm" onclick="goToStep(4, 1)">去写作台<svg class="ic " aria-hidden="true"><use href="#i-right"/></svg></button>
+            <button type="button" class="og-tool" data-act="remove-vol">移除</button>
+          </div>
         </div>
         <div class="og-anchors">
           <div class="og-anchor" style="--c:#3B5BDB"><b>阶段核心目标</b><p id="st1_a1">两人被迫开启同居生活，在生活习惯的剧烈碰撞中订立三条‘互不越界’的合租契约。</p></div>
@@ -210,7 +219,12 @@
         <div class="og-vol-head">
           <div><div class="og-vol-title" id="st2_title">第二卷：契约情侣与香调升温</div>
             <div class="og-vol-meta"><span class="og-pill">待前卷完成</span><span>预估 12 章 · 约 2.5 万字</span></div></div>
-          <div class="og-actions"><button type="button" class="og-btn sm" data-act="edit-vol" data-stage="2">编辑锚点</button><button type="button" class="og-btn is-primary sm" onclick="goToStep(4, 2)">去写作台<svg class="ic " aria-hidden="true"><use href="#i-right"/></svg></button></div>
+          <div class="og-actions">
+            <button type="button" class="og-tool is-ai" data-act="rewrite-vol" data-stage="2"><svg class="ic " aria-hidden="true"><use href="#i-refresh"/></svg><span class="lbl">重写锚点</span></button>
+            <button type="button" class="og-btn sm" data-act="edit-vol" data-stage="2">编辑锚点</button>
+            <button type="button" class="og-btn is-primary sm" onclick="goToStep(4, 2)">去写作台<svg class="ic " aria-hidden="true"><use href="#i-right"/></svg></button>
+            <button type="button" class="og-tool" data-act="remove-vol">移除</button>
+          </div>
         </div>
         <div class="og-anchors">
           <div class="og-anchor" style="--c:#3B5BDB"><b>核心目标</b><p id="st2_a1">以情侣身份出席艺术展，在公开场合高甜互动逐渐弄假成真</p></div>
@@ -1241,6 +1255,28 @@
     <div class="actions" style="margin-top:16px;">
       <button class="primary" id="sec_pwd_confirm_btn">确认</button>
       <button class="secondary" id="sec_pwd_cancel_btn">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 原创草稿箱模态框 ================= -->
+<div class="modal-mask" id="og_drafts_modal" role="dialog" aria-modal="true" aria-labelledby="og_drafts_title" style="display:none;">
+  <div class="modal-box og-drafts-box">
+    <div class="og-drafts-head">
+      <h3 style="margin:0" id="og_drafts_title">原创草稿箱</h3>
+      <button type="button" class="ghost mini-btn" id="og_drafts_close" aria-label="关闭">✕</button>
+    </div>
+    <p class="mini og-drafts-sub">保存写了一半的设定与大纲，随时继续创作；不会影响已生成的小说。</p>
+    <div class="og-drafts-toolbar">
+      <button type="button" class="og-btn sm" id="og_drafts_new_btn">新建空白草稿</button>
+      <button type="button" class="og-btn is-ghost sm" id="og_drafts_import_btn">导入备份 JSON</button>
+      <input type="file" id="og_drafts_import_file" accept=".json,application/json" style="display:none;">
+    </div>
+    <div class="og-drafts-list" id="og_drafts_list">
+      <div class="og-drafts-empty">加载中…</div>
+    </div>
+    <div class="actions" style="margin-top:16px;">
+      <button type="button" class="secondary" id="og_drafts_cancel_btn">关闭</button>
     </div>
   </div>
 </div>

@@ -25,6 +25,7 @@ MODAL_TARGETS = [
     "#history_modal",
     "#import_modal",
     "#shortcuts_modal",
+    "#og_drafts_modal",
     "#rd_assist_modal",
     "#rd_settings",
     "#rd_more",
@@ -150,6 +151,21 @@ def _setup_modal_state(page, live_server, modal_id, data_state):
         if data_state == "populated":
             page.fill("#web_auth_input", "SomePassword123")
 
+    elif modal_id == "#og_drafts_modal":
+        page.goto(live_server)
+        page.wait_for_load_state("networkidle")
+        if data_state == "populated":
+            page.evaluate("""() => fetch('/api/novel/original/drafts', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    title: '弹窗测试草稿',
+                    spec: { meta: { title: '弹窗测试草稿', genre: '都市言情' }, ideation: { logline: '测试梗概' } }
+                })
+            })""")
+            page.wait_for_timeout(250)
+        page.locator("#btn_og_draft_box").click()
+
     page.wait_for_timeout(350)
 
 
@@ -183,6 +199,7 @@ def _execute_close_path(page, modal_id, close_path):
         "#history_modal": {"close_x": "#hm_close", "cancel_btn": "#hm_cancel_btn"},
         "#import_modal": {"close_x": "#im_close", "cancel_btn": "#im_cancel_btn"},
         "#shortcuts_modal": {"close_x": "#sm_close", "cancel_btn": "#sm_done_btn"},
+        "#og_drafts_modal": {"close_x": "#og_drafts_close", "cancel_btn": "#og_drafts_cancel_btn"},
         "#web_auth_modal": {"close_x": "#web_auth_modal .close-btn", "cancel_btn": "#web_auth_modal .cancel-btn"},
         "#rd_assist_modal": {"close_x": "#rd_assist_close", "cancel_btn": "#rd_assist_close"},
         "#rd_settings": {"close_x": "button[data-rd-close='rd_settings']", "cancel_btn": "button[data-rd-close='rd_settings']"},

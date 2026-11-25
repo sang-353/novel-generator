@@ -25,6 +25,7 @@
     runnerTotalChapters: 0,
     isRestoring: false,
     draftRestored: false,
+    currentDraftId: null,
   };
 
   const OG_DRAFT_KEY = 'novel_og_studio_draft_v2';
@@ -192,14 +193,15 @@
   // =========================================================================
   function getFormStages() {
     const stages = [];
-    const st1Title = safeText('st1_title').trim();
-    if (st1Title) stages.push({ stage_index: 1, title: st1Title });
-    const st2Title = safeText('st2_title').trim();
-    if (st2Title) stages.push({ stage_index: 2, title: st2Title });
-    document.querySelectorAll('#og_route_list .og-extra-vol').forEach((volEl) => {
+    document.querySelectorAll('#og_route_list .og-vol[data-stage]').forEach((volEl) => {
       const idx = parseInt(volEl.dataset.stage || '0', 10);
       const tEl = volEl.querySelector('.og-vol-title');
-      if (idx > 2) stages.push({ stage_index: idx, title: tEl ? tEl.textContent.trim() : `第 ${idx} 卷` });
+      if (idx > 0) {
+        stages.push({
+          stage_index: idx,
+          title: (tEl ? tEl.textContent.trim() : '') || `第 ${idx} 卷`,
+        });
+      }
     });
     return stages.length ? stages : [{ stage_index: 1, title: '第一卷：开篇启程' }];
   }
@@ -662,6 +664,7 @@
           <div class="og-vol-meta"><span class="og-pill">待前卷完成</span><span>预估 ${esc(vCh)} 章 · 约 ${Math.round(vCh * 2.5) / 10} 万字</span></div>
         </div>
         <div class="og-actions">
+          <button type="button" class="og-tool is-ai" data-act="rewrite-vol" data-stage="${idx}"><svg class="ic " aria-hidden="true"><use href="#i-refresh"/></svg><span class="lbl">重写锚点</span></button>
           <button type="button" class="og-btn sm" data-act="edit-vol" data-stage="${idx}">编辑锚点</button>
           <button type="button" class="og-btn is-primary sm" onclick="goToStep(4, ${idx})">去写作台</button>
           <button type="button" class="og-tool" data-act="remove-vol">移除</button>
@@ -695,6 +698,7 @@
       if (!candidates.length) throw new Error('模型未返回新锚点');
       if (goalEl) goalEl.textContent = candidates[0];
       updateSummaryBar();
+      saveOgDraft();
       if (window.toast) window.toast('已更新本卷阶段核心目标锚点');
     } catch (err) {
       if (window.toast) window.toast(`锚点推演失败: ${err.message}`);
@@ -769,46 +773,24 @@
       });
     });
 
-    const stages = [
-      {
-        stage_index: 1,
-        title: safeText('st1_title').trim() || '第一卷：开篇启程',
-        expected_chapters: 6,
-        anchors: {
-          stage_goal: safeText('st1_a1').trim() || '建立核心开局冲突与人物关系',
-          main_obstacle: safeText('st1_a2').trim() || '',
-          climax_hook: safeText('st1_a3').trim() || '',
-          transition_springboard: safeText('st1_a4').trim() || '',
-        }
-      }
-    ];
-    const st2Title = safeText('st2_title').trim();
-    if (st2Title) {
-      stages.push({
-        stage_index: 2,
-        title: st2Title,
-        expected_chapters: 8,
-        anchors: {
-          stage_goal: safeText('st2_a1').trim() || '',
-          main_obstacle: '',
-          climax_hook: safeText('st2_a3').trim() || '',
-          transition_springboard: '',
-        }
-      });
-    }
-    document.querySelectorAll('#og_route_list .og-extra-vol').forEach((volEl) => {
-      const idx = parseInt(volEl.dataset.stage || '3', 10);
+    const stages = [];
+    document.querySelectorAll('#og_route_list .og-vol[data-stage]').forEach((volEl) => {
+      const idx = parseInt(volEl.dataset.stage || '1', 10);
       const tEl = volEl.querySelector('.og-vol-title');
       const pEls = volEl.querySelectorAll('.og-anchor p');
+      const a1 = getEl(`st${idx}_a1`);
+      const a2 = getEl(`st${idx}_a2`);
+      const a3 = getEl(`st${idx}_a3`);
+      const a4 = getEl(`st${idx}_a4`);
       stages.push({
         stage_index: idx,
-        title: tEl ? tEl.textContent.trim() : `第 ${idx} 卷`,
-        expected_chapters: 8,
+        title: (tEl ? tEl.textContent.trim() : '') || `第 ${idx} 卷`,
+        expected_chapters: idx === 1 ? 6 : 8,
         anchors: {
-          stage_goal: pEls[0] ? pEls[0].textContent.trim() : '',
-          main_obstacle: '',
-          climax_hook: pEls[1] ? pEls[1].textContent.trim() : '',
-          transition_springboard: '',
+          stage_goal: (a1 ? a1.textContent.trim() : (pEls[0] ? pEls[0].textContent.trim() : '')),
+          main_obstacle: a2 ? a2.textContent.trim() : '',
+          climax_hook: (a3 ? a3.textContent.trim() : (pEls[1] ? pEls[1].textContent.trim() : '')),
+          transition_springboard: a4 ? a4.textContent.trim() : '',
         }
       });
     });
@@ -860,6 +842,48 @@
     const badge = getEl(badgeId);
     if (badge && badge.nextElementSibling && badge.nextElementSibling.tagName === 'EM') {
       badge.nextElementSibling.textContent = text || '';
+    }
+  }
+
+  function ensureBaseStageCard(stageIdx) {
+    const route = getEl('og_route_list');
+    if (!route) return;
+    if (route.querySelector(`.og-vol[data-stage="${stageIdx}"]`)) return;
+    const vol = document.createElement('div');
+    vol.className = stageIdx === 1 ? 'og-vol is-current' : 'og-vol is-pending';
+    vol.dataset.stage = String(stageIdx);
+    const anchorsHtml = stageIdx === 1
+      ? `<div class="og-anchors">
+          <div class="og-anchor" style="--c:#3B5BDB"><b>阶段核心目标</b><p id="st1_a1"></p></div>
+          <div class="og-anchor" style="--c:#7A8296"><b>核心阻力</b><p id="st1_a2"></p></div>
+          <div class="og-anchor" style="--c:#A86A0C"><b>阶段高潮</b><p id="st1_a3"></p></div>
+          <div class="og-anchor" style="--c:#6A55C9"><b>破局跳板</b><p id="st1_a4"></p></div>
+        </div>`
+      : `<div class="og-anchors">
+          <div class="og-anchor" style="--c:#3B5BDB"><b>核心目标</b><p id="st2_a1"></p></div>
+          <div class="og-anchor" style="--c:#A86A0C"><b>高潮引爆点</b><p id="st2_a3"></p></div>
+        </div>`;
+    vol.innerHTML = `
+      <span class="og-vol-node"></span>
+      <div class="og-vol-head">
+        <div>
+          <div class="og-vol-title" id="st${stageIdx}_title"></div>
+          <div class="og-vol-meta"><span class="og-pill${stageIdx === 1 ? ' is-now' : ''}">${stageIdx === 1 ? '当前攻坚卷' : '待前卷完成'}</span><span>预估 ${stageIdx === 1 ? 10 : 12} 章 · 约 ${stageIdx === 1 ? '2' : '2.5'} 万字</span></div>
+        </div>
+        <div class="og-actions">
+          <button type="button" class="og-tool is-ai" data-act="rewrite-vol" data-stage="${stageIdx}"><svg class="ic " aria-hidden="true"><use href="#i-refresh"/></svg><span class="lbl">重写锚点</span></button>
+          <button type="button" class="og-btn sm" data-act="edit-vol" data-stage="${stageIdx}">编辑锚点</button>
+          <button type="button" class="og-btn is-primary sm" onclick="goToStep(4, ${stageIdx})">去写作台</button>
+          <button type="button" class="og-tool" data-act="remove-vol">移除</button>
+        </div>
+      </div>
+      ${anchorsHtml}`;
+    if (stageIdx === 1) {
+      route.insertBefore(vol, route.firstChild);
+    } else {
+      const firstExtra = route.querySelector('.og-extra-vol');
+      if (firstExtra) route.insertBefore(vol, firstExtra);
+      else route.appendChild(vol);
     }
   }
 
@@ -929,6 +953,7 @@
       setElVal('val_ending', endText || spec.ending.climax_vision || '');
     }
     if (spec.stages && spec.stages.length > 0) {
+      ensureBaseStageCard(1);
       const st1 = spec.stages[0];
       setElText('st1_title', st1.title || '');
       if (st1.anchors) {
@@ -938,6 +963,7 @@
         setElText('st1_a4', st1.anchors.transition_springboard || '');
       }
       if (spec.stages.length > 1) {
+        ensureBaseStageCard(2);
         const st2 = spec.stages[1];
         setElText('st2_title', st2.title || '');
         if (st2.anchors) {
@@ -1566,6 +1592,7 @@
     if (state.isRestoring) return;
     try {
       const draft = {
+        draftId: state.currentDraftId || null,
         novelId: state.novelId,
         activeStation: state.activeStation,
         currentStageIndex: state.currentStageIndex,
@@ -1585,6 +1612,7 @@
       const draft = JSON.parse(raw);
       if (!draft || typeof draft !== 'object' || !draft.spec) return false;
       state.isRestoring = true;
+      state.currentDraftId = draft.draftId || null;
       fillFormWithSpec(draft.spec);
       state.novelId = safeVal('val_title').trim() || (draft.spec.meta && draft.spec.meta.title) || draft.novelId || '';
       window.selectStage(draft.currentStageIndex || 1);
@@ -1607,6 +1635,7 @@
   window.loadDemo = function(presetKey, silent) {
     const preset = PRESETS[presetKey];
     if (!preset) return;
+    state.currentDraftId = null;
     fillFormWithSpec(preset);
     state.novelId = preset.meta.title;
     window.selectStage(1);
@@ -1672,7 +1701,9 @@
     const want = safeVal('c1_want').trim();
     put('ov_protagonist', pname + want, `<b>${esc(pname)}</b>${want ? '：' + esc(want) : ''}`);
     put('ov_ending', safeVal('val_ending'));
-    const t = getEl('st1_title'), g = getEl('st1_a1');
+    const firstVol = document.querySelector('#og_route_list .og-vol');
+    const t = getEl('st1_title') || (firstVol && firstVol.querySelector('.og-vol-title'));
+    const g = getEl('st1_a1') || (firstVol && firstVol.querySelector('.og-anchor p'));
     const tt = t ? t.textContent.trim() : '';
     put('ov_stage', tt, `<b>${esc(tt)}</b>${g ? '<br>' + esc(g.textContent.trim()) : ''}`);
   }
@@ -1721,8 +1752,13 @@
       case 'refine-char': window.refineCharacterCard(f, el.dataset.mode || 'polish'); break;
       case 'add-vol': window.addVolumeStage(); saveOgDraft(); break;
       case 'remove-vol': {
+        const allVols = document.querySelectorAll('#og_route_list .og-vol');
+        if (allVols.length <= 1) {
+          if (window.toast) window.toast('至少保留一卷，无法移除');
+          break;
+        }
         const v = el.closest('.og-vol');
-        if (v) { v.remove(); syncStageSelector(); saveOgDraft(); if (window.toast) window.toast('已移除新增分卷'); }
+        if (v) { v.remove(); syncStageSelector(); refreshOverview(); saveOgDraft(); if (window.toast) window.toast('已移除分卷'); }
         break;
       }
       case 'rewrite-vol': window.rewriteStageAnchors(parseInt(el.dataset.stage || '1', 10)); break;
@@ -1766,9 +1802,255 @@
   });
 
   // =========================================================================
+  // 11.8 原创草稿箱（多草稿落盘保存、读取、新建、导入与删除）
+  // =========================================================================
+  function setDraftStatusText(msg) {
+    const el = getEl('og_draft_status');
+    if (el) el.textContent = msg || '';
+  }
+
+  function formatDraftTime(isoOrMs) {
+    if (!isoOrMs) return '';
+    try {
+      const d = new Date(isoOrMs);
+      if (isNaN(d.getTime())) return String(isoOrMs);
+      const pad = n => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function buildBlankSpec() {
+    return {
+      schema_version: '2.0.0',
+      locked_fields: [],
+      meta: { title: '', genre: '都市言情', selected_trope: null },
+      ideation: { logline: '', hook: '', reader_expectation: '', theme: '', tone: '' },
+      worldview: { background: '', special_rules: '', taboos: '' },
+      protagonist: { id: 'char_protagonist', name: '主角', role: '主角', want: '', need: '', flaw: '', arc: '' },
+      characters: [{ id: 'char_key_1', name: '关键角色', relation_type: 'cp_love', role_desc: '', bond_or_conflict: '' }],
+      ending: { climax_vision: '', core_dilemma: '', ultimate_cost: '', resolution_tone: '' },
+      stages: [
+        { stage_index: 1, title: '第一卷：开篇启程', expected_chapters: 6, anchors: { stage_goal: '', main_obstacle: '', climax_hook: '', transition_springboard: '' } },
+        { stage_index: 2, title: '第二卷：发展与升级', expected_chapters: 8, anchors: { stage_goal: '', climax_hook: '' } },
+      ],
+    };
+  }
+
+  function applyDraftRecord(draft) {
+    if (!draft || typeof draft !== 'object' || !draft.spec) return;
+    state.isRestoring = true;
+    state.currentDraftId = draft.draft_id || draft.draftId || null;
+    fillFormWithSpec(draft.spec);
+    state.novelId = safeVal('val_title').trim() || (draft.spec.meta && draft.spec.meta.title) || draft.novelId || '';
+    window.selectStage(draft.current_stage_index || draft.currentStageIndex || 1);
+    window.goToStep(draft.active_station || draft.activeStation || 1);
+    autosize(document);
+    state.isRestoring = false;
+    state.draftRestored = true;
+    saveOgDraft();
+    setDraftStatusText(`已载入草稿：${draft.title || state.novelId || '未命名草稿'}`);
+  }
+
+  window.saveOgDraftToBox = async function(silent) {
+    const spec = collectSpecFromForm();
+    const rawTitle = safeVal('val_title').trim();
+    if (spec.meta) spec.meta.title = rawTitle || '未命名草稿';
+    const payload = {
+      draft_id: state.currentDraftId || undefined,
+      title: rawTitle || '未命名草稿',
+      genre: (spec.meta && spec.meta.genre) || '未选题材',
+      novelId: rawTitle || state.novelId || '',
+      active_station: state.activeStation || 1,
+      current_stage_index: state.currentStageIndex || 1,
+      spec: spec,
+    };
+    try {
+      const res = await window.api('/api/novel/original/drafts', 'POST', payload);
+      const saved = res && res.data;
+      if (saved && saved.draft_id) {
+        state.currentDraftId = saved.draft_id;
+        saveOgDraft();
+        const t = formatDraftTime(saved.updated_at) || '刚刚';
+        setDraftStatusText(`已存草稿箱 · ${t}`);
+      }
+      if (!silent && window.toast) window.toast('已保存到草稿箱');
+      return saved;
+    } catch (err) {
+      if (!silent && window.toast) window.toast(`保存草稿失败: ${err.message}`);
+      return null;
+    }
+  };
+
+  function renderDraftsList(items) {
+    const listEl = getEl('og_drafts_list');
+    if (!listEl) return;
+    if (!items || items.length === 0) {
+      listEl.innerHTML = '<div class="og-drafts-empty">草稿箱暂无草稿。点击左侧“保存草稿”或上方“导入备份 JSON”即可存入。</div>';
+      return;
+    }
+    const stationNames = { 1: '灵魂定调', 2: '舞台与群像', 3: '航线路标', 4: '阶段写作台' };
+    listEl.innerHTML = items.map(item => {
+      const isCur = state.currentDraftId && state.currentDraftId === item.draft_id;
+      const stName = stationNames[item.active_station] || '灵魂定调';
+      const timeStr = formatDraftTime(item.updated_at);
+      return `
+        <div class="og-draft-item${isCur ? ' is-active' : ''}" data-draft-id="${esc(item.draft_id)}">
+          <div class="og-draft-info">
+            <div class="og-draft-title">${esc(item.title || '未命名草稿')}${isCur ? ' <span class="og-pill is-now">当前</span>' : ''}</div>
+            <div class="og-draft-meta">
+              <span>${esc(item.genre || '未选题材')}</span>
+              <span>进度：${esc(stName)}</span>
+              <span>更新：${esc(timeStr)}</span>
+            </div>
+            ${item.logline_preview ? `<div class="og-draft-logline">${esc(item.logline_preview)}</div>` : ''}
+          </div>
+          <div class="og-draft-ops">
+            <button type="button" class="og-btn is-primary sm" data-draft-act="load" data-draft-id="${esc(item.draft_id)}">继续编辑</button>
+            <button type="button" class="og-btn is-ghost sm" data-draft-act="delete" data-draft-id="${esc(item.draft_id)}">删除</button>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  async function refreshDraftsModalList() {
+    const listEl = getEl('og_drafts_list');
+    if (listEl) listEl.innerHTML = '<div class="og-drafts-empty">正在读取草稿箱…</div>';
+    try {
+      const res = await window.api('/api/novel/original/drafts');
+      const items = (res && res.data && Array.isArray(res.data.drafts)) ? res.data.drafts : [];
+      renderDraftsList(items);
+    } catch (err) {
+      if (listEl) listEl.innerHTML = `<div class="og-drafts-empty">读取失败：${esc(err.message)}</div>`;
+    }
+  }
+
+  window.openOgDraftsModal = function() {
+    if (typeof window.openModal === 'function') {
+      window.openModal('og_drafts_modal', { mask: true, esc: true });
+    } else {
+      const m = getEl('og_drafts_modal');
+      if (m) m.style.display = 'flex';
+    }
+    refreshDraftsModalList();
+  };
+
+  window.closeOgDraftsModal = function() {
+    if (typeof window.closeModal === 'function') {
+      window.closeModal('og_drafts_modal');
+    } else {
+      const m = getEl('og_drafts_modal');
+      if (m) m.style.display = 'none';
+    }
+  };
+
+  async function loadDraftFromBox(draftId) {
+    try {
+      const res = await window.api(`/api/novel/original/drafts/${encodeURIComponent(draftId)}`);
+      const draft = res && res.data;
+      if (!draft) throw new Error('草稿数据为空');
+      applyDraftRecord(draft);
+      window.closeOgDraftsModal();
+      if (window.toast) window.toast(`已恢复草稿《${draft.title || '未命名草稿'}》`);
+    } catch (err) {
+      if (window.toast) window.toast(`载入草稿失败: ${err.message}`);
+    }
+  }
+
+  async function deleteDraftFromBox(draftId) {
+    try {
+      await window.api(`/api/novel/original/drafts/${encodeURIComponent(draftId)}`, 'DELETE');
+      if (state.currentDraftId === draftId) {
+        state.currentDraftId = null;
+        saveOgDraft();
+      }
+      await refreshDraftsModalList();
+      if (window.toast) window.toast('已删除草稿');
+    } catch (err) {
+      if (window.toast) window.toast(`删除草稿失败: ${err.message}`);
+    }
+  }
+
+  function startBlankDraft() {
+    state.isRestoring = true;
+    state.currentDraftId = null;
+    state.novelId = '';
+    fillFormWithSpec(buildBlankSpec());
+    window.selectStage(1);
+    window.goToStep(1);
+    autosize(document);
+    state.isRestoring = false;
+    saveOgDraft();
+    setDraftStatusText('新建空白草稿（未存草稿箱）');
+    window.closeOgDraftsModal();
+    if (window.toast) window.toast('已切换为空白草稿');
+  }
+
+  async function importDraftBackupJson(rawText) {
+    const parsed = JSON.parse(rawText);
+    if (!parsed || typeof parsed !== 'object' || !parsed.spec) {
+      throw new Error('JSON 格式不匹配，缺少 spec 字段');
+    }
+    const res = await window.api('/api/novel/original/drafts', 'POST', parsed);
+    const saved = res && res.data;
+    if (saved) {
+      applyDraftRecord(saved);
+      await refreshDraftsModalList();
+      if (window.toast) window.toast(`已导入草稿《${saved.title || '未命名草稿'}》`);
+    }
+  }
+
+  function bindDraftBoxEvents() {
+    const saveBtn = getEl('btn_og_save_draft');
+    if (saveBtn) saveBtn.addEventListener('click', () => window.saveOgDraftToBox(false));
+
+    const boxBtn = getEl('btn_og_draft_box');
+    if (boxBtn) boxBtn.addEventListener('click', () => window.openOgDraftsModal());
+
+    const closeBtn = getEl('og_drafts_close');
+    if (closeBtn) closeBtn.addEventListener('click', () => window.closeOgDraftsModal());
+
+    const cancelBtn = getEl('og_drafts_cancel_btn');
+    if (cancelBtn) cancelBtn.addEventListener('click', () => window.closeOgDraftsModal());
+
+    const newBtn = getEl('og_drafts_new_btn');
+    if (newBtn) newBtn.addEventListener('click', startBlankDraft);
+
+    const importBtn = getEl('og_drafts_import_btn');
+    const fileInp = getEl('og_drafts_import_file');
+    if (importBtn && fileInp) {
+      importBtn.addEventListener('click', () => { fileInp.value = ''; fileInp.click(); });
+      fileInp.addEventListener('change', async () => {
+        const f = fileInp.files && fileInp.files[0];
+        if (!f) return;
+        try {
+          const text = await f.text();
+          await importDraftBackupJson(text);
+        } catch (err) {
+          if (window.toast) window.toast(`导入失败: ${err.message}`);
+        }
+      });
+    }
+
+    const listEl = getEl('og_drafts_list');
+    if (listEl) {
+      listEl.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-draft-act]');
+        if (!btn) return;
+        const id = btn.dataset.draftId;
+        if (!id) return;
+        if (btn.dataset.draftAct === 'load') loadDraftFromBox(id);
+        else if (btn.dataset.draftAct === 'delete') deleteDraftFromBox(id);
+      });
+    }
+  }
+
+  // =========================================================================
   // 12. 模块初始化入口
   // =========================================================================
   function initOriginalStudio() {
+    bindDraftBoxEvents();
     if (!window.restoreOgDraft()) {
       window.loadDemo('romance', true);
       window.goToStep(1);

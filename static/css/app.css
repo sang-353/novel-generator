@@ -2554,3 +2554,95 @@ button:disabled {
   color: var(--ink);
   background: var(--card-subtle);
 }
+
+/* 原创草稿箱样式 */
+.og-draft-bar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.og-draft-status {
+  font-size: 11px;
+  color: var(--muted);
+  min-height: 16px;
+  line-height: 1.4;
+}
+.og-drafts-box {
+  max-width: 560px;
+  width: 92%;
+}
+.og-drafts-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.og-drafts-sub {
+  color: var(--muted);
+  margin: 0 0 12px;
+}
+.og-drafts-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.og-drafts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 340px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.og-drafts-empty {
+  text-align: center;
+  padding: 28px 12px;
+  color: var(--muted);
+  font-size: 13px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+}
+.og-draft-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card-subtle);
+}
+.og-draft-item.is-active {
+  border-color: var(--accent);
+}
+.og-draft-info {
+  flex: 1;
+  min-width: 0;
+}
+.og-draft-title {
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 4px;
+  word-break: break-word;
+}
+.og-draft-meta {
+  font-size: 12px;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.og-draft-logline {
+  font-size: 12px;
+  color: var(--ink);
+  opacity: 0.85;
+  margin-top: 5px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+.og-draft-ops {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}

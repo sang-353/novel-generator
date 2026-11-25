@@ -383,3 +383,131 @@ def apply_locked_fields(
             set_field_by_path(new_spec, field_path, orig_val)
     new_spec["locked_fields"] = list(set(locks))
     return new_spec
+
+
+# =========================================================================
+# 草稿箱存储管理 (Drafts Box，允许半成品设定，不走严格 validate_spec)
+# =========================================================================
+
+def get_drafts_dir() -> Path:
+    """获取原创草稿箱目录（随 NOVELS_DIR 动态解析以保证测试隔离）。"""
+    d = NOVELS_DIR / "_drafts"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _normalize_draft_id(draft_id: Any) -> str:
+    """规范化草稿 ID，仅保留安全字符，防止路径穿越。"""
+    raw = str(draft_id or "").strip()
+    cleaned = re.sub(r"[^a-zA-Z0-9_\-]", "", raw)
+    return cleaned[:64]
+
+
+def _extract_draft_summary(draft: Dict[str, Any]) -> Dict[str, Any]:
+    """提取草稿列表展示所需的摘要字段。"""
+    spec = draft.get("spec") if isinstance(draft.get("spec"), dict) else {}
+    meta = spec.get("meta") if isinstance(spec.get("meta"), dict) else {}
+    ideation = spec.get("ideation") if isinstance(spec.get("ideation"), dict) else {}
+    title = (draft.get("title") or meta.get("title") or "").strip() or "未命名草稿"
+    genre = (draft.get("genre") or meta.get("genre") or "").strip() or "未选题材"
+    logline = (ideation.get("logline") or "").strip()
+    return {
+        "draft_id": draft.get("draft_id", ""),
+        "title": title,
+        "genre": genre,
+        "logline_preview": logline[:80],
+        "active_station": int(draft.get("active_station") or 1),
+        "current_stage_index": int(draft.get("current_stage_index") or 1),
+        "updated_at": draft.get("updated_at") or now_iso(),
+        "created_at": draft.get("created_at") or draft.get("updated_at") or now_iso(),
+    }
+
+
+def list_studio_drafts() -> List[Dict[str, Any]]:
+    """按更新时间倒序列出草稿箱中的所有草稿摘要。"""
+    drafts_dir = get_drafts_dir()
+    items: List[Dict[str, Any]] = []
+    for p in drafts_dir.glob("*.json"):
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                if not data.get("draft_id"):
+                    data["draft_id"] = p.stem
+                items.append(_extract_draft_summary(data))
+        except Exception:
+            continue
+    items.sort(key=lambda x: str(x.get("updated_at") or ""), reverse=True)
+    return items
+
+
+def load_studio_draft(draft_id: str) -> Optional[Dict[str, Any]]:
+    """读取指定草稿的完整内容。"""
+    clean_id = _normalize_draft_id(draft_id)
+    if not clean_id:
+        return None
+    p = get_drafts_dir() / f"{clean_id}.json"
+    if not p.exists():
+        return None
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            data["draft_id"] = clean_id
+            return data
+    except Exception:
+        return None
+    return None
+
+
+def save_studio_draft(payload: Dict[str, Any], draft_id: Optional[str] = None) -> Dict[str, Any]:
+    """保存或更新半成品草稿到草稿箱。"""
+    if not isinstance(payload, dict):
+        raise ValueError("草稿数据必须为 JSON 对象")
+    spec = payload.get("spec")
+    if not isinstance(spec, dict):
+        raise ValueError("缺少 spec 对象")
+
+    clean_id = _normalize_draft_id(draft_id or payload.get("draft_id"))
+    if not clean_id:
+        clean_id = f"draft_{int(time.time() * 1000)}_{os.getpid()}"
+
+    drafts_dir = get_drafts_dir()
+    p = drafts_dir / f"{clean_id}.json"
+    existing_created_at = None
+    if p.exists():
+        try:
+            old = json.loads(p.read_text(encoding="utf-8"))
+            if isinstance(old, dict):
+                existing_created_at = old.get("created_at")
+        except Exception:
+            pass
+
+    meta = spec.get("meta") if isinstance(spec.get("meta"), dict) else {}
+    title = (payload.get("title") or meta.get("title") or "").strip() or "未命名草稿"
+    genre = (payload.get("genre") or meta.get("genre") or "").strip() or "未选题材"
+    now = now_iso()
+
+    record: Dict[str, Any] = {
+        "draft_id": clean_id,
+        "title": title,
+        "genre": genre,
+        "novelId": payload.get("novelId") or title,
+        "active_station": int(payload.get("active_station") or payload.get("activeStation") or 1),
+        "current_stage_index": int(payload.get("current_stage_index") or payload.get("currentStageIndex") or 1),
+        "spec": spec,
+        "created_at": existing_created_at or now,
+        "updated_at": now,
+    }
+    _atomic_write_json(p, record)
+    return record
+
+
+def delete_studio_draft(draft_id: str) -> bool:
+    """删除指定草稿，成功返回 True，不存在返回 False。"""
+    clean_id = _normalize_draft_id(draft_id)
+    if not clean_id:
+        return False
+    p = get_drafts_dir() / f"{clean_id}.json"
+    if not p.exists():
+        return False
+    p.unlink()
+    return True
