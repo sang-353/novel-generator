@@ -21,12 +21,13 @@ def test_volume_1_2_3_actions_aligned_and_removable(page, live_server):
     page.wait_for_timeout(200)
     expect(page.locator("#og_route_list .og-vol")).to_have_count(3)
 
-    # 1. 第 1、2、3 卷都应同时拥有 rewrite-vol / edit-vol / remove-vol
+    # 1. 第 1、2、3 卷都应同时拥有 rewrite-vol / edit-vol / remove-vol，且均有 4 个锚点框
     for st in ("1", "2", "3"):
         vol = page.locator(f"#og_route_list .og-vol[data-stage='{st}']")
         expect(vol.locator(f"[data-act='rewrite-vol'][data-stage='{st}']")).to_be_visible()
         expect(vol.locator(f"[data-act='edit-vol'][data-stage='{st}']")).to_be_visible()
         expect(vol.locator("[data-act='remove-vol']")).to_be_visible()
+        expect(vol.locator(".og-anchor")).to_have_count(4)
 
     # 2. 第 1 卷可进入编辑并保存
     v1_edit = page.locator("#og_route_list .og-vol[data-stage='1'] [data-act='edit-vol']")
@@ -53,5 +54,15 @@ def test_volume_1_2_3_actions_aligned_and_removable(page, live_server):
     expect(page.locator("#og_route_list .og-vol[data-stage='1']")).to_be_visible()
     expect(page.locator("#og_route_list .og-vol[data-stage='2']")).to_be_visible()
     expect(page.locator("#st1_title")).to_have_text("第一卷：试探同居与薄荷微风")
+
+    # 5. 移除第 2 卷仅剩第 1 卷后，点击“增加一卷”应创建第 2 卷（而非第 3 卷）
+    page.locator("#og_route_list .og-vol[data-stage='2'] [data-act='remove-vol']").click()
+    expect(page.locator("#og_route_list .og-vol")).to_have_count(1)
+    page.locator("#btn_add_og_vol").click()
+    page.wait_for_timeout(200)
+    expect(page.locator("#og_route_list .og-vol")).to_have_count(2)
+    expect(page.locator("#og_route_list .og-vol[data-stage='2']")).to_be_visible()
+    expect(page.locator("#st2_title")).to_contain_text("第2卷")
+    expect(page.locator("#og_route_list .og-vol[data-stage='2'] .og-anchor")).to_have_count(4)
 
     monitor.assert_no_errors("og_volumes_alignment")

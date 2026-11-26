@@ -15,6 +15,7 @@
     activeJobId: null,
     eventSource: null,
     lastBeats: [],
+    beatsByStage: {},
     chainedCancelled: false,
     extraCharCounter: 2,
     extraVolCounter: 2,
@@ -644,14 +645,19 @@
   window.addVolumeStage = function(stageData, silent) {
     const route = getEl('og_route_list');
     if (!route) return;
-    state.extraVolCounter += 1;
-    const idx = (stageData && stageData.stage_index) ? parseInt(stageData.stage_index, 10) : state.extraVolCounter;
-    if (idx > state.extraVolCounter) state.extraVolCounter = idx;
+    const existingIndices = Array.from(route.querySelectorAll('.og-vol[data-stage]'))
+      .map(el => parseInt(el.dataset.stage || '0', 10))
+      .filter(n => !isNaN(n) && n > 0);
+    const maxIdx = existingIndices.length ? Math.max(...existingIndices) : 0;
+    const idx = (stageData && stageData.stage_index) ? parseInt(stageData.stage_index, 10) : (maxIdx + 1);
+    state.extraVolCounter = Math.max(state.extraVolCounter || 2, idx);
     const vTitle = (stageData && stageData.title) ? stageData.title : `第${idx}卷：待规划新篇章`;
     const vCh = (stageData && stageData.expected_chapters) ? stageData.expected_chapters : 10;
     const anchors = (stageData && stageData.anchors) ? stageData.anchors : {};
     const vGoal = anchors.stage_goal || '推进主线矛盾升级，开启全新剧情舞台。';
+    const vObstacle = anchors.main_obstacle || '';
     const vClimax = anchors.climax_hook || '卷末揭示核心秘密，完成阶段性局势反转。';
+    const vSpringboard = anchors.transition_springboard || '';
 
     const vol = document.createElement('div');
     vol.className = 'og-vol is-pending og-extra-vol';
@@ -671,8 +677,10 @@
         </div>
       </div>
       <div class="og-anchors">
-        <div class="og-anchor" style="--c:#3B5BDB"><b>核心目标</b><p id="st${idx}_a1">${esc(vGoal)}</p></div>
-        <div class="og-anchor" style="--c:#A86A0C"><b>高潮引爆点</b><p id="st${idx}_a3">${esc(vClimax)}</p></div>
+        <div class="og-anchor" style="--c:#3B5BDB"><b>阶段核心目标</b><p id="st${idx}_a1">${esc(vGoal)}</p></div>
+        <div class="og-anchor" style="--c:#7A8296"><b>核心阻力</b><p id="st${idx}_a2">${esc(vObstacle)}</p></div>
+        <div class="og-anchor" style="--c:#A86A0C"><b>阶段高潮</b><p id="st${idx}_a3">${esc(vClimax)}</p></div>
+        <div class="og-anchor" style="--c:#6A55C9"><b>破局跳板</b><p id="st${idx}_a4">${esc(vSpringboard)}</p></div>
       </div>`;
     route.appendChild(vol);
     syncStageSelector();
@@ -860,8 +868,10 @@
           <div class="og-anchor" style="--c:#6A55C9"><b>破局跳板</b><p id="st1_a4"></p></div>
         </div>`
       : `<div class="og-anchors">
-          <div class="og-anchor" style="--c:#3B5BDB"><b>核心目标</b><p id="st2_a1"></p></div>
-          <div class="og-anchor" style="--c:#A86A0C"><b>高潮引爆点</b><p id="st2_a3"></p></div>
+          <div class="og-anchor" style="--c:#3B5BDB"><b>阶段核心目标</b><p id="st2_a1"></p></div>
+          <div class="og-anchor" style="--c:#7A8296"><b>核心阻力</b><p id="st2_a2"></p></div>
+          <div class="og-anchor" style="--c:#A86A0C"><b>阶段高潮</b><p id="st2_a3"></p></div>
+          <div class="og-anchor" style="--c:#6A55C9"><b>破局跳板</b><p id="st2_a4"></p></div>
         </div>`;
     vol.innerHTML = `
       <span class="og-vol-node"></span>
@@ -968,7 +978,9 @@
         setElText('st2_title', st2.title || '');
         if (st2.anchors) {
           setElText('st2_a1', st2.anchors.stage_goal || '');
+          setElText('st2_a2', st2.anchors.main_obstacle || '');
           setElText('st2_a3', st2.anchors.climax_hook || '');
+          setElText('st2_a4', st2.anchors.transition_springboard || '');
         }
       }
       spec.stages.slice(2).forEach(extraStage => {
@@ -1090,13 +1102,42 @@
   // =========================================================================
   // 8. 章节节拍表 (Beat List) 抽屉与工位 4 节拍同步
   // =========================================================================
-  window.openBeatDrawer = async function(stageIndex) {
+  function collectBeatsFromDrawer() {
+    const listEl = getEl('beat_items_list');
+    if (!listEl) return [];
+    const items = [];
+    listEl.querySelectorAll('.og-beat').forEach((card, idx) => {
+      const titleInp = card.querySelector('.og-beat-title-inp');
+      const sumInp = card.querySelector('.og-beat-summary-inp');
+      const typeSel = card.querySelector('.og-beat-type-sel');
+      const cluesInp = card.querySelector('.og-beat-clues-inp');
+      const rawClues = cluesInp ? cluesInp.value.trim() : '';
+      const clues = rawClues ? rawClues.split(/[、,，]+/).map(s => s.trim()).filter(Boolean) : [];
+      items.push({
+        chapter_offset: idx + 1,
+        title: (titleInp ? titleInp.value.trim() : '') || `第${idx + 1}章`,
+        beat_type: typeSel ? typeSel.value : 'setup',
+        summary: sumInp ? sumInp.value.trim() : '',
+        planted_clues: clues,
+      });
+    });
+    return items;
+  }
+
+  window.openBeatDrawer = async function(stageIndex, forceRegen) {
     const stIdx = parseInt(stageIndex || state.currentStageIndex || '1', 10) || 1;
     state.drawerStageIndex = stIdx;
     const drawer = getEl('beat_drawer');
     const mask = getEl('beat_drawer_mask');
     if (drawer) drawer.style.display = 'flex';
     if (mask) mask.style.display = 'block';
+
+    const cached = state.beatsByStage && state.beatsByStage[stIdx];
+    if (!forceRegen && Array.isArray(cached) && cached.length > 0) {
+      state.lastBeats = cached;
+      renderBeatList(cached);
+      return;
+    }
 
     const listEl = getEl('beat_items_list');
     if (listEl) listEl.innerHTML = `<div class="og-empty">正在推导第 ${stIdx} 卷章节节拍…</div>`;
@@ -1110,11 +1151,13 @@
         provider_id: currentProviderId(),
       });
       const beats = (res.data && res.data.beats) ? res.data.beats : [];
+      state.beatsByStage[stIdx] = beats;
       state.lastBeats = beats;
       renderBeatList(beats);
       renderStationBeats(beats);
+      saveOgDraft();
     } catch (err) {
-      if (listEl) listEl.innerHTML = `<div class="og-empty" style="color:var(--og-seal)">节拍表加载失败：${esc(err.message)}。可点击下方「重新推演节拍」重试。</div>`;
+      if (listEl) listEl.innerHTML = `<div class="og-empty" style="color:var(--og-seal)">节拍表加载失败：${esc(err.message)}。可点击下方「重新推演节拍」重试，或点「+ 新增一章」手动编写。</div>`;
     }
   };
 
@@ -1127,6 +1170,12 @@
 
   window.confirmBeatDrawer = async function() {
     const stIdx = parseInt(state.drawerStageIndex || state.currentStageIndex || '1', 10) || 1;
+    const edited = collectBeatsFromDrawer();
+    if (edited.length) {
+      state.beatsByStage[stIdx] = edited;
+      state.lastBeats = edited;
+      saveOgDraft();
+    }
     if (state.lastBeats && state.lastBeats.length) {
       try {
         const novelId = await ensureSpecSynced();
@@ -1157,8 +1206,12 @@
         provider_id: currentProviderId(),
       });
       const beats = (res.data && res.data.beats) ? res.data.beats : [];
+      state.beatsByStage[stIdx] = beats;
       state.lastBeats = beats;
       renderStationBeats(beats);
+      const drawer = getEl('beat_drawer');
+      if (drawer && drawer.style.display !== 'none') renderBeatList(beats);
+      saveOgDraft();
       if (window.toast) window.toast(`已生成第 ${stIdx} 卷 ${beats.length} 章最新节拍表`);
     } catch (err) {
       if (window.toast) window.toast(`节拍推演失败: ${err.message}`);
@@ -1169,18 +1222,31 @@
     const listEl = getEl('beat_items_list');
     if (!listEl) return;
     if (!beats || !beats.length) {
-      listEl.innerHTML = '<div class="og-empty">还没有节拍表，点击下方「重新推演节拍」生成。</div>';
+      listEl.innerHTML = '<div class="og-empty">还没有节拍表，可点击下方「+ 新增一章」手动填写，或点「重新推演节拍」生成。</div>';
       return;
     }
     listEl.innerHTML = beats.map((b, idx) => {
-      const kind = b.beat_type === 'climax' ? 'climax' : (b.beat_type === 'transition' ? 'hook' : '');
-      const pill = kind === 'climax' ? '<span class="og-pill is-amber">阶段高潮</span>'
-        : kind === 'hook' ? '<span class="og-pill is-violet">破局跳板</span>' : '';
-      const clues = (b.planted_clues && b.planted_clues.length)
-        ? `<div class="og-clue">伏笔：${esc(b.planted_clues.join('、'))}</div>` : '';
-      return `<div class="og-beat ${kind}">
-        <div class="og-beat-top"><span class="og-beat-no">第 ${b.chapter_offset || (idx + 1)} 章</span><span class="og-beat-name">${esc(b.title)}</span>${pill}</div>
-        <p>${esc(b.summary)}</p>${clues}</div>`;
+      const bt = b.beat_type || 'setup';
+      const kind = bt === 'climax' ? 'climax' : (bt === 'transition' ? 'hook' : '');
+      const cluesStr = (b.planted_clues && b.planted_clues.length) ? b.planted_clues.join('、') : '';
+      return `<div class="og-beat ${kind}" data-beat-idx="${idx}">
+        <div class="og-beat-edit-head">
+          <div class="og-beat-edit-left">
+            <span class="og-beat-no">第 ${idx + 1} 章</span>
+            <select class="og-select-inline og-beat-type-sel" aria-label="章节节拍类型">
+              <option value="setup"${bt === 'setup' ? ' selected' : ''}>普通铺垫</option>
+              <option value="climax"${bt === 'climax' ? ' selected' : ''}>阶段高潮</option>
+              <option value="transition"${bt === 'transition' ? ' selected' : ''}>破局跳板</option>
+            </select>
+          </div>
+          <button type="button" class="og-tool" data-beat-act="remove" data-beat-idx="${idx}">移除</button>
+        </div>
+        <div class="og-beat-edit-fields">
+          <input type="text" class="og-input og-beat-title-inp" placeholder="章节标题" value="${esc(b.title || '')}">
+          <textarea class="og-input og-beat-summary-inp" rows="2" placeholder="本章节拍梗概与核心冲突">${esc(b.summary || '')}</textarea>
+          <input type="text" class="og-input og-beat-clues-inp" placeholder="伏笔（顿号或逗号分隔，可留空）" value="${esc(cluesStr)}">
+        </div>
+      </div>`;
     }).join('');
   }
 
@@ -1597,6 +1663,7 @@
         activeStation: state.activeStation,
         currentStageIndex: state.currentStageIndex,
         activeJobId: state.activeJobId || null,
+        beatsByStage: state.beatsByStage || {},
         spec: collectSpecFromForm(),
         updatedAt: Date.now(),
       };
@@ -1613,6 +1680,7 @@
       if (!draft || typeof draft !== 'object' || !draft.spec) return false;
       state.isRestoring = true;
       state.currentDraftId = draft.draftId || null;
+      state.beatsByStage = (draft.beatsByStage && typeof draft.beatsByStage === 'object') ? draft.beatsByStage : {};
       fillFormWithSpec(draft.spec);
       state.novelId = safeVal('val_title').trim() || (draft.spec.meta && draft.spec.meta.title) || draft.novelId || '';
       window.selectStage(draft.currentStageIndex || 1);
@@ -1636,6 +1704,8 @@
     const preset = PRESETS[presetKey];
     if (!preset) return;
     state.currentDraftId = null;
+    state.beatsByStage = {};
+    state.lastBeats = [];
     fillFormWithSpec(preset);
     state.novelId = preset.meta.title;
     window.selectStage(1);
@@ -2046,11 +2116,68 @@
     }
   }
 
+  function bindBeatDrawerEvents() {
+    const addBtn = getEl('btn_add_beat_item');
+    if (addBtn) {
+      addBtn.addEventListener('click', () => {
+        const stIdx = parseInt(state.drawerStageIndex || state.currentStageIndex || '1', 10) || 1;
+        const cur = collectBeatsFromDrawer();
+        const nextNo = cur.length + 1;
+        cur.push({
+          chapter_offset: nextNo,
+          title: `第${nextNo}章：待补充标题`,
+          beat_type: 'setup',
+          summary: '',
+          planted_clues: [],
+        });
+        state.beatsByStage[stIdx] = cur;
+        state.lastBeats = cur;
+        renderBeatList(cur);
+        saveOgDraft();
+      });
+    }
+
+    const listEl = getEl('beat_items_list');
+    if (listEl) {
+      listEl.addEventListener('click', (e) => {
+        const rm = e.target.closest('[data-beat-act="remove"]');
+        if (!rm) return;
+        const idx = parseInt(rm.dataset.beatIdx || '-1', 10);
+        const stIdx = parseInt(state.drawerStageIndex || state.currentStageIndex || '1', 10) || 1;
+        const cur = collectBeatsFromDrawer();
+        if (idx >= 0 && idx < cur.length) {
+          cur.splice(idx, 1);
+          state.beatsByStage[stIdx] = cur;
+          state.lastBeats = cur;
+          renderBeatList(cur);
+          saveOgDraft();
+        }
+      });
+      const syncHandler = (e) => {
+        const stIdx = parseInt(state.drawerStageIndex || state.currentStageIndex || '1', 10) || 1;
+        const cur = collectBeatsFromDrawer();
+        state.beatsByStage[stIdx] = cur;
+        state.lastBeats = cur;
+        if (e.target && e.target.classList && e.target.classList.contains('og-beat-type-sel')) {
+          const card = e.target.closest('.og-beat');
+          if (card) {
+            card.classList.toggle('climax', e.target.value === 'climax');
+            card.classList.toggle('hook', e.target.value === 'transition');
+          }
+        }
+        saveOgDraft();
+      };
+      listEl.addEventListener('input', syncHandler);
+      listEl.addEventListener('change', syncHandler);
+    }
+  }
+
   // =========================================================================
   // 12. 模块初始化入口
   // =========================================================================
   function initOriginalStudio() {
     bindDraftBoxEvents();
+    bindBeatDrawerEvents();
     if (!window.restoreOgDraft()) {
       window.loadDemo('romance', true);
       window.goToStep(1);

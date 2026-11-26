@@ -2646,3 +2646,27 @@ button:disabled {
   gap: 6px;
   flex-shrink: 0;
 }
+
+/* 章节节拍表抽屉内编辑样式 */
+.og-beat-edit-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.og-beat-edit-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.og-beat-edit-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.og-beat-edit-fields .og-input {
+  width: 100%;
+  font-size: 13px;
+  padding: 6px 8px;
+}
